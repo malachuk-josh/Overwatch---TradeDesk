@@ -73,6 +73,14 @@ const FACTORS = [
 ];
 
 const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
+const DEFAULT_THESIS_INSTRUMENT = "SPX";
+const THESIS_INSTRUMENTS = [
+  { symbol: "SPX", label: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx", focusLabel: "SPX / ES" },
+  { symbol: "NDX", label: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx", focusLabel: "NDX / NQ" },
+  { symbol: "DJI", label: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji", focusLabel: "DJI / YM" },
+];
+const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
+  THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
 
 const C = {
   bull: "#3DD68C",
@@ -458,7 +466,9 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
 If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
 
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes }) => `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading SPX / ES / NQ / YM. Today is ${dateLine()}.
+const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument }) => {
+  const focus = thesisInstrumentConfig(instrument);
+  return `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
 
 === LIVE DESK DATA ===
 ${condenseMarket(market)}
@@ -474,6 +484,7 @@ ${condenseTiming(timing)}
 Pillar weights (0-100, higher = more influence on the call): Technicals ${weights.technicals}, Macro/News ${weights.macro}, Sentiment ${weights.sentiment}, Positioning/Flows ${weights.positioning}, Event Risk ${weights.eventRisk}.
 Directional lean: ${lean === "auto" ? "none — derive direction purely from the data" : `trader is leaning ${lean} — stress-test that lean against the data and push back if it is not justified`}.
 Risk appetite: ${risk}.
+Primary instrument focus: ${focus.symbol} (${focus.name}) with ${focus.futures} futures as the live execution proxy when relevant.
 Trader notes: ${notes ? notes : "none"}.
 
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
@@ -482,10 +493,14 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Be specific — use actual numbers from the data. The sign of score must match bias. Conviction should reflect how aligned the weighted pillars are.
 Treat the pillar weights as a scoring model, not decoration: high-weight pillars must have more influence than low-weight pillars and the drivers must name the highest-weight/highest-impact inputs.
 Treat the desk stance as a constraint: directional lean may tilt the score, but you must push back if the weighted data disagrees; risk appetite must alter conviction, sizing language, and stand-aside conditions.
+Focus the levels, game plan, invalidation, and watchpoints on ${focus.symbol} first. You can reference the broader index complex, but the trade expression should be built for ${focus.focusLabel}.
 The thesis must explicitly use the Internals regime: explain whether market breadth confirms or conflicts with price, what the trend state means in plain English, and whether the volatility structure supports risk-taking or argues for tighter risk.
-When session is PRE-MARKET, AFTER-HOURS, or CLOSED, explicitly account for the possibility that SPX/NDX/DJI reflect the last regular close while ES/NQ/YM futures are live. Weight futures more heavily when they diverge from cash indexes, and say that in timingNote.`;
+When session is PRE-MARKET, AFTER-HOURS, or CLOSED, explicitly account for the possibility that SPX/NDX/DJI reflect the last regular close while ES/NQ/YM futures are live. Weight ${focus.futures} more heavily when it diverges from ${focus.symbol}, and say that in timingNote.`;
+};
 
-const newsletterPrompt = ({ market, news, points, thesis, timing, edition, weights, lean, risk, notes }) => `Write today's edition (No. ${edition}) of "OVERWATCH DAILY BIAS" — a sharp institutional morning note from Overwatch Intelligence. Date: ${dateLine()}.
+const newsletterPrompt = ({ market, news, points, thesis, timing, edition, weights, lean, risk, notes, instrument }) => {
+  const focus = thesisInstrumentConfig(instrument);
+  return `Write today's edition (No. ${edition}) of "OVERWATCH DAILY BIAS" — a sharp institutional morning note from Overwatch Intelligence. Date: ${dateLine()}.
 
 === TODAY'S DATA ===
 ${condenseMarket(market)}
@@ -511,6 +526,7 @@ Desk stance read: ${thesis.stanceRead || stanceLine({ lean, risk, notes })}
 === CURRENT DESK CONFIGURATION ===
 Pillar weights: ${weightsLine(weights)}
 Desk stance: ${stanceLine({ lean, risk, notes })}
+Primary instrument focus: ${focus.symbol} (${focus.name}) with ${focus.futures} futures as the execution proxy when relevant.
 
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
 {"headline":"<edition headline, 5-10 words>","dek":"<one-line subtitle>","timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","executiveSummary":"<55-75 words>","marketRecap":"<70-90 words on tape, rates, vol, sectors — with numbers>","marketOutlook":"<95-130 words explaining recent, current, and upcoming events plus brief market impact analysis>","stanceRead":"<one sentence explaining how the desk stance and risk appetite shaped the note>","pillarRead":"<one sentence explaining which weighted pillars mattered most>","thesisNarrative":"<95-120 words articulating the bias, key levels, weighted pillars, stance, and the plan>","watchToday":["<3-4 short bullets: catalysts and levels to watch>"],"riskRadar":"<35-55 words on what could break the call>","finalWord":"<one closing sentence with desk personality>"}
@@ -518,8 +534,10 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: confident, concrete, zero fluff. Use actual numbers from the data.
 The newsletter must carry the thesis weighting through: mention the most influential pillar weights and explain how the desk stance/risk appetite shaped the plan. Do not treat stance as a generic footer.
 The newsletter must include a plain-English read of breadth, trend state, and volatility structure. Do not mention the Internals regime generically; translate it into what it means for an index trader today.
-The Market Outlook section must separate the catalyst story into recent headlines/data, current same-day events, and upcoming events this week. For each, state why it matters to SPX/NDX/DJI, futures, rates, volatility, or breadth.
-If session is PRE-MARKET, AFTER-HOURS, or CLOSED, the newsletter must note that cash index data may be stale versus live futures when relevant, especially if ES/NQ/YM diverge from SPX/NDX/DJI.`;
+The Market Outlook section must separate the catalyst story into recent headlines/data, current same-day events, and upcoming events this week. For each, state why it matters to ${focus.symbol}, ${focus.futures}, rates, volatility, or breadth.
+Keep the note centered on ${focus.focusLabel}. Cross-index context is useful, but the lead framing, key levels, and watch list should be written for ${focus.symbol}.
+If session is PRE-MARKET, AFTER-HOURS, or CLOSED, the newsletter must note that cash index data may be stale versus live futures when relevant, especially if ${focus.futures} diverges from ${focus.symbol}.`;
+};
 
 /* ================================================================
    STYLES — graphite-navy desk terminal, brass signal accent
@@ -2267,9 +2285,10 @@ const DataPointSection = ({ points, onRefresh }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, onGoNewsletter }) => {
+const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, onGoNewsletter }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
+  const activeInstrument = thesisInstrumentConfig(instrument);
 
   return (
     <div className="grid g-thesis" style={{ alignItems: "start" }}>
@@ -2290,6 +2309,18 @@ const ThesisTab = ({ weights, setWeights, lean, setLean, risk, setRisk, notes, s
             </div>
           ))}
           <FactorRadarChart weights={weights} />
+        </Card>
+        <Card icon={NotebookPen} title="Instrument focus" sub="Choose which index the thesis and note are built for">
+          <div className="seg">
+            {THESIS_INSTRUMENTS.map((item) => (
+              <button key={item.symbol} className={instrument === item.symbol ? "on" : ""} onClick={() => setInstrument(item.symbol)}>
+                {item.symbol}
+              </button>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>
+            Primary build target: <span style={{ color: "var(--text)" }}>{activeInstrument.name}</span> with {activeInstrument.futures} as the live execution proxy.
+          </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
           <span className="lab-label">Directional lean</span>
@@ -2348,6 +2379,7 @@ const ThesisTab = ({ weights, setWeights, lean, setLean, risk, setRisk, notes, s
                   <div className="th-head">"{t.headline}"</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 9, alignItems: "flex-end" }}>
+                  <span className="chip">{(t.instrument || instrument)} FOCUS</span>
                   <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66" }}>SCORE {fmtSigned(t.score, 0)}</span>
                   <ConvictionPips n={t.conviction || 0} bias={t.bias} />
                 </div>
@@ -2846,6 +2878,7 @@ export default function Overwatch() {
   const [session, setSession] = useState(marketSession());
 
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
+  const [instrument, setInstrument] = useState(DEFAULT_THESIS_INSTRUMENT);
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [lean, setLean] = useState("auto");
   const [risk, setRisk] = useState("balanced");
@@ -2880,6 +2913,7 @@ export default function Overwatch() {
       const s = await loadStored(SETTINGS_KEY, null);
       if (s) {
         if (Array.isArray(s.watchlist) && s.watchlist.length) setWatchlist(reconcileWatchlist(s.watchlist));
+        if (s.instrument) setInstrument(thesisInstrumentConfig(s.instrument).symbol);
         if (s.weights) setWeights((w) => ({ ...w, ...s.weights }));
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
@@ -2894,8 +2928,8 @@ export default function Overwatch() {
 
   /* persist on change */
   useEffect(() => {
-    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, weights, lean, risk });
-  }, [storageReady, watchlist, weights, lean, risk]);
+    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk });
+  }, [storageReady, watchlist, instrument, weights, lean, risk]);
   useEffect(() => {
     if (storageReady) saveStored(HISTORY_KEY, history);
   }, [storageReady, history]);
@@ -2978,10 +3012,11 @@ export default function Overwatch() {
     setThesis((s) => ({ ...s, status: "loading", error: null }));
     try {
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes });
+      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument });
+      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument });
       const entry = {
         ...data,
+        instrument,
         timestamp: data.timestamp || `${timing.generatedAtShort} · ${timing.session}`,
         timingNote: data.timingNote || timing.timingNote,
         _id: uid(),
@@ -2991,6 +3026,7 @@ export default function Overwatch() {
         _generatedAt: timing.generatedAt,
         _quoteAsOf: timing.quoteAsOf,
         _timing: timing,
+        _instrument: instrument,
         _weights: weights,
         _lean: lean,
         _risk: risk,
@@ -3013,10 +3049,12 @@ export default function Overwatch() {
     try {
       const edition = Math.max(1, newsletterHistory.length + 1);
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
-      const prompt = newsletterPrompt({ market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes });
-      const data = await callDesk("newsletter", prompt, { market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes });
+      const focusInstrument = thesis.data?.instrument || instrument;
+      const prompt = newsletterPrompt({ market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes, instrument: focusInstrument });
+      const data = await callDesk("newsletter", prompt, { market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes, instrument: focusInstrument });
       const entry = {
         ...data,
+        instrument: focusInstrument,
         timestamp: data.timestamp || `${timing.generatedAtShort} · ${timing.session}`,
         timingNote: data.timingNote || thesis.data.timingNote || timing.timingNote,
         _id: uid(),
@@ -3027,6 +3065,7 @@ export default function Overwatch() {
         _generatedAt: timing.generatedAt,
         _quoteAsOf: timing.quoteAsOf,
         _timing: timing,
+        _instrument: focusInstrument,
         _thesisId: thesis.data?._id || null,
         _thesis: thesis.data,
         _weights: weights,
@@ -3135,6 +3174,7 @@ export default function Overwatch() {
         {tab === "calendar" && <CalendarTab points={points} onRefresh={refreshPoints} />}
         {tab === "thesis" && (
           <ThesisTab
+            instrument={instrument} setInstrument={setInstrument}
             weights={weights} setWeights={setWeights}
             lean={lean} setLean={setLean}
             risk={risk} setRisk={setRisk}

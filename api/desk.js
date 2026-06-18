@@ -1380,7 +1380,16 @@ const buildMarketOutlook = ({ news, points, timing }) => {
   return `${recentLine} ${currentLine} ${upcomingLine}${timingLine}`;
 };
 
-const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "" }) => {
+const THESIS_INSTRUMENTS = {
+  SPX: { symbol: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx" },
+  NDX: { symbol: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx" },
+  DJI: { symbol: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji" },
+};
+
+const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
+
+const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX" }) => {
+  const focus = getThesisInstrument(instrument);
   const tickers = market?.tickers || [];
   const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"].map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct).filter(Number.isFinite);
   const cashTape = avgChangeForSymbols(tickers, ["SPX", "NDX", "DJI"]);
@@ -1422,8 +1431,8 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   const alignmentBoost = alignedPillars >= 4 ? 1 : alignedPillars <= 2 ? -1 : 0;
   const riskConviction = stance.risk === "aggressive" ? 1 : stance.risk === "defensive" ? -1 : 0;
   const conviction = clamp(Math.round(Math.abs(score) / 12) + 3 + alignmentBoost + riskConviction - (eventPenalty >= 25 ? 1 : 0), 3, stance.risk === "defensive" ? 8 : 10);
-  const spx = points?.spx || {};
-  const pivot = spx.pivot || spx.spot;
+  const focusPoints = points?.[focus.pointsKey] || {};
+  const pivot = focusPoints.pivot || focusPoints.spot;
   const topContributors = [...weighted.rows].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 3);
   const pillarRead = `Top weighted pillars: ${topContributors.map((row) => `${row.label} ${row.score >= 0 ? "+" : ""}${row.score} at ${row.weight}% weight`).join("; ")}.`;
   const stanceSummary = stanceRead({ ...stance, baseScore: weighted.baseScore, finalScore: score });
@@ -1435,18 +1444,19 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   const action = pivot
     ? `${round(pivot, 0)} is the decision point: acceptance ${bias === "bearish" ? "below" : "above"} it confirms the primary scenario.`
     : "Use the opening range as the decision point and wait for acceptance.";
-  const upside = (spx.resistances || []).length ? (spx.resistances || []).join(" / ") : "First resistance, then the prior session high.";
-  const downside = (spx.supports || []).length ? (spx.supports || []).join(" / ") : "First support, then the prior session low.";
+  const upside = (focusPoints.resistances || []).length ? (focusPoints.resistances || []).join(" / ") : "First resistance, then the prior session high.";
+  const downside = (focusPoints.supports || []).length ? (focusPoints.supports || []).join(" / ") : "First support, then the prior session low.";
   const leanPhrase = stance.lean === "auto" ? "auto stance" : `${stance.lean} directional lean`;
 
   return {
+    instrument: focus.symbol,
     bias,
     score,
     conviction,
     timestamp: `${timingRead.generatedAtShort} · ${timingRead.session}`,
     timingNote: timingRead.timingNote,
     headline,
-    summary: `The ${timingRead.staleCashRisk ? "futures-adjusted" : "index"} tape is averaging ${round(tape)}% while the headline balance scores ${Math.round(newsScore)}. ${points?.internals?.trendDetail?.read || `The live trend read is ${points?.internals?.trend || "range"}.`} ${pillarRead} ${stanceSummary} That combination produces a ${bias} call with ${conviction}/10 conviction${notes ? ", with the desk note treated as a secondary constraint" : ""}.`,
+    summary: `The ${timingRead.staleCashRisk ? "futures-adjusted" : "index"} tape is averaging ${round(tape)}% while the headline balance scores ${Math.round(newsScore)}. ${points?.internals?.trendDetail?.read || `The live trend read is ${points?.internals?.trend || "range"}.`} ${pillarRead} ${stanceSummary} That combination produces a ${bias} call with ${conviction}/10 conviction for ${focus.symbol}${notes ? ", with the desk note treated as a secondary constraint" : ""}.`,
     pillarRead,
     stanceRead: stanceSummary,
     pillarWeights: weighted.weights,
@@ -1461,6 +1471,7 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
       `Weighted base score ${weighted.baseScore >= 0 ? "+" : ""}${weighted.baseScore}`,
       `Desk stance ${stance.lean} / ${stance.risk} (${stance.leanAdjustment >= 0 ? "+" : ""}${stance.leanAdjustment} lean adj, ${stance.riskMultiplier}x risk)`,
       `Pillar weights: ${summarizeWeights(weighted.weights)}`,
+      `Instrument focus ${focus.symbol} / ${focus.futures}`,
       `${timingRead.staleCashRisk ? "Futures-adjusted tape" : "Index tape"} ${tape >= 0 ? "+" : ""}${round(tape)}%`,
       Number.isFinite(futuresTape) && Number.isFinite(cashTape) ? `Futures ${signed(futuresTape, 2, "%")} vs cash ${signed(cashTape, 2, "%")}` : null,
       points?.internals?.breadthDetail ? `Breadth ${points.internals.breadthDetail.advancers}/${points.internals.breadthDetail.total} sectors (${points.internals.breadthDetail.tone})` : null,
@@ -1472,35 +1483,38 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
       `${risk} risk posture`,
     ].filter(Boolean),
     bullCase: [
-      `SPX accepts above ${round(pivot || spx.spot || 0, 0)} and breadth improves beyond ${points?.internals?.breadthDetail?.pctPositive ?? 50}% participation.`,
+      `${focus.symbol} accepts above ${round(pivot || focusPoints.spot || 0, 0)} and breadth improves beyond ${points?.internals?.breadthDetail?.pctPositive ?? 50}% participation.`,
       "Nasdaq leadership broadens instead of relying on a narrow group.",
       "Volatility fades while sector participation turns more constructive.",
     ],
     bearCase: [
-      `SPX rejects ${round(pivot || spx.spot || 0, 0)} and loses first support.`,
+      `${focus.symbol} rejects ${round(pivot || focusPoints.spot || 0, 0)} and loses first support.`,
       "VIX expands while breadth rolls over and growth/cyclicals weaken together.",
       "High-impact headlines keep rates or geopolitical risk bid.",
     ],
     levels: { action, upside, downside },
     gamePlan: bias === "neutral"
-      ? `Trade smaller around the pivot and demand an opening-range break with breadth confirmation. The ${stance.risk} risk setting argues for ${stance.risk === "aggressive" ? "faster add-ons only after confirmation" : stance.risk === "defensive" ? "smaller size and cleaner invalidation" : "normal size after confirmation"}.`
-      : `Favor ${bias === "bullish" ? "long" : "short"} setups only after price confirms at the action level. Scale risk to ${risk}; the ${leanPhrase} is already reflected in the final score, so do not double-count it by chasing an extended first move.`,
+      ? `Trade ${focus.symbol} smaller around the pivot and demand an opening-range break with breadth confirmation. The ${stance.risk} risk setting argues for ${stance.risk === "aggressive" ? "faster add-ons only after confirmation" : stance.risk === "defensive" ? "smaller size and cleaner invalidation" : "normal size after confirmation"}.`
+      : `Favor ${bias === "bullish" ? "long" : "short"} ${focus.symbol} / ${focus.futures} setups only after price confirms at the action level. Scale risk to ${risk}; the ${leanPhrase} is already reflected in the final score, so do not double-count it by chasing an extended first move.`,
     invalidation: bias === "bullish"
-      ? `A sustained break below ${spx.supports?.[0] || "first support"} with rising VIX invalidates the long thesis.`
+      ? `A sustained break below ${focusPoints.supports?.[0] || "first support"} with rising VIX invalidates the long thesis.`
       : bias === "bearish"
-        ? `A sustained reclaim above ${spx.resistances?.[0] || "first resistance"} with improving breadth invalidates the short thesis.`
+        ? `A sustained reclaim above ${focusPoints.resistances?.[0] || "first resistance"} with improving breadth invalidates the short thesis.`
         : "Two-sided acceptance away from the pivot with broad sector confirmation ends the neutral thesis.",
     standAside: "Stand aside during headline-driven gaps, conflicting breadth, or repeated failed breaks around the action level.",
   };
 };
 
-const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced" }) => {
+const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced", instrument = thesis?.instrument || "SPX" }) => {
+  const focus = getThesisInstrument(instrument);
   const spx = market?.tickers?.find((item) => item.symbol === "SPX");
   const ndx = market?.tickers?.find((item) => item.symbol === "NDX");
+  const dji = market?.tickers?.find((item) => item.symbol === "DJI");
   const vix = market?.tickers?.find((item) => item.symbol === "VIX");
+  const focusTicker = market?.tickers?.find((item) => item.symbol === focus.symbol);
   const timingRead = timingContext(timing, market);
   const timingSentence = timingRead.staleCashRisk
-    ? `Because this was generated during ${timingRead.session}, cash index prints may lag live ES/NQ/YM futures.`
+    ? `Because this was generated during ${timingRead.session}, cash index prints may lag live ${focus.futures} futures.`
     : `This note was generated during ${timingRead.session}, with quote timing still checked against the live feed.`;
   const actionLevel = thesis.levels?.action || "the opening range";
   const actionNumber = String(actionLevel).match(/^[\d,.]+/)?.[0];
@@ -1518,6 +1532,7 @@ const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, wei
     finalScore: Number(thesis?.score ?? 0),
   });
   return {
+    instrument: focus.symbol,
     headline: thesis.headline,
     dek: `${thesis.bias.toUpperCase()} · score ${thesis.score >= 0 ? "+" : ""}${thesis.score} · conviction ${thesis.conviction}/10 · ${lean}/${risk}`,
     timestamp: `${timingRead.generatedAtShort} · ${timingRead.session}`,
@@ -1525,12 +1540,12 @@ const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, wei
     stanceRead: stanceSummary,
     pillarRead,
     pillarWeights: normalizedWeights,
-    executiveSummary: `Overwatch enters edition ${edition} with a ${thesis.bias} bias. The call is anchored to the action level and weighted by the desk configuration: ${pillarRead} ${stanceSummary} ${timingSentence}`,
-    marketRecap: `SPX is ${spx ? `${spx.changePct >= 0 ? "up" : "down"} ${Math.abs(spx.changePct).toFixed(2)}% near ${spx.price}` : "awaiting a fresh quote"}, while the Nasdaq 100 is ${ndx ? `${ndx.changePct >= 0 ? "up" : "down"} ${Math.abs(ndx.changePct).toFixed(2)}%` : "mixed"}. ${breadthLine} ${volLine} ${timingSentence}`,
+    executiveSummary: `Overwatch enters edition ${edition} with a ${thesis.bias} bias in ${focus.symbol}. The call is anchored to the action level and weighted by the desk configuration: ${pillarRead} ${stanceSummary} ${timingSentence}`,
+    marketRecap: `${focus.symbol} is ${focusTicker ? `${focusTicker.changePct >= 0 ? "up" : "down"} ${Math.abs(focusTicker.changePct).toFixed(2)}% near ${focusTicker.price}` : "awaiting a fresh quote"}, while SPX / NDX / DJI read ${[spx, ndx, dji].filter(Boolean).map((item) => `${item.symbol} ${signed(item.changePct, 2, "%")}`).join(", ") || "mixed"}. ${breadthLine} ${volLine} ${timingSentence}`,
     marketOutlook: buildMarketOutlook({ news, points, timing }),
     thesisNarrative: `${thesis.summary} The desk will treat ${actionReference} as the primary trigger, but breadth and volatility must confirm the move. The ${lean}/${risk} stance and pillar weights are already embedded in the score, so the note should not double-count the trader preference. ${thesis.gamePlan} The call is invalidated when ${String(thesis.invalidation || "price breaks the opposite side of the setup").replace(/^./, (char) => char.toLowerCase())}`,
     watchToday: [
-      thesis.levels?.action || "Opening-range acceptance",
+      `${focus.symbol}: ${thesis.levels?.action || "Opening-range acceptance"}`,
       `VIX behavior near ${points?.vix?.spot ?? "the latest print"}`,
       points?.internals?.breadthDetail ? `Breadth confirmation: ${points.internals.breadthDetail.advancers}/${points.internals.breadthDetail.total} sectors positive` : "Sector breadth and Nasdaq leadership",
       points?.internals?.volDetail ? `Vol regime: ${points.internals.volDetail.zone} / ${points.internals.volDetail.structure}` : null,
