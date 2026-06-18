@@ -2454,22 +2454,6 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
           </>
         )}
 
-        <Card icon={History} title="Thesis archive" sub={`${history.length} saved call${history.length === 1 ? "" : "s"} — persists between sessions`}>
-          {!history.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically. Build a track record, then audit your reads.</div>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
-            {history.map((h) => (
-              <div key={h._id} className={`hist-row ${viewing?._id === h._id ? "viewing" : ""}`} onClick={() => setViewing(h)}>
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(h)}</span>
-                <span className="chip" style={{ color: h.bias === "bullish" ? C.bull : h.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor", flex: "none" }}>{h.bias}</span>
-                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{h.headline}</span>
-                <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(h.score, 0)}</span>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteHist(h._id); }}>
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </div>
   );
@@ -2760,26 +2744,119 @@ const NewsletterTab = ({
         <EmptyState
           icon={Mail}
           title="No current thesis loaded"
-          body="You can reopen archived newsletters below, or build a fresh thesis to publish a new edition."
+          body="You can reopen archived newsletters from the Archives tab, or build a fresh thesis to publish a new edition."
           action={<button className="btn btn-brass" onClick={onGoThesis}><FlaskConical size={15} /> Go to Thesis Lab</button>}
         />
       )}
 
-      <Card icon={History} title="Newsletter archive" sub={`${newsletterHistory.length} saved edition${newsletterHistory.length === 1 ? "" : "s"} — persists between sessions`}>
-        {!newsletterHistory.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated newsletter lands here automatically, just like thesis history.</div>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
-          {newsletterHistory.map((item) => (
-            <div key={item._id} className={`hist-row ${viewingNewsletter?._id === item._id ? "viewing" : ""}`} onClick={() => setViewingNewsletter(item)}>
-              <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(item)}</span>
-              <span className="chip b-brass" style={{ flex: "none" }}>No. {item._edition || "—"}</span>
-              <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{item.headline || "Untitled edition"}</span>
-              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteNewsletter(item._id); }}>
-                <Trash2 size={12} />
-              </button>
+    </div>
+  );
+};
+
+/* ================================================================
+   TAB — ARCHIVES
+   ================================================================ */
+
+const ArchiveTab = ({
+  history,
+  viewing,
+  setViewing,
+  onDeleteHist,
+  newsletterHistory,
+  viewingNewsletter,
+  setViewingNewsletter,
+  onDeleteNewsletter,
+  onGoThesis,
+  onGoNewsletter,
+}) => {
+  const latestThesis = history[0];
+  const latestNewsletter = newsletterHistory[0];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="grid g-2">
+        <Card icon={History} title="Archive overview" sub="One place for thesis calls and published notes">
+          <div className="grid g-3">
+            <div className="metric">
+              <span className="metric-k" style={{ color: C.brass }}>Thesis calls</span>
+              <span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{history.length} saved call{history.length === 1 ? "" : "s"}</span>
             </div>
-          ))}
-        </div>
-      </Card>
+            <div className="metric">
+              <span className="metric-k" style={{ color: C.bull }}>Newsletter editions</span>
+              <span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{newsletterHistory.length} saved edition{newsletterHistory.length === 1 ? "" : "s"}</span>
+            </div>
+          </div>
+          <div style={{ marginTop: 13, color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+            Use the lists below to reopen a saved thesis or note, or remove older versions when you want to clean up the desk history.
+          </div>
+        </Card>
+
+        <Card icon={FlaskConical} title="Latest thesis" sub={latestThesis ? latestThesis.headline : "No saved calls yet"}>
+          {latestThesis ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="chip">{latestThesis.instrument || "SPX"}</span>
+                <span className="chip" style={{ color: latestThesis.bias === "bullish" ? C.bull : latestThesis.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor" }}>{latestThesis.bias}</span>
+                <span className="chip b-info">SCORE {fmtSigned(latestThesis.score, 0)}</span>
+              </div>
+              <button className="btn btn-brass" onClick={() => { setViewing(latestThesis); onGoThesis?.(); }}>Open latest thesis</button>
+            </div>
+          ) : (
+            <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically.</div>
+          )}
+        </Card>
+
+        <Card icon={Mail} title="Latest newsletter" sub={latestNewsletter ? latestNewsletter.headline : "No saved editions yet"}>
+          {latestNewsletter ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className="chip b-brass">No. {latestNewsletter._edition || "—"}</span>
+                <span className="chip">{latestNewsletter.instrument || "SPX"}</span>
+              </div>
+              <button className="btn btn-brass" onClick={() => { setViewingNewsletter(latestNewsletter); onGoNewsletter?.(); }}>Open latest newsletter</button>
+            </div>
+          ) : (
+            <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated newsletter lands here automatically.</div>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid g-2">
+        <Card icon={History} title="Thesis archive" sub={`${history.length} saved call${history.length === 1 ? "" : "s"} — persists between sessions`}>
+          {!history.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically. Build a track record, then audit your reads.</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+            {history.map((h) => (
+              <div key={h._id} className={`hist-row ${viewing?._id === h._id ? "viewing" : ""}`} onClick={() => setViewing(h)}>
+                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(h)}</span>
+                <span className="chip" style={{ color: h.bias === "bullish" ? C.bull : h.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor", flex: "none" }}>{h.bias}</span>
+                <span className="chip" style={{ flex: "none" }}>{h.instrument || "SPX"}</span>
+                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{h.headline}</span>
+                <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(h.score, 0)}</span>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteHist(h._id); }}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card icon={Mail} title="Newsletter archive" sub={`${newsletterHistory.length} saved edition${newsletterHistory.length === 1 ? "" : "s"} — persists between sessions`}>
+          {!newsletterHistory.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated newsletter lands in the Archives tab automatically, just like thesis history.</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+            {newsletterHistory.map((item) => (
+              <div key={item._id} className={`hist-row ${viewingNewsletter?._id === item._id ? "viewing" : ""}`} onClick={() => setViewingNewsletter(item)}>
+                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(item)}</span>
+                <span className="chip b-brass" style={{ flex: "none" }}>No. {item._edition || "—"}</span>
+                <span className="chip" style={{ flex: "none" }}>{item.instrument || "SPX"}</span>
+                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{item.headline || "Untitled edition"}</span>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteNewsletter(item._id); }}>
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
@@ -3105,12 +3182,14 @@ export default function Overwatch() {
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
   const newsletterBadge = newsletterHistory.length || null;
+  const archiveBadge = (history.length + newsletterHistory.length) || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", icon: Activity, badge: market.data?.tickers?.length },
     { id: "news", label: "News Intel", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: history.length || null },
     { id: "newsletter", label: "Newsletter", icon: Mail, badge: newsletterBadge },
+    { id: "archives", label: "Archives", icon: History, badge: archiveBadge },
   ];
 
   const steps = [
@@ -3194,6 +3273,20 @@ export default function Overwatch() {
             setViewingNewsletter={setViewingNewsletter}
             onDeleteNewsletter={deleteNewsletter}
             onGenerate={generateNewsletter} onGoThesis={() => setTab("thesis")} notify={notify}
+          />
+        )}
+        {tab === "archives" && (
+          <ArchiveTab
+            history={history}
+            viewing={viewing}
+            setViewing={setViewing}
+            onDeleteHist={deleteHist}
+            newsletterHistory={newsletterHistory}
+            viewingNewsletter={viewingNewsletter}
+            setViewingNewsletter={setViewingNewsletter}
+            onDeleteNewsletter={deleteNewsletter}
+            onGoThesis={() => setTab("thesis")}
+            onGoNewsletter={() => setTab("newsletter")}
           />
         )}
       </main>
