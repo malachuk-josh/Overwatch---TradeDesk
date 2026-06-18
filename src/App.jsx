@@ -2775,22 +2775,6 @@ const ArchiveTab = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div className="grid g-2">
-        <Card icon={History} title="Archive overview" sub="One place for thesis calls and published notes">
-          <div className="grid g-3">
-            <div className="metric">
-              <span className="metric-k" style={{ color: C.brass }}>Thesis calls</span>
-              <span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{history.length} saved call{history.length === 1 ? "" : "s"}</span>
-            </div>
-            <div className="metric">
-              <span className="metric-k" style={{ color: C.bull }}>Newsletter editions</span>
-              <span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{newsletterHistory.length} saved edition{newsletterHistory.length === 1 ? "" : "s"}</span>
-            </div>
-          </div>
-          <div style={{ marginTop: 13, color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-            Use the lists below to reopen a saved thesis or note, or remove older versions when you want to clean up the desk history.
-          </div>
-        </Card>
-
         <Card icon={FlaskConical} title="Latest thesis" sub={latestThesis ? latestThesis.headline : "No saved calls yet"}>
           {latestThesis ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
