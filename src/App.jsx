@@ -666,7 +666,8 @@ const CSS = `
 .g-3{grid-template-columns:repeat(3,1fr)}
 .g-data{grid-template-columns:1fr 1fr 1fr}
 .g-thesis{grid-template-columns:340px 1fr}
-@media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis{grid-template-columns:1fr}}
+.archives-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+@media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.g-3{grid-template-columns:1fr}.bd-main{padding:14px 12px 24px}.bd-header{padding:12px 14px;flex-wrap:wrap}.bd-hright{width:100%;justify-content:space-between;margin-left:0}}
 
 /* ---------- cards ---------- */
@@ -2774,7 +2775,7 @@ const ArchiveTab = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div className="grid g-2">
+      <div className="archives-grid">
         <Card icon={FlaskConical} title="Latest thesis" sub={latestThesis ? latestThesis.headline : "No saved calls yet"}>
           {latestThesis ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
@@ -2805,13 +2806,13 @@ const ArchiveTab = ({
         </Card>
       </div>
 
-      <div className="grid g-2">
+      <div className="archives-grid">
         <Card icon={History} title="Thesis archive" sub={`${history.length} saved call${history.length === 1 ? "" : "s"} — persists between sessions`}>
           {!history.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically. Build a track record, then audit your reads.</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
             {history.map((h) => (
               <div key={h._id} className={`hist-row ${viewing?._id === h._id ? "viewing" : ""}`} onClick={() => setViewing(h)}>
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(h)}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 164, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(h)}</span>
                 <span className="chip" style={{ color: h.bias === "bullish" ? C.bull : h.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor", flex: "none" }}>{h.bias}</span>
                 <span className="chip" style={{ flex: "none" }}>{h.instrument || "SPX"}</span>
                 <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{h.headline}</span>
@@ -2829,7 +2830,7 @@ const ArchiveTab = ({
           <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
             {newsletterHistory.map((item) => (
               <div key={item._id} className={`hist-row ${viewingNewsletter?._id === item._id ? "viewing" : ""}`} onClick={() => setViewingNewsletter(item)}>
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 132, flex: "none" }}>{archiveStamp(item)}</span>
+                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 164, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(item)}</span>
                 <span className="chip b-brass" style={{ flex: "none" }}>No. {item._edition || "—"}</span>
                 <span className="chip" style={{ flex: "none" }}>{item.instrument || "SPX"}</span>
                 <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{item.headline || "Untitled edition"}</span>
