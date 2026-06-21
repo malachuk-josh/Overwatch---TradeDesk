@@ -159,10 +159,10 @@ const storeBrief = async (data) => {
   const kvUrl = _kvUrl(), kvToken = _kvToken();
   if (kvUrl && kvToken) {
     try {
-      await fetch(`${kvUrl}/set/overwatch:brief`, {
+      await fetch(kvUrl, {
         method: "POST",
         headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ value: JSON.stringify(_briefCache), ex: 86400 }),
+        body: JSON.stringify(["SET", "overwatch:brief", JSON.stringify(_briefCache), "EX", "86400"]),
         signal: AbortSignal.timeout(5000),
       });
     } catch { /* KV optional */ }
