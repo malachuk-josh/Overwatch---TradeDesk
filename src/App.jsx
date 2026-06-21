@@ -93,6 +93,7 @@ const C = {
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const NEWSLETTER_HISTORY_KEY = "overwatch:newsletter-history";
+const BRIEFS_KEY = "overwatch:brief-history";
 const TOP_ASSET_CARD_ORDER = ["SPX", "ES", "NDX", "NQ", "DJI", "YM"];
 
 /* ---------------- formatting helpers ---------------- */
@@ -3126,6 +3127,77 @@ const NewsletterTab = ({
    TAB — ARCHIVES
    ================================================================ */
 
+const BriefDetailView = ({ brief, onBack, onDelete }) => {
+  const newsItems = Array.isArray(brief.overnightNews) ? brief.overnightNews : [];
+  const calItems = Array.isArray(brief.calendar) ? brief.calendar : [];
+  const riskItems = Array.isArray(brief.risks) ? brief.risks : [];
+  const runAt = brief.runAt || brief._receivedAt?.split("T")[1]?.slice(0, 5) || "";
+  const runDate = brief.date || brief._receivedAt?.split("T")[0] || "";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button className="btn btn-ghost btn-sm" onClick={onBack}><ChevronRight size={13} style={{ transform: "rotate(180deg)" }} /> Back</button>
+        <span className="disp" style={{ fontSize: 12, color: C.brass, letterSpacing: ".06em" }}>MORNING BRIEF</span>
+        <span style={{ fontSize: 12, color: C.muted, marginLeft: 4 }}>{runDate}{runAt ? ` · ${runAt}` : ""}</span>
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", color: C.bear }} onClick={onDelete} title="Delete"><Trash2 size={13} /></button>
+      </div>
+      {brief.marketOverview && (
+        <div className="mb-section">
+          <div className="mb-label">Market Overview</div>
+          <div className="mb-body">{brief.marketOverview}</div>
+        </div>
+      )}
+      {newsItems.length > 0 && (
+        <div className="mb-section">
+          <div className="mb-label">Overnight News</div>
+          <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 }}>
+            {newsItems.map((n, i) => <li key={i} style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5 }}>{n}</li>)}
+          </ul>
+        </div>
+      )}
+      {calItems.length > 0 && (
+        <div className="mb-section">
+          <div className="mb-label">Economic Calendar</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            {calItems.map((ev, i) => (
+              <div key={i} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span className="mono" style={{ fontSize: 11, color: C.muted, width: 80, flex: "none" }}>{ev.time}</span>
+                <span style={{ fontSize: 12.5, color: "var(--text)", flex: 1 }}>{ev.event}</span>
+                {ev.importance === "high" && <span className="chip" style={{ color: C.bear, borderColor: C.bear, fontSize: 10 }}>HIGH</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {brief.keyLevels && (
+        <div className="mb-section">
+          <div className="mb-label">Key Levels</div>
+          <div className="mb-body">{brief.keyLevels}</div>
+        </div>
+      )}
+      {(brief.setups || brief.actionable) && (
+        <div className="mb-section">
+          <div className="mb-label">Setups</div>
+          <div className="mb-body">{brief.setups || brief.actionable}</div>
+        </div>
+      )}
+      {riskItems.length > 0 && (
+        <div className="mb-section">
+          <div className="mb-label">Risks</div>
+          <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 4 }}>
+            {riskItems.map((r, i) => <li key={i} style={{ fontSize: 12.5, color: C.brass, lineHeight: 1.5 }}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+      {brief.summary && (
+        <div style={{ borderTop: `1px solid var(--line)`, paddingTop: 12, fontSize: 13, color: "var(--text)", lineHeight: 1.6, fontStyle: "italic" }}>
+          {brief.summary}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ArchiveTab = ({
   history,
   viewing,
@@ -3135,9 +3207,12 @@ const ArchiveTab = ({
   viewingNewsletter,
   setViewingNewsletter,
   onDeleteNewsletter,
+  briefHistory,
+  onDeleteBrief,
   onGoThesis,
   onGoNewsletter,
 }) => {
+  const [viewingBrief, setViewingBrief] = useState(null);
   const latestThesis = history[0];
   const latestNewsletter = newsletterHistory[0];
 
@@ -3210,6 +3285,41 @@ const ArchiveTab = ({
           </div>
         </Card>
       </div>
+
+      <Card icon={NotebookPen} title="Morning Brief Archive" sub={briefHistory.length ? `${briefHistory.length} brief${briefHistory.length === 1 ? "" : "s"} — persists between sessions` : "No briefs archived yet"}>
+        {viewingBrief ? (
+          <BriefDetailView
+            brief={viewingBrief}
+            onBack={() => setViewingBrief(null)}
+            onDelete={() => { onDeleteBrief(viewingBrief._id); setViewingBrief(null); }}
+          />
+        ) : (
+          <>
+            {!briefHistory.length && (
+              <div style={{ color: C.muted, fontSize: 12.5 }}>
+                Briefs posted by the 5 AM routine auto-archive here each morning. Run the routine to populate your first entry.
+              </div>
+            )}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+              {briefHistory.map((b) => {
+                const date = b.date || b._receivedAt?.split("T")[0] || "Unknown date";
+                const runAt = b.runAt || (b._receivedAt ? new Date(b._receivedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "");
+                const summary = b.summary || b.marketOverview || "No summary";
+                return (
+                  <div key={b._id} className="hist-row" onClick={() => setViewingBrief(b)}>
+                    <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 90, flex: "none", whiteSpace: "nowrap" }}>{date}</span>
+                    {runAt && <span className="mono" style={{ fontSize: 10.5, color: C.brass, flex: "none", whiteSpace: "nowrap" }}>{runAt}</span>}
+                    <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{summary}</span>
+                    <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteBrief(b._id); }}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 };
@@ -3323,6 +3433,7 @@ export default function Overwatch() {
   const [brief, setBrief] = useState(IDLE);
 
   const [history, setHistory] = useState([]);
+  const [briefHistory, setBriefHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
   const [newsletterHistory, setNewsletterHistory] = useState([]);
   const [viewingNewsletter, setViewingNewsletter] = useState(null);
@@ -3353,6 +3464,8 @@ export default function Overwatch() {
       if (Array.isArray(h) && h.length) setHistory(h);
       const nh = await loadStored(NEWSLETTER_HISTORY_KEY, []);
       if (Array.isArray(nh) && nh.length) setNewsletterHistory(nh);
+      const bh = await loadStored(BRIEFS_KEY, []);
+      if (Array.isArray(bh) && bh.length) setBriefHistory(bh);
       setStorageReady(true);
     })();
   }, []);
@@ -3367,6 +3480,9 @@ export default function Overwatch() {
   useEffect(() => {
     if (storageReady) saveStored(NEWSLETTER_HISTORY_KEY, newsletterHistory);
   }, [storageReady, newsletterHistory]);
+  useEffect(() => {
+    if (storageReady) saveStored(BRIEFS_KEY, briefHistory);
+  }, [storageReady, briefHistory]);
 
   const notify = useCallback((msg, kind = "ok") => {
     const id = uid();
@@ -3422,6 +3538,16 @@ export default function Overwatch() {
     if (!storageReady || tab !== "newsletter") return;
     if (brief.status === "idle") refreshBrief();
   }, [storageReady, tab]);
+
+  useEffect(() => {
+    if (!storageReady || brief.status !== "ready" || !brief.data) return;
+    const date = brief.data.date || brief.data._receivedAt?.split("T")[0];
+    if (!date) return;
+    setBriefHistory((prev) => {
+      if (prev.some((b) => (b.date || b._receivedAt?.split("T")[0]) === date)) return prev;
+      return [{ ...brief.data, _id: uid() }, ...prev];
+    });
+  }, [storageReady, brief.status, brief.data]);
 
   useEffect(() => {
     if (!storageReady || tab !== "pulse") return;
@@ -3538,11 +3664,15 @@ export default function Overwatch() {
     setViewingNewsletter((v) => (v && v._id === id ? null : v));
     notify("Archived newsletter deleted", "ok");
   };
+  const deleteBrief = (id) => {
+    setBriefHistory((h) => h.filter((x) => x._id !== id));
+    notify("Morning brief deleted", "ok");
+  };
 
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
   const newsletterBadge = newsletterHistory.length || null;
-  const archiveBadge = (history.length + newsletterHistory.length) || null;
+  const archiveBadge = (history.length + newsletterHistory.length + briefHistory.length) || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", icon: Activity, badge: market.data?.tickers?.length },
     { id: "news", label: "News Intel", icon: Newspaper, badge: news.data?.headlines?.length },
@@ -3646,6 +3776,8 @@ export default function Overwatch() {
             viewingNewsletter={viewingNewsletter}
             setViewingNewsletter={setViewingNewsletter}
             onDeleteNewsletter={deleteNewsletter}
+            briefHistory={briefHistory}
+            onDeleteBrief={deleteBrief}
             onGoThesis={() => setTab("thesis")}
             onGoNewsletter={() => setTab("newsletter")}
           />
