@@ -149,16 +149,19 @@ let newsCache;
 let calendarCache;
 let flowCache;
 
-// Morning brief cache — persists in warm Lambda instances; optionally backed by Vercel KV
+// Morning brief cache — persists in warm Lambda instances; optionally backed by Upstash/Vercel KV
 let _briefCache = null;
+const _kvUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const _kvToken = () => process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 const storeBrief = async (data) => {
   _briefCache = { ...data, _storedAt: Date.now() };
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  const kvUrl = _kvUrl(), kvToken = _kvToken();
+  if (kvUrl && kvToken) {
     try {
-      await fetch(`${process.env.KV_REST_API_URL}/set/overwatch:brief`, {
+      await fetch(`${kvUrl}/set/overwatch:brief`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ value: JSON.stringify(_briefCache), ex: 86400 }),
         signal: AbortSignal.timeout(5000),
       });
@@ -168,10 +171,11 @@ const storeBrief = async (data) => {
 
 const getBrief = async () => {
   if (_briefCache && (Date.now() - _briefCache._storedAt) < 86_400_000) return _briefCache;
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+  const kvUrl = _kvUrl(), kvToken = _kvToken();
+  if (kvUrl && kvToken) {
     try {
-      const res = await fetch(`${process.env.KV_REST_API_URL}/get/overwatch:brief`, {
-        headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` },
+      const res = await fetch(`${kvUrl}/get/overwatch:brief`, {
+        headers: { Authorization: `Bearer ${kvToken}` },
         signal: AbortSignal.timeout(5000),
       });
       const { result } = await res.json();
