@@ -1057,6 +1057,52 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
 .err{border:1px solid rgba(242,85,90,.4);background:var(--bear-dim);border-radius:10px;padding:15px 17px;display:flex;align-items:center;gap:12px;font-size:13px}
 .loading-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px;font-family:'JetBrains Mono',monospace}
 
+/* ---------- morning brief card ---------- */
+.mb-card{border:1px solid rgba(232,180,90,.35);border-radius:12px;background:linear-gradient(135deg,rgba(232,180,90,.06),rgba(232,180,90,.02));padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.mb-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mb-badge{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#E8B45A;background:rgba(232,180,90,.14);border:1px solid rgba(232,180,90,.35);border-radius:5px;padding:3px 8px}
+.mb-meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);letter-spacing:.06em}
+.mb-body{font-size:13.5px;line-height:1.72;color:var(--text)}
+.mb-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.mb-grid{grid-template-columns:1fr}}
+.mb-section{display:flex;flex-direction:column;gap:5px}
+.mb-label{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mb-item{font-size:12.5px;line-height:1.6;padding:3px 0;border-bottom:1px dotted var(--line)}
+.mb-item:last-child{border:none}
+.mb-chip-bull{display:inline-block;color:#3DD68C;font-weight:700;font-size:10px;font-family:'Space Grotesk',sans-serif;letter-spacing:.08em}
+.mb-chip-bear{display:inline-block;color:#F2555A;font-weight:700;font-size:10px;font-family:'Space Grotesk',sans-serif;letter-spacing:.08em}
+.mb-none{font-size:12.5px;color:var(--muted);font-style:italic}
+
+/* ---------- daily trade plan (inside newspaper) ---------- */
+.tp-divider{display:flex;align-items:center;gap:12px;margin:30px 0 20px}
+.tp-divider-line{flex:1;height:2px;background:var(--paper-ink)}
+.tp-divider-label{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#A87B2E;white-space:nowrap}
+.tp-checklist{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-bottom:4px}
+@media(max-width:640px){.tp-checklist{grid-template-columns:1fr}}
+.tp-check-item{display:flex;align-items:flex-start;gap:7px;font-family:'Inter',sans-serif;font-size:12px;line-height:1.55;padding:4px 0;border-bottom:1px dotted var(--paper-line)}
+.tp-check-item:last-child{border:none}
+.tp-check-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#A87B2E;font-weight:700;flex:none;width:88px}
+.tp-setups-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
+@media(max-width:640px){.tp-setups-grid{grid-template-columns:1fr}}
+.tp-setup-box{border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.6}
+.tp-setup-box.bull{background:rgba(30,122,79,.08);border:1px solid rgba(30,122,79,.3)}
+.tp-setup-box.bear{background:rgba(184,80,63,.08);border:1px solid rgba(184,80,63,.3)}
+.tp-setup-box h5{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 7px}
+.tp-setup-box.bull h5{color:#1E7A4F}
+.tp-setup-box.bear h5{color:#B8503F}
+.tp-setup-row{display:flex;justify-content:space-between;border-bottom:1px dotted var(--paper-line);padding:2.5px 0}
+.tp-setup-row:last-child{border:none}
+.tp-setup-key{color:var(--paper-muted);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em}
+.tp-futures-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:4px}
+.tp-futures-table th{text-align:left;font-weight:600;color:var(--paper-muted);border-bottom:1px solid var(--paper-ink);padding:4px 6px;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase}
+.tp-futures-table td{padding:5px 6px;border-bottom:1px solid var(--paper-line);vertical-align:top}
+.tp-internals-row{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:4px}
+@media(max-width:640px){.tp-internals-row{grid-template-columns:1fr}}
+.tp-internal-cell{border:1px solid var(--paper-line);border-radius:5px;padding:8px 10px}
+.tp-internal-cell .label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#A87B2E;margin-bottom:4px}
+.tp-internal-cell .val{font-size:12px;line-height:1.5}
+.tp-confirm{border-left:3px solid #A87B2E;background:rgba(168,123,46,.07);border-radius:0 5px 5px 0;padding:9px 12px;font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;margin-top:4px;color:var(--paper-muted)}
+
 /* ---------- toasts ---------- */
 .toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:9px;z-index:200}
 .toast{
@@ -2487,6 +2533,272 @@ const copyText = async (text) => {
 
 const PAPER_BIAS = { bullish: "#1E7A4F", bearish: "#B8503F", neutral: "#A87B2E" };
 
+/* ================================================================
+   MORNING BRIEF CARD — output from the 5 AM daily research routine
+   ================================================================ */
+
+const MorningBriefCard = ({ brief, status, onRefresh }) => {
+  if (status === "loading") return (
+    <div className="mb-card"><LoadingBlock lines={4} msg="Fetching morning brief from routine…" /></div>
+  );
+  if (!brief) return (
+    <div className="mb-card" style={{ gap: 10 }}>
+      <div className="mb-header">
+        <span className="mb-badge">Morning Brief</span>
+        <span className="mb-meta">No brief on file for today</span>
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onRefresh}><RefreshCw size={12} /></button>
+      </div>
+      <div className="mb-none">
+        The 5 AM daily research routine hasn't posted today's brief yet, or the feed is cold.
+        Configure the routine to POST its output to <span className="mono" style={{ fontSize: 11 }}>/api/desk</span> with <span className="mono" style={{ fontSize: 11 }}>operation: "brief"</span> to auto-populate this card each morning.
+      </div>
+    </div>
+  );
+  const runAt = brief.runAt || brief._receivedAt?.split("T")[1]?.slice(0, 5) || "5:00 AM";
+  const runDate = brief.date || brief._receivedAt?.split("T")[0] || "";
+  const newsItems = Array.isArray(brief.overnightNews) ? brief.overnightNews : [];
+  const calItems = Array.isArray(brief.calendar) ? brief.calendar : [];
+  const riskItems = Array.isArray(brief.risks) ? brief.risks : [];
+
+  return (
+    <div className="mb-card">
+      <div className="mb-header">
+        <span className="mb-badge">Morning Brief</span>
+        <span className="mb-meta">{runDate} · {runAt} EDT · 5 AM Routine</span>
+        <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onRefresh} title="Refresh brief"><RefreshCw size={12} /></button>
+      </div>
+
+      {brief.marketOverview && (
+        <div className="mb-body">{brief.marketOverview}</div>
+      )}
+
+      <div className="mb-grid">
+        {newsItems.length > 0 && (
+          <div className="mb-section">
+            <div className="mb-label">Overnight News</div>
+            {newsItems.slice(0, 5).map((item, i) => (
+              <div key={i} className="mb-item">{item}</div>
+            ))}
+          </div>
+        )}
+        {calItems.length > 0 && (
+          <div className="mb-section">
+            <div className="mb-label">Economic Calendar</div>
+            {calItems.map((item, i) => (
+              <div key={i} className="mb-item">
+                <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: item.importance === "high" ? C.bear : C.brass }}>{item.time}</span>
+                {" — "}{item.event}
+                {item.importance === "high" && <span className="mb-chip-bear"> ★</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        {brief.keyLevels && (
+          <div className="mb-section">
+            <div className="mb-label">Key Levels</div>
+            <div className="mb-item">{brief.keyLevels}</div>
+          </div>
+        )}
+        {riskItems.length > 0 && (
+          <div className="mb-section">
+            <div className="mb-label">Key Risks</div>
+            {riskItems.slice(0, 3).map((item, i) => (
+              <div key={i} className="mb-item"><span className="mb-chip-bear">▸</span> {item}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {(brief.setups || brief.actionable) && (
+        <div className="mb-section">
+          <div className="mb-label">Actionable Setups</div>
+          <div className="mb-body" style={{ fontSize: 12.5, marginTop: 2 }}>{brief.setups || brief.actionable}</div>
+        </div>
+      )}
+
+      {brief.summary && (
+        <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10, fontSize: 13, color: C.muted, lineHeight: 1.65, fontStyle: "italic" }}>
+          {brief.summary}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
+   DAILY TRADE PLAN SECTION — rendered inside the newsletter paper
+   ================================================================ */
+
+const TradePlanSection = ({ plan }) => {
+  if (!plan) return null;
+  const biasC = plan.bias === "bullish" ? "#1E7A4F" : plan.bias === "bearish" ? "#B8503F" : "#A87B2E";
+
+  return (
+    <>
+      <div className="tp-divider">
+        <div className="tp-divider-line" />
+        <div className="tp-divider-label">Daily Trade Plan — SPY</div>
+        <div className="tp-divider-line" />
+      </div>
+
+      {/* Bias Meter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: biasC }}>
+          ■ Bias: {plan.biasLabel}
+        </span>
+        {plan.internals?.vixPrice && (
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: "var(--paper-muted)" }}>
+            VIX {plan.internals.vixPrice} · {plan.internals.vixRead}
+          </span>
+        )}
+      </div>
+
+      {/* Macro Risk Note */}
+      {plan.macroRisk && (
+        <div style={{ border: "1.5px solid rgba(168,123,46,.35)", borderLeft: "3px solid #A87B2E", borderRadius: "0 5px 5px 0", background: "rgba(168,123,46,.07)", padding: "9px 13px", marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, color: "var(--paper-muted)" }}>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", color: "#A87B2E", fontWeight: 700 }}>■■ Macro Risk Note: </span>
+          {plan.macroRisk}
+        </div>
+      )}
+
+      {/* Pre-Market Checklist */}
+      <div className="np-sec">Pre-Market Checklist</div>
+      <div className="tp-checklist">
+        {plan.checklist && Object.entries({
+          "Overnight": plan.checklist.overnightConditions,
+          "Key Levels": plan.checklist.keyLevels,
+          "Events": plan.checklist.economicEvents,
+          "Game Plan": plan.checklist.gamePlan,
+          "Risk Mgmt": plan.checklist.riskManagement,
+        }).filter(([, v]) => v).map(([k, v]) => (
+          <div key={k} className="tp-check-item">
+            <span className="tp-check-label">{k}</span>
+            <span style={{ fontSize: 11.5, lineHeight: 1.55 }}>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Key S/R */}
+      {(plan.levels?.spyResistance?.length || plan.levels?.spySupport?.length) ? (
+        <>
+          <div className="np-sec">Key Support & Resistance — SPY</div>
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>
+            {plan.levels.spyResistance?.length > 0 && (
+              <div>
+                <span style={{ color: "#B8503F", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}>Resistance: </span>
+                {plan.levels.spyResistance.join(" · ")}
+              </div>
+            )}
+            {plan.levels.spySupport?.length > 0 && (
+              <div>
+                <span style={{ color: "#1E7A4F", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}>Support: </span>
+                {plan.levels.spySupport.join(" · ")}
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {/* Bullish / Bearish Setups */}
+      <div className="np-sec">Trade Setups</div>
+      <div className="tp-setups-grid">
+        <div className="tp-setup-box bull">
+          <h5>Bullish Setups</h5>
+          {(plan.bullishSetups || []).map((s, i) => (
+            <div key={i} style={{ marginBottom: i < plan.bullishSetups.length - 1 ? 8 : 0 }}>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 10.5, color: "#1E7A4F", marginBottom: 3 }}>{i + 1}. {s.label}</div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Entry</span><span>{s.entry}</span></div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Target</span><span>{s.target}</span></div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Stop</span><span>{s.stop}</span></div>
+              {s.options && <div className="tp-setup-row"><span className="tp-setup-key">Options</span><span style={{ fontSize: 10.5 }}>{s.options}</span></div>}
+            </div>
+          ))}
+        </div>
+        <div className="tp-setup-box bear">
+          <h5>Bearish Setups</h5>
+          {(plan.bearishSetups || []).map((s, i) => (
+            <div key={i} style={{ marginBottom: i < plan.bearishSetups.length - 1 ? 8 : 0 }}>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 10.5, color: "#B8503F", marginBottom: 3 }}>{i + 1}. {s.label}</div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Entry</span><span>{s.entry}</span></div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Target</span><span>{s.target}</span></div>
+              <div className="tp-setup-row"><span className="tp-setup-key">Stop</span><span>{s.stop}</span></div>
+              {s.options && <div className="tp-setup-row"><span className="tp-setup-key">Options</span><span style={{ fontSize: 10.5 }}>{s.options}</span></div>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Macro Futures Bias */}
+      <div className="np-sec">Macro Futures Bias</div>
+      <table className="tp-futures-table">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Chg %</th>
+            <th>Read</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(plan.futuresBias || []).map((row) => (
+            <tr key={row.symbol}>
+              <td style={{ fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{row.symbol}</td>
+              <td style={{ color: row.changePct == null ? C.muted : row.changePct >= 0 ? "#1E7A4F" : "#B8503F", fontWeight: 600 }}>
+                {row.changePct != null ? (row.changePct >= 0 ? "+" : "") + row.changePct + "%" : "—"}
+                {row.price != null ? ` (${row.price})` : ""}
+              </td>
+              <td style={{ color: "var(--paper-muted)", fontSize: 10.5 }}>{row.read}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Market Internals */}
+      <div className="np-sec">Market Internals</div>
+      <div className="tp-internals-row">
+        <div className="tp-internal-cell">
+          <div className="label">VIX Outlook</div>
+          <div className="val">{plan.internals?.vixPrice ? `VIX ${plan.internals.vixPrice}` : "—"}<br /><span style={{ fontSize: 10.5, color: "var(--paper-muted)" }}>{plan.internals?.vixRead || "—"}</span></div>
+        </div>
+        <div className="tp-internal-cell">
+          <div className="label">Top Gamma / Pivot</div>
+          <div className="val" style={{ fontFamily: "'JetBrains Mono',monospace" }}>{plan.internals?.gammaStrikes || "—"}</div>
+        </div>
+        <div className="tp-internal-cell">
+          <div className="label">Pre-Market Gap Map</div>
+          <div className="val" style={{ fontSize: 11 }}>
+            <span style={{ color: "#1E7A4F", fontWeight: 600 }}>Leaders:</span> {plan.internals?.leaders || "—"}<br />
+            <span style={{ color: "#B8503F", fontWeight: 600 }}>Laggards:</span> {plan.internals?.laggards || "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Economic Calendar */}
+      {plan.calendarHighlights?.length > 0 && (
+        <>
+          <div className="np-sec">Economic Calendar Highlights</div>
+          <ul className="np-watch">
+            {plan.calendarHighlights.map((c, i) => (
+              <li key={i}>
+                <span className="mono" style={{ fontSize: 11, color: c.importance === "high" ? "#B8503F" : "#A87B2E", fontWeight: 600 }}>{c.time}</span>
+                {" — "}{c.event}{" "}
+                <span style={{ fontSize: 10, color: "var(--paper-muted)" }}>({c.importance})</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {/* Confirmation Rule */}
+      {plan.confirmationRule && (
+        <>
+          <div className="np-sec">Notes & Risk Management</div>
+          <div className="tp-confirm">{plan.confirmationRule}</div>
+        </>
+      )}
+    </>
+  );
+};
+
 const buildMarkdown = ({ d, thesis, market, points, edition }) => {
   const lines = [];
   const stanceRead = d.stanceRead || thesis.stanceRead;
@@ -2559,6 +2871,54 @@ const buildMarkdown = ({ d, thesis, market, points, edition }) => {
   lines.push(`*${d.finalWord || ""}*`);
   lines.push("");
   lines.push(`— Overwatch Daily Bias Desk · live public market data + optional AI synthesis · verify before trading · not financial advice`);
+
+  const tp = d.tradePlan;
+  if (tp) {
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+    lines.push(`## Daily Trade Plan — SPY`);
+    lines.push(`**Bias:** ${tp.biasLabel} · VIX ${tp.internals?.vixPrice || "—"}`);
+    if (tp.macroRisk) lines.push(`\n> **Macro Risk:** ${tp.macroRisk}`);
+    lines.push("");
+    lines.push("### Pre-Market Checklist");
+    if (tp.checklist) {
+      Object.entries({ "Overnight Conditions": tp.checklist.overnightConditions, "Key Levels": tp.checklist.keyLevels, "Economic Events": tp.checklist.economicEvents, "Game Plan": tp.checklist.gamePlan, "Risk Management": tp.checklist.riskManagement }).filter(([, v]) => v).forEach(([k, v]) => lines.push(`- **${k}:** ${v}`));
+    }
+    if (tp.levels?.spyResistance?.length || tp.levels?.spySupport?.length) {
+      lines.push("");
+      lines.push("### Key Support & Resistance — SPY");
+      if (tp.levels.spyResistance?.length) lines.push(`- **Resistance:** ${tp.levels.spyResistance.join(", ")}`);
+      if (tp.levels.spySupport?.length) lines.push(`- **Support:** ${tp.levels.spySupport.join(", ")}`);
+    }
+    if (tp.bullishSetups?.length) {
+      lines.push("");
+      lines.push("### Bullish Setups");
+      tp.bullishSetups.forEach((s, i) => lines.push(`${i + 1}. **${s.label}** | Entry: ${s.entry} | Target: ${s.target} | Stop: ${s.stop}${s.options ? ` | ${s.options}` : ""}`));
+    }
+    if (tp.bearishSetups?.length) {
+      lines.push("");
+      lines.push("### Bearish Setups");
+      tp.bearishSetups.forEach((s, i) => lines.push(`${i + 1}. **${s.label}** | Entry: ${s.entry} | Target: ${s.target} | Stop: ${s.stop}${s.options ? ` | ${s.options}` : ""}`));
+    }
+    if (tp.futuresBias?.length) {
+      lines.push("");
+      lines.push("### Macro Futures Bias");
+      lines.push("| Symbol | Chg % | Read |");
+      lines.push("|---|---|---|");
+      tp.futuresBias.forEach((row) => lines.push(`| **${row.symbol}** | ${row.changePct != null ? (row.changePct >= 0 ? "+" : "") + row.changePct + "%" : "—"} | ${row.read} |`));
+    }
+    if (tp.calendarHighlights?.length) {
+      lines.push("");
+      lines.push("### Economic Calendar Highlights");
+      tp.calendarHighlights.forEach((c) => lines.push(`- **${c.time}** — ${c.event} (${c.importance})`));
+    }
+    if (tp.confirmationRule) {
+      lines.push("");
+      lines.push(`> **Confirmation Rule:** ${tp.confirmationRule}`);
+    }
+  }
+
   return lines.join("\n");
 };
 
@@ -2575,6 +2935,9 @@ const NewsletterTab = ({
   onGenerate,
   onGoThesis,
   notify,
+  brief,
+  briefStatus,
+  onRefreshBrief,
 }) => {
   const [copied, setCopied] = useState(false);
   const currentThesis = thesis.data;
@@ -2625,6 +2988,8 @@ const NewsletterTab = ({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <MorningBriefCard brief={brief} status={briefStatus} onRefresh={onRefreshBrief} />
+
       <div style={{ display: "flex", gap: 9, justifyContent: "center", flexWrap: "wrap" }}>
         <button className="btn btn-brass" onClick={onGenerate} disabled={nl.status === "loading" || !currentThesis} title={!currentThesis ? "Build today's thesis first" : ""}>
           {nl.status === "loading" ? <><RefreshCw size={14} className="spin" /> Writing the note…</> : nl.data ? <><RotateCcw size={14} /> Regenerate note</> : <><Mail size={14} /> Generate morning note</>}
@@ -2725,6 +3090,9 @@ const NewsletterTab = ({
             <div className="np-risk">{d.riskRadar}</div>
 
             <div className="np-final">{d.finalWord} <span style={{ fontStyle: "normal", fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, fontWeight: 700, letterSpacing: ".06em" }}>— THE OVERWATCH DESK</span></div>
+
+            <TradePlanSection plan={d.tradePlan || (t ? d : null)?.tradePlan} />
+
             <div className="np-foot">Overwatch Daily Bias · internal desk note · generated {d.timestamp || d._generatedAt || d._date || stampNow()} · live public market data + optional AI synthesis · verify levels before trading · not financial advice</div>
           </div>
         </div>
@@ -2952,6 +3320,7 @@ export default function Overwatch() {
   const [recap, setRecap] = useState(IDLE);
   const [thesis, setThesis] = useState(IDLE);
   const [nl, setNl] = useState(IDLE);
+  const [brief, setBrief] = useState(IDLE);
 
   const [history, setHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
@@ -3021,6 +3390,7 @@ export default function Overwatch() {
   const refreshNews = () => runFetch(setNews, "news", newsPrompt());
   const refreshPoints = () => runFetch(setPoints, "points", pointsPrompt());
   const refreshRecap = (payload = {}) => runFetch(setRecap, "recap", sessionPrompt(payload), payload);
+  const refreshBrief = () => runFetch(setBrief, "getbrief", null, {});
 
   const anyLoading = [market, news, points, recap].some((m) => m.status === "loading");
   const anyData = !!(market.data || news.data || points.data);
@@ -3047,6 +3417,11 @@ export default function Overwatch() {
     autoSyncStarted.current = true;
     syncAll();
   }, [storageReady]);
+
+  useEffect(() => {
+    if (!storageReady || tab !== "newsletter") return;
+    if (brief.status === "idle") refreshBrief();
+  }, [storageReady, tab]);
 
   useEffect(() => {
     if (!storageReady || tab !== "pulse") return;
@@ -3258,6 +3633,7 @@ export default function Overwatch() {
             setViewingNewsletter={setViewingNewsletter}
             onDeleteNewsletter={deleteNewsletter}
             onGenerate={generateNewsletter} onGoThesis={() => setTab("thesis")} notify={notify}
+            brief={brief.data} briefStatus={brief.status} onRefreshBrief={refreshBrief}
           />
         )}
         {tab === "archives" && (

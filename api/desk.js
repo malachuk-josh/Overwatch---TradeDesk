@@ -149,6 +149,38 @@ let newsCache;
 let calendarCache;
 let flowCache;
 
+// Morning brief cache — persists in warm Lambda instances; optionally backed by Vercel KV
+let _briefCache = null;
+
+const storeBrief = async (data) => {
+  _briefCache = { ...data, _storedAt: Date.now() };
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      await fetch(`${process.env.KV_REST_API_URL}/set/overwatch:brief`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ value: JSON.stringify(_briefCache), ex: 86400 }),
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch { /* KV optional */ }
+  }
+};
+
+const getBrief = async () => {
+  if (_briefCache && (Date.now() - _briefCache._storedAt) < 86_400_000) return _briefCache;
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      const res = await fetch(`${process.env.KV_REST_API_URL}/get/overwatch:brief`, {
+        headers: { Authorization: `Bearer ${process.env.KV_REST_API_TOKEN}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      const { result } = await res.json();
+      if (result) { _briefCache = JSON.parse(result); return _briefCache; }
+    } catch { /* KV optional */ }
+  }
+  return null;
+};
+
 const json = (res, status, body) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -1505,6 +1537,101 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   };
 };
 
+const makeTradePlan = ({ market, news, points, thesis }) => {
+  if (!thesis || !market) return null;
+  const bySymbol = (sym) => (market?.tickers || []).find((t) => t.symbol === sym);
+  const es = bySymbol("ES");
+  const nq = bySymbol("NQ");
+  const ym = bySymbol("YM");
+  const dxy = bySymbol("DXY");
+  const us10y = bySymbol("US10Y");
+  const cl = bySymbol("CL");
+  const vix = bySymbol("VIX");
+
+  const focus = thesis.instrument || "SPX";
+  const focusLevels = points?.[focus.toLowerCase()] || points?.spx || {};
+  const supports = (focusLevels.supports || []).filter((v) => Number.isFinite(Number(v)));
+  const resistances = (focusLevels.resistances || []).filter((v) => Number.isFinite(Number(v)));
+  const pivot = focusLevels.pivot;
+
+  const toSpy = (v) => (Number.isFinite(Number(v)) ? round(Number(v) / 10, 1) : null);
+  const r1 = resistances[0] != null ? Number(resistances[0]) : null;
+  const r2 = resistances[1] != null ? Number(resistances[1]) : null;
+  const s1 = supports[0] != null ? Number(supports[0]) : null;
+  const s2 = supports[1] != null ? Number(supports[1]) : null;
+  const piv = pivot != null ? Number(pivot) : null;
+  const spy = { r1: toSpy(r1), r2: toSpy(r2), s1: toSpy(s1), s2: toSpy(s2), piv: toSpy(piv) };
+
+  const bias = thesis.bias || "neutral";
+  const score = Number(thesis.score || 0);
+  const biasLabel = bias === "bullish" ? (Math.abs(score) > 50 ? "Bullish" : "Neutral-to-Bullish") : bias === "bearish" ? (Math.abs(score) > 50 ? "Bearish" : "Neutral-to-Bearish") : "Neutral";
+
+  const calAll = [...(points?.calendarGroups?.today || []), ...(points?.calendarGroups?.tomorrow || [])];
+  const highImpact = calAll.filter((e) => e?.importance === "high").slice(0, 2);
+  const macroRisk = highImpact.length
+    ? `${highImpact.map((e) => `${e.event}${e.time ? ` at ${e.time}` : ""}`).join("; ")} — manage size around event risk.`
+    : news?.mood || "No major scheduled catalysts — price action may be technically driven.";
+
+  const bullishSetups = [];
+  if (spy.s1 && spy.r1) bullishSetups.push({ label: "Bounce Play", entry: `${spy.s1}${spy.s2 ? `–${spy.s2}` : ""}`, target: `${spy.r1}${spy.r2 ? ` → ${spy.r2}` : ""}`, stop: `< ${round(spy.s1 - 1.5, 1)}`, options: `${Math.round(spy.s1)}C or ${Math.round(spy.s1)}C/${Math.round(spy.r1)}C spread` });
+  if (spy.r1) bullishSetups.push({ label: "Breakout", entry: `> ${spy.r1}`, target: spy.r2 ? `${spy.r2} → ${round(spy.r2 + 2, 1)}` : `${round(spy.r1 + 3, 1)}`, stop: `~ ${round(spy.r1 - 2, 1)}`, options: spy.r1 ? `${Math.round(spy.r1)}C or ${Math.round(spy.r1)}C/${Math.round(spy.r1 + 3)}C spread` : null });
+  if (!bullishSetups.length) bullishSetups.push({ label: "Long Entry", entry: thesis.levels?.action || "Opening-range acceptance", target: thesis.levels?.upside || "Next resistance", stop: "Below action level", options: null });
+
+  const bearishSetups = [];
+  if (spy.r1 && spy.s1) bearishSetups.push({ label: "Resistance Fade", entry: `~ ${spy.r1}${spy.r2 ? `/${spy.r2}` : ""}`, target: `${spy.s1}${spy.s2 ? ` → ${spy.s2}` : ""}`, stop: `> ${round(spy.r1 + 2, 1)}`, options: `${Math.round(spy.r1)}P or ${Math.round(spy.r1)}P/${Math.round(spy.s1)}P spread` });
+  if (spy.s1) bearishSetups.push({ label: "Breakdown", entry: `< ${spy.s1}`, target: spy.s2 ? `${spy.s2} → ${round(spy.s2 - 2, 1)}` : `${round(spy.s1 - 4, 1)}`, stop: `> ${round(spy.s1 + 2, 1)}`, options: spy.s1 ? `${Math.round(spy.s1)}P or ${Math.round(spy.s1 - 4)}P spread` : null });
+  if (!bearishSetups.length) bearishSetups.push({ label: "Short Entry", entry: thesis.levels?.action || "Opening-range rejection", target: thesis.levels?.downside || "Next support", stop: "Above action level", options: null });
+
+  const futuresBias = [
+    { symbol: "ES", label: "E-mini S&P", changePct: es ? round(es.changePct, 2) : null, read: es ? (Number(es.changePct) >= 0.3 ? "Constructive" : Number(es.changePct) <= -0.3 ? "Weak — lower highs" : "Flat") : "—" },
+    { symbol: "NQ", label: "E-mini Nasdaq", changePct: nq ? round(nq.changePct, 2) : null, read: nq ? (Number(nq.changePct) >= 0.3 ? "Growth leading" : Number(nq.changePct) <= -0.3 ? "Under mega-cap pressure" : "Flat") : "—" },
+    { symbol: "YM", label: "E-mini Dow", changePct: ym ? round(ym.changePct, 2) : null, read: ym ? (Number(ym.changePct) >= 0.3 ? "Value leading" : Number(ym.changePct) <= -0.3 ? "Value weak" : "Flat") : "—" },
+    { symbol: "DXY", label: "US Dollar", changePct: dxy ? round(dxy.changePct, 2) : null, read: dxy ? (Number(dxy.changePct) >= 0.2 ? "Strong — risk-off pressure" : Number(dxy.changePct) <= -0.2 ? "Weak — risk-on tailwind" : "Flat — neutral") : "—" },
+    { symbol: "US10Y", label: "10-Year Yield", changePct: us10y ? round(us10y.changePct, 2) : null, price: us10y ? round(us10y.price, 3) : null, read: us10y ? (Number(us10y.changePct) >= 0.5 ? "Sticky highs — equity headwind" : Number(us10y.changePct) <= -0.5 ? "Falling — supportive" : "Stable — neutral") : "—" },
+    { symbol: "CL", label: "WTI Crude", changePct: cl ? round(cl.changePct, 2) : null, read: cl ? (Number(cl.changePct) >= 0.8 ? "Bid — risk-on signal" : Number(cl.changePct) <= -0.8 ? "Weak — demand fears" : "Flat — neutral") : "—" },
+  ];
+
+  const vixPrice = vix?.price || points?.vix?.spot;
+  const vixZone = points?.internals?.volDetail?.zone || "";
+  const vixStr = points?.vix?.structure || "";
+  const vixRead = [vixZone ? `${vixZone.charAt(0).toUpperCase()}${vixZone.slice(1)}` : null, vixStr || null, Number(vixPrice) > 25 ? "risk-off bias" : Number(vixPrice) > 18 ? "watchful" : "calm"].filter(Boolean).join(" · ");
+
+  const sortedSectors = [...(market?.sectors || [])].filter((s) => Number.isFinite(Number(s.changePct))).sort((a, b) => Number(b.changePct) - Number(a.changePct));
+  const leaders = sortedSectors.slice(0, 2).map((s) => s.name).join(", ") || "N/A";
+  const laggards = sortedSectors.slice(-2).map((s) => s.name).join(", ") || "N/A";
+  const gammaStrikes = [spy.piv, spy.r1].filter((v) => v != null).join(", ") || "N/A";
+
+  const calHighlights = [...(points?.calendarGroups?.today || []), ...(points?.calendarGroups?.tomorrow || []), ...(points?.calendarGroups?.upcoming || [])].filter((e) => e?.importance !== "low").slice(0, 4);
+
+  return {
+    biasLabel,
+    bias,
+    score,
+    macroRisk,
+    levels: {
+      resistance: resistances.slice(0, 3).map((v) => round(v, 0)),
+      support: supports.slice(0, 3).map((v) => round(v, 0)),
+      pivot: piv ? round(piv, 0) : null,
+      spyResistance: [spy.r1, spy.r2].filter(Boolean),
+      spySupport: [spy.s1, spy.s2].filter(Boolean),
+      spyPivot: spy.piv,
+    },
+    bullishSetups,
+    bearishSetups,
+    futuresBias,
+    internals: { vixPrice: Number.isFinite(Number(vixPrice)) ? round(vixPrice, 1) : null, vixRead, gammaStrikes, leaders, laggards },
+    calendarHighlights: calHighlights,
+    confirmationRule: "Valid moves require a 5m close beyond the key level with above-average volume. No confirmation → fakeout risk. Respect stops.",
+    checklist: {
+      overnightConditions: es ? (Number(es.changePct) >= 0.3 ? `Gap up — ES futures +${round(es.changePct, 2)}%` : Number(es.changePct) <= -0.3 ? `Gap down — ES futures ${round(es.changePct, 2)}%` : `Flat — ES futures ${round(es.changePct, 2)}%`) : "Pending pre-market data",
+      keyLevels: [spy.piv ? `SPY pivot ~${spy.piv}` : null, spy.r1 ? `Resistance: ${[spy.r1, spy.r2].filter(Boolean).join(" / ")}` : null, spy.s1 ? `Support: ${[spy.s1, spy.s2].filter(Boolean).join(" / ")}` : null].filter(Boolean).join(" | "),
+      economicEvents: calHighlights.length ? calHighlights.map((e) => `${e.event}${e.time ? ` @ ${e.time}` : ""}`).join("; ") : "No major scheduled events",
+      gamePlan: thesis.gamePlan || "Wait for opening-range confirmation before sizing into directional trades",
+      riskManagement: `Max daily loss: define before open. ${thesis.standAside || "Stand aside during headline gaps and failed breaks."}`,
+    },
+  };
+};
+
 const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced", instrument = thesis?.instrument || "SPX" }) => {
   const focus = getThesisInstrument(instrument);
   const spx = market?.tickers?.find((item) => item.symbol === "SPX");
@@ -1553,6 +1680,7 @@ const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, wei
     ].filter(Boolean),
     riskRadar: `${thesis.invalidation} ${timingRead.staleCashRisk ? "Do not over-trust stale cash-index levels until regular-market liquidity confirms futures." : "Headline gaps and fast volatility expansion can make otherwise clean levels unreliable."} Size should fall before discipline does.`,
     finalWord: "Let price confirm the story before the desk commits capital.",
+    tradePlan: makeTradePlan({ market, news, points, thesis }),
   };
 };
 
@@ -1687,8 +1815,17 @@ export default async function handler(req, res) {
           stanceRead: data.stanceRead || fallback.stanceRead,
           pillarRead: data.pillarRead || fallback.pillarRead,
           pillarWeights: data.pillarWeights || fallback.pillarWeights,
+          tradePlan: fallback.tradePlan,
         }
         : fallback;
+    } else if (operation === "brief") {
+      const secret = process.env.BRIEF_SECRET;
+      if (secret && payload.secret !== secret) return json(res, 401, { error: "Unauthorized" });
+      const briefData = payload.brief || payload;
+      await storeBrief({ ...briefData, _receivedAt: new Date().toISOString() });
+      data = { ok: true, stored: true };
+    } else if (operation === "getbrief") {
+      data = await getBrief();
     } else {
       return json(res, 400, { error: "Unknown desk operation" });
     }
