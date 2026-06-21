@@ -74,6 +74,11 @@ Add this step at the end of the routine instructions:
 | `brief` | POST | Routine pushes daily research |
 | `getbrief` | fetch | App retrieves stored brief |
 
+## Vercel Deployment
+
+Pushes to `main` trigger automatic Vercel deployments via the GitHub integration.
+Free tier limit: 100 deployments/day — upgrade to Pro if the limit is hit.
+
 ## Development
 
 ```bash
