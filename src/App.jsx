@@ -2494,11 +2494,14 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
               <div className="guard g-red"><b><AlertTriangle size={12} /> Thesis invalidation</b>{t.invalidation}</div>
               <div className="guard g-amber"><b><Shield size={12} /> Stand-aside conditions</b>{t.standAside}</div>
             </div>
-            {!viewing && thesis.data && (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" onClick={() => downloadPDF(buildThesisPrintHTML(t), `overwatch-thesis-${t._date || t.instrument || "today"}.pdf`)} title="Download thesis as PDF">
+                <FileText size={14} /> Download PDF
+              </button>
+              {!viewing && thesis.data && (
                 <button className="btn" onClick={onGoNewsletter}>Publish the morning note <ArrowRight size={14} /></button>
-              </div>
-            )}
+              )}
+            </div>
           </>
         )}
 
@@ -2923,6 +2926,220 @@ const buildMarkdown = ({ d, thesis, market, points, edition }) => {
   return lines.join("\n");
 };
 
+const buildNewsletterPrintHTML = ({ d, thesis, market, points, edition }) => {
+  const t = d._thesis || thesis;
+  const biasColor = t?.bias === "bullish" ? "#22c55e" : t?.bias === "bearish" ? "#ef4444" : "#c9a84c";
+  const tp = d.tradePlan;
+  const cal = [
+    ...(points?.calendarGroups?.today || []),
+    ...(points?.calendarGroups?.tomorrow || []),
+    ...(points?.calendarGroups?.upcoming || []),
+    ...(points?.calendar || []),
+  ].filter((c) => c && c.importance !== "low").slice(0, 5);
+
+  const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : "";
+
+  const setupRows = (setups) => (setups || []).map((s) =>
+    `<tr><td><b>${s.label}</b></td><td>${s.entry}</td><td>${s.target}</td><td>${s.stop}</td><td>${s.options || "—"}</td></tr>`
+  ).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Overwatch No. ${edition} — ${d._date || ""}</title><style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Georgia,'Times New Roman',serif;font-size:13px;color:#111;background:#fff;padding:32px 48px;max-width:800px;margin:0 auto}
+    h1{font-size:22px;letter-spacing:.04em;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:6px}
+    .meta{font-size:11px;color:#555;margin-bottom:18px;font-family:Arial,sans-serif;letter-spacing:.02em}
+    .bias{font-size:28px;font-weight:900;letter-spacing:.08em;color:${biasColor};font-family:'Helvetica Neue',Arial,sans-serif}
+    h2{font-size:14px;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #ddd;padding-bottom:3px}
+    h3{font-size:12px;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;margin:12px 0 5px;text-transform:uppercase;letter-spacing:.04em}
+    p{margin-bottom:10px;line-height:1.65}
+    ul{margin:6px 0 10px 18px;line-height:1.7}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11.5px}
+    th{background:#f0f0f0;padding:5px 8px;text-align:left;font-family:Arial,sans-serif;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+    td{padding:4px 8px;border-bottom:1px solid #e8e8e8;vertical-align:top}
+    td.lbl{width:140px;color:#555;font-family:Arial,sans-serif;font-size:11px;font-weight:600}
+    .headline{font-size:18px;font-style:italic;margin:10px 0 4px;line-height:1.4}
+    .dek{font-size:13px;color:#444;font-style:italic;margin-bottom:14px}
+    .callout{background:#f8f8f8;border-left:3px solid #c9a84c;padding:10px 14px;margin:12px 0;font-size:12px;line-height:1.6}
+    .bull{color:#16a34a}.bear{color:#dc2626}.brass{color:#c9a84c}
+    .footer{margin-top:28px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;color:#777;font-family:Arial,sans-serif}
+    .guard{padding:8px 12px;margin:6px 0;border-left:3px solid #999;font-size:12px;background:#fafafa}
+    .guard.red{border-color:#dc2626}.guard.amber{border-color:#d97706}
+    .tp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+    @media print{body{padding:20px 30px}h1{font-size:18px}.bias{font-size:22px}}
+  </style></head><body>
+    <h1>OVERWATCH DAILY BIAS — No. ${edition}</h1>
+    <div class="meta">${d._date || ""} &nbsp;·&nbsp; Bias: <b style="color:${biasColor}">${(t?.bias || "").toUpperCase()}</b> &nbsp;·&nbsp; Score ${t?.score >= 0 ? "+" : ""}${t?.score ?? 0} &nbsp;·&nbsp; Conviction ${t?.conviction ?? "—"}/10 &nbsp;·&nbsp; ${d.timestamp || d._generatedAt || ""}</div>
+
+    <div class="bias">${(t?.bias || "—").toUpperCase()}</div>
+    <div class="headline">"${d.headline}"</div>
+    ${d.dek ? `<div class="dek">${d.dek}</div>` : ""}
+
+    ${d.executiveSummary ? `<div class="callout"><b>The lede.</b> ${d.executiveSummary}</div>` : ""}
+
+    ${t?.stanceRead || t?.pillarRead ? `
+    <h2>Desk stance</h2>
+    <table><tbody>
+      ${row("Desk stance", t.stanceRead)}
+      ${row("Pillar model", t.pillarRead)}
+    </tbody></table>` : ""}
+
+    <h2>Market recap</h2>
+    <p>${d.marketRecap || "—"}</p>
+    ${d.marketOutlook ? `<h2>Market outlook</h2><p>${d.marketOutlook}</p>` : ""}
+
+    ${(market?.tickers || []).length ? `
+    <table><thead><tr><th>Ticker</th><th>Last</th><th>Chg %</th></tr></thead><tbody>
+      ${(market.tickers || []).slice(0, 6).map((tk) =>
+        `<tr><td><b>${tk.symbol}</b></td><td>${tk.price != null ? Number(tk.price).toLocaleString() : "—"}</td><td class="${Number(tk.changePct) >= 0 ? "bull" : "bear"}">${Number(tk.changePct) >= 0 ? "+" : ""}${Number(tk.changePct).toFixed(2)}%</td></tr>`
+      ).join("")}
+    </tbody></table>` : ""}
+
+    <h2>The call</h2>
+    <p>${d.thesisNarrative || "—"}</p>
+    <table><tbody>
+      ${row("Action level", t?.levels?.action)}
+      ${row("Upside target", t?.levels?.upside)}
+      ${row("Downside target", t?.levels?.downside)}
+      ${row("Game plan", t?.gamePlan)}
+      ${row("Invalidation", t?.invalidation)}
+    </tbody></table>
+
+    ${(d.watchToday || []).length ? `
+    <h2>Watch today</h2>
+    <ul>${(d.watchToday || []).map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
+
+    ${cal.length ? `
+    <h2>Economic calendar</h2>
+    <table><thead><tr><th>Time</th><th>Event</th><th>Importance</th></tr></thead><tbody>
+      ${cal.map((c) => `<tr><td>${c.time || "—"}</td><td>${c.event}</td><td>${c.importance}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+
+    <h2>Risk radar</h2>
+    <p>${d.riskRadar || "—"}</p>
+
+    ${d.finalWord ? `<div class="callout"><i>${d.finalWord}</i></div>` : ""}
+
+    ${t?.invalidation || t?.standAside ? `
+    <div class="guard red"><b>Thesis invalidation:</b> ${t?.invalidation || "—"}</div>
+    <div class="guard amber"><b>Stand-aside conditions:</b> ${t?.standAside || "—"}</div>` : ""}
+
+    ${tp ? `
+    <h2>Daily trade plan — SPY</h2>
+    <p><b>Bias:</b> ${tp.biasLabel} &nbsp;·&nbsp; VIX ${tp.internals?.vixPrice || "—"}</p>
+    ${tp.macroRisk ? `<div class="callout"><b>Macro risk:</b> ${tp.macroRisk}</div>` : ""}
+
+    ${tp.checklist ? `
+    <h3>Pre-market checklist</h3>
+    <table><tbody>
+      ${row("Overnight", tp.checklist.overnightConditions)}
+      ${row("Key levels", tp.checklist.keyLevels)}
+      ${row("Events", tp.checklist.economicEvents)}
+      ${row("Game plan", tp.checklist.gamePlan)}
+      ${row("Risk mgmt", tp.checklist.riskManagement)}
+    </tbody></table>` : ""}
+
+    ${tp.bullishSetups?.length ? `
+    <h3>Bullish setups</h3>
+    <table><thead><tr><th>Setup</th><th>Entry</th><th>Target</th><th>Stop</th><th>Options</th></tr></thead><tbody>
+      ${setupRows(tp.bullishSetups)}
+    </tbody></table>` : ""}
+
+    ${tp.bearishSetups?.length ? `
+    <h3>Bearish setups</h3>
+    <table><thead><tr><th>Setup</th><th>Entry</th><th>Target</th><th>Stop</th><th>Options</th></tr></thead><tbody>
+      ${setupRows(tp.bearishSetups)}
+    </tbody></table>` : ""}
+
+    ${tp.futuresBias?.length ? `
+    <h3>Macro futures bias</h3>
+    <table><thead><tr><th>Symbol</th><th>Chg %</th><th>Read</th></tr></thead><tbody>
+      ${tp.futuresBias.map((r) => `<tr><td><b>${r.symbol}</b></td><td class="${r.changePct >= 0 ? "bull" : "bear"}">${r.changePct != null ? (r.changePct >= 0 ? "+" : "") + r.changePct + "%" : "—"}</td><td>${r.read}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+
+    ${tp.confirmationRule ? `<div class="callout"><b>Confirmation rule:</b> ${tp.confirmationRule}</div>` : ""}
+    ` : ""}
+
+    <div class="footer">Overwatch Daily Bias Desk &nbsp;·&nbsp; Live public market data + optional AI synthesis &nbsp;·&nbsp; Verify before trading &nbsp;·&nbsp; Not financial advice</div>
+  </body></html>`;
+};
+
+const buildThesisPrintHTML = (t) => {
+  if (!t) return "";
+  const biasColor = t.bias === "bullish" ? "#22c55e" : t.bias === "bearish" ? "#ef4444" : "#c9a84c";
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Overwatch Thesis — ${t._date || t.instrument || ""}</title><style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Georgia,'Times New Roman',serif;font-size:13px;color:#111;background:#fff;padding:32px 48px;max-width:800px;margin:0 auto}
+    h1{font-size:22px;letter-spacing:.04em;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:6px}
+    .meta{font-size:11px;color:#555;margin-bottom:18px;font-family:Arial,sans-serif;letter-spacing:.02em}
+    .bias{font-size:32px;font-weight:900;letter-spacing:.08em;color:${biasColor};font-family:'Helvetica Neue',Arial,sans-serif}
+    h2{font-size:14px;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #ddd;padding-bottom:3px}
+    p{margin-bottom:10px;line-height:1.65}
+    ul{margin:6px 0 10px 18px;line-height:1.7}
+    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11.5px}
+    th{background:#f0f0f0;padding:5px 8px;text-align:left;font-family:Arial,sans-serif;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+    td{padding:4px 8px;border-bottom:1px solid #e8e8e8;vertical-align:top}
+    td.lbl{width:140px;color:#555;font-family:Arial,sans-serif;font-size:11px;font-weight:600}
+    .headline{font-size:18px;font-style:italic;margin:10px 0 14px;line-height:1.4}
+    .callout{background:#f8f8f8;border-left:3px solid #c9a84c;padding:10px 14px;margin:12px 0;font-size:12px;line-height:1.6}
+    .bull{color:#16a34a}.bear{color:#dc2626}
+    .guard{padding:8px 12px;margin:6px 0;border-left:3px solid #999;font-size:12px;background:#fafafa}
+    .guard.red{border-color:#dc2626}.guard.amber{border-color:#d97706}
+    .footer{margin-top:28px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;color:#777;font-family:Arial,sans-serif}
+    @media print{body{padding:20px 30px}.bias{font-size:26px}}
+  </style></head><body>
+    <h1>OVERWATCH DAILY THESIS</h1>
+    <div class="meta">${t._date || ""} &nbsp;·&nbsp; Instrument: <b>${t.instrument || "SPX"}</b> &nbsp;·&nbsp; Score: <b style="color:${biasColor}">${t.score >= 0 ? "+" : ""}${t.score ?? 0}</b> &nbsp;·&nbsp; Conviction ${t.conviction ?? "—"}/10 &nbsp;·&nbsp; ${t.timestamp || t._generatedAt || ""}</div>
+    <div class="bias">${(t.bias || "—").toUpperCase()}</div>
+    <div class="headline">"${t.headline}"</div>
+    <p>${t.summary || ""}</p>
+
+    ${t.stanceRead || t.pillarRead ? `
+    <h2>Desk stance</h2>
+    <table><tbody>
+      ${t.stanceRead ? `<tr><td class="lbl">Desk stance</td><td>${t.stanceRead}</td></tr>` : ""}
+      ${t.pillarRead ? `<tr><td class="lbl">Pillar model</td><td>${t.pillarRead}</td></tr>` : ""}
+    </tbody></table>` : ""}
+
+    ${(t.weightedPillars || []).length ? `
+    <h2>Pillar breakdown</h2>
+    <table><thead><tr><th>Pillar</th><th>Score</th><th>Weight</th><th>Impact</th></tr></thead><tbody>
+      ${(t.weightedPillars || []).map((p) => `<tr><td>${p.label || p.key}</td><td>${p.score >= 0 ? "+" : ""}${p.score}</td><td>${p.weight}%</td><td>${p.contribution >= 0 ? "+" : ""}${p.contribution?.toFixed(1)}</td></tr>`).join("")}
+    </tbody></table>` : ""}
+
+    ${(t.drivers || []).length ? `<div class="callout"><b>Key drivers:</b> ${t.drivers.join(" · ")}</div>` : ""}
+
+    ${(t.bullCase || []).length ? `
+    <h2>Bull case</h2>
+    <ul class="bull">${t.bullCase.map((b) => `<li>${b}</li>`).join("")}</ul>` : ""}
+
+    ${(t.bearCase || []).length ? `
+    <h2>Bear case</h2>
+    <ul class="bear">${t.bearCase.map((b) => `<li>${b}</li>`).join("")}</ul>` : ""}
+
+    <h2>Levels that matter</h2>
+    <table><tbody>
+      ${t.levels?.action ? `<tr><td class="lbl">Action level</td><td>${t.levels.action}</td></tr>` : ""}
+      ${t.levels?.upside ? `<tr><td class="lbl">Upside target</td><td>${t.levels.upside}</td></tr>` : ""}
+      ${t.levels?.downside ? `<tr><td class="lbl">Downside target</td><td>${t.levels.downside}</td></tr>` : ""}
+      ${t.gamePlan ? `<tr><td class="lbl">Game plan</td><td>${t.gamePlan}</td></tr>` : ""}
+    </tbody></table>
+
+    <div class="guard red"><b>Thesis invalidation:</b> ${t.invalidation || "—"}</div>
+    <div class="guard amber"><b>Stand-aside conditions:</b> ${t.standAside || "—"}</div>
+
+    <div class="footer">Overwatch Daily Bias Desk &nbsp;·&nbsp; Live public market data + optional AI synthesis &nbsp;·&nbsp; Verify before trading &nbsp;·&nbsp; Not financial advice</div>
+  </body></html>`;
+};
+
+const downloadPDF = (html, filename) => {
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 400);
+};
+
 const NewsletterTab = ({
   nl,
   thesis,
@@ -2964,6 +3181,12 @@ const NewsletterTab = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const doDownloadPDF = () => {
+    if (!d || !t) return;
+    const html = buildNewsletterPrintHTML({ d, thesis: t, market, points, edition: displayedEdition });
+    downloadPDF(html, `overwatch-no${displayedEdition}-${d._date || "today"}.pdf`);
+  };
+
   const biasC = PAPER_BIAS[t?.bias] || PAPER_BIAS.neutral;
   const pct = ((clamp(t?.score ?? 0, -100, 100) + 100) / 200) * 100;
   const calendarGroups = points?.calendarGroups || {};
@@ -3001,6 +3224,11 @@ const NewsletterTab = ({
         {d && (
           <button className="btn" onClick={doCopy}>
             {copied ? <><Check size={14} color={C.bull} /> Copied</> : <><Copy size={14} /> Copy as markdown</>}
+          </button>
+        )}
+        {d && t && (
+          <button className="btn" onClick={doDownloadPDF} title="Download as PDF">
+            <FileText size={14} /> Download PDF
           </button>
         )}
       </div>
@@ -3260,6 +3488,9 @@ const ArchiveTab = ({
                 <span className="chip" style={{ flex: "none" }}>{h.instrument || "SPX"}</span>
                 <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{h.headline}</span>
                 <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(h.score, 0)}</span>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => { e.stopPropagation(); downloadPDF(buildThesisPrintHTML(h), `overwatch-thesis-${h._date || h.instrument || "archived"}.pdf`); }}>
+                  <FileText size={12} />
+                </button>
                 <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteHist(h._id); }}>
                   <Trash2 size={12} />
                 </button>
@@ -3277,6 +3508,9 @@ const ArchiveTab = ({
                 <span className="chip b-brass" style={{ flex: "none" }}>No. {item._edition || "—"}</span>
                 <span className="chip" style={{ flex: "none" }}>{item.instrument || "SPX"}</span>
                 <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{item.headline || "Untitled edition"}</span>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => { e.stopPropagation(); downloadPDF(buildNewsletterPrintHTML({ d: item, thesis: item._thesis, market: null, points: null, edition: item._edition || "—" }), `overwatch-no${item._edition || "0"}-${item._date || "archived"}.pdf`); }}>
+                  <FileText size={12} />
+                </button>
                 <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteNewsletter(item._id); }}>
                   <Trash2 size={12} />
                 </button>
