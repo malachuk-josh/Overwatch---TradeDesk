@@ -93,6 +93,7 @@ const C = {
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const NEWSLETTER_HISTORY_KEY = "overwatch:newsletter-history";
+const ARCHIVE_KEY = "overwatch:archive";
 const BRIEFS_KEY = "overwatch:brief-history";
 const TOP_ASSET_CARD_ORDER = ["SPX", "ES", "NDX", "NQ", "DJI", "YM"];
 
@@ -3427,98 +3428,66 @@ const BriefDetailView = ({ brief, onBack, onDelete }) => {
 };
 
 const ArchiveTab = ({
-  history,
+  archiveHistory,
   viewing,
   setViewing,
-  onDeleteHist,
-  newsletterHistory,
   viewingNewsletter,
   setViewingNewsletter,
-  onDeleteNewsletter,
+  onDeleteEntry,
   briefHistory,
   onDeleteBrief,
   onGoThesis,
   onGoNewsletter,
 }) => {
   const [viewingBrief, setViewingBrief] = useState(null);
-  const latestThesis = history[0];
-  const latestNewsletter = newsletterHistory[0];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div className="archives-grid">
-        <Card icon={FlaskConical} title="Latest thesis" sub={latestThesis ? latestThesis.headline : "No saved calls yet"}>
-          {latestThesis ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span className="chip">{latestThesis.instrument || "SPX"}</span>
-                <span className="chip" style={{ color: latestThesis.bias === "bullish" ? C.bull : latestThesis.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor" }}>{latestThesis.bias}</span>
-                <span className="chip b-info">SCORE {fmtSigned(latestThesis.score, 0)}</span>
-              </div>
-              <button className="btn btn-brass" onClick={() => { setViewing(latestThesis); onGoThesis?.(); }}>Open latest thesis</button>
-            </div>
-          ) : (
-            <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically.</div>
-          )}
-        </Card>
-
-        <Card icon={Mail} title="Latest newsletter" sub={latestNewsletter ? latestNewsletter.headline : "No saved editions yet"}>
-          {latestNewsletter ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <span className="chip b-brass">No. {latestNewsletter._edition || "—"}</span>
-                <span className="chip">{latestNewsletter.instrument || "SPX"}</span>
-              </div>
-              <button className="btn btn-brass" onClick={() => { setViewingNewsletter(latestNewsletter); onGoNewsletter?.(); }}>Open latest newsletter</button>
-            </div>
-          ) : (
-            <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated newsletter lands here automatically.</div>
-          )}
-        </Card>
-      </div>
-
-      <div className="archives-grid">
-        <Card icon={History} title="Thesis archive" sub={`${history.length} saved call${history.length === 1 ? "" : "s"} — persists between sessions`}>
-          {!history.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated thesis lands here automatically. Build a track record, then audit your reads.</div>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
-            {history.map((h) => (
-              <div key={h._id} className={`hist-row ${viewing?._id === h._id ? "viewing" : ""}`} onClick={() => setViewing(h)}>
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 164, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(h)}</span>
-                <span className="chip" style={{ color: h.bias === "bullish" ? C.bull : h.bias === "bearish" ? C.bear : C.brass, borderColor: "currentColor", flex: "none" }}>{h.bias}</span>
-                <span className="chip" style={{ flex: "none" }}>{h.instrument || "SPX"}</span>
-                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{h.headline}</span>
-                <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(h.score, 0)}</span>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => { e.stopPropagation(); downloadPDF(buildThesisPrintHTML(h), `overwatch-thesis-${h._date || h.instrument || "archived"}.pdf`); }}>
+      <Card icon={History} title="Daily archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · persists between sessions` : "No archived entries yet"}>
+        {!archiveHistory.length && (
+          <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis and newsletter lands here automatically. Newsletters include the attached thesis so you always have the full picture.</div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
+          {archiveHistory.map((entry) => {
+            const isNl = entry._type === "newsletter";
+            const t = isNl ? entry._thesis : entry;
+            const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
+            const isViewingThis = isNl ? viewingNewsletter?._id === entry._id : viewing?._id === entry._id;
+            return (
+              <div
+                key={entry._id}
+                className={`hist-row ${isViewingThis ? "viewing" : ""}`}
+                onClick={() => {
+                  if (isNl) { setViewingNewsletter(entry); onGoNewsletter?.(); }
+                  else { setViewing(entry); onGoThesis?.(); }
+                }}
+              >
+                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
+                {isNl
+                  ? <span className="chip b-brass" style={{ flex: "none", fontSize: 10 }}>No. {entry._edition || "—"}</span>
+                  : <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
+                }
+                <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
+                <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
+                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+                  {isNl ? (entry.headline || "Untitled edition") : (entry.headline || "—")}
+                </span>
+                {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => {
+                  e.stopPropagation();
+                  if (isNl) downloadPDF(buildNewsletterPrintHTML({ d: entry, thesis: entry._thesis, market: null, points: null, edition: entry._edition || "—" }), `overwatch-no${entry._edition || "0"}-${entry._date || "archived"}.pdf`);
+                  else downloadPDF(buildThesisPrintHTML(entry), `overwatch-thesis-${entry._date || entry.instrument || "archived"}.pdf`);
+                }}>
                   <FileText size={12} />
                 </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteHist(h._id); }}>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry._id); }}>
                   <Trash2 size={12} />
                 </button>
               </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card icon={Mail} title="Newsletter archive" sub={`${newsletterHistory.length} saved edition${newsletterHistory.length === 1 ? "" : "s"} — persists between sessions`}>
-          {!newsletterHistory.length && <div style={{ color: C.muted, fontSize: 12.5 }}>Every generated newsletter lands in the Archives tab automatically, just like thesis history.</div>}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
-            {newsletterHistory.map((item) => (
-              <div key={item._id} className={`hist-row ${viewingNewsletter?._id === item._id ? "viewing" : ""}`} onClick={() => setViewingNewsletter(item)}>
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 164, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(item)}</span>
-                <span className="chip b-brass" style={{ flex: "none" }}>No. {item._edition || "—"}</span>
-                <span className="chip" style={{ flex: "none" }}>{item.instrument || "SPX"}</span>
-                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{item.headline || "Untitled edition"}</span>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => { e.stopPropagation(); downloadPDF(buildNewsletterPrintHTML({ d: item, thesis: item._thesis, market: null, points: null, edition: item._edition || "—" }), `overwatch-no${item._edition || "0"}-${item._date || "archived"}.pdf`); }}>
-                  <FileText size={12} />
-                </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteNewsletter(item._id); }}>
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+            );
+          })}
+        </div>
+      </Card>
 
       <Card icon={NotebookPen} title="Morning Brief Archive" sub={briefHistory.length ? `${briefHistory.length} brief${briefHistory.length === 1 ? "" : "s"} — persists between sessions` : "No briefs archived yet"}>
         {viewingBrief ? (
@@ -3666,10 +3635,9 @@ export default function Overwatch() {
   const [nl, setNl] = useState(IDLE);
   const [brief, setBrief] = useState(IDLE);
 
-  const [history, setHistory] = useState([]);
+  const [archiveHistory, setArchiveHistory] = useState([]);
   const [briefHistory, setBriefHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
-  const [newsletterHistory, setNewsletterHistory] = useState([]);
   const [viewingNewsletter, setViewingNewsletter] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -3694,10 +3662,21 @@ export default function Overwatch() {
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
       }
-      const h = await loadStored(HISTORY_KEY, []);
-      if (Array.isArray(h) && h.length) setHistory(h);
-      const nh = await loadStored(NEWSLETTER_HISTORY_KEY, []);
-      if (Array.isArray(nh) && nh.length) setNewsletterHistory(nh);
+      // Load unified archive; migrate legacy separate keys on first run
+      const ah = await loadStored(ARCHIVE_KEY, null);
+      if (Array.isArray(ah) && ah.length) {
+        setArchiveHistory(ah);
+      } else {
+        // Migration: merge old thesis history + newsletter history into one list
+        const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
+        const legacyNl = (await loadStored(NEWSLETTER_HISTORY_KEY, [])) || [];
+        const nlIds = new Set(legacyNl.map((n) => n._thesisId).filter(Boolean));
+        // Keep thesis entries that don't have a newsletter counterpart
+        const thesisOnly = legacyThesis.filter((t) => !nlIds.has(t._id)).map((t) => ({ ...t, _type: "thesis" }));
+        const nlEntries = legacyNl.map((n) => ({ ...n, _type: "newsletter" }));
+        const merged = [...thesisOnly, ...nlEntries].sort((a, b) => (b._ts || 0) - (a._ts || 0)).slice(0, 60);
+        if (merged.length) setArchiveHistory(merged);
+      }
       const bh = await loadStored(BRIEFS_KEY, []);
       if (Array.isArray(bh) && bh.length) setBriefHistory(bh);
       setStorageReady(true);
@@ -3709,11 +3688,8 @@ export default function Overwatch() {
     if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk });
   }, [storageReady, watchlist, instrument, weights, lean, risk]);
   useEffect(() => {
-    if (storageReady) saveStored(HISTORY_KEY, history);
-  }, [storageReady, history]);
-  useEffect(() => {
-    if (storageReady) saveStored(NEWSLETTER_HISTORY_KEY, newsletterHistory);
-  }, [storageReady, newsletterHistory]);
+    if (storageReady) saveStored(ARCHIVE_KEY, archiveHistory);
+  }, [storageReady, archiveHistory]);
   useEffect(() => {
     if (storageReady) saveStored(BRIEFS_KEY, briefHistory);
   }, [storageReady, briefHistory]);
@@ -3830,7 +3806,7 @@ export default function Overwatch() {
         _notes: notes,
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
-      setHistory((h) => [entry, ...h].slice(0, 60));
+      setArchiveHistory((h) => [{ ...entry, _type: "thesis" }, ...h].slice(0, 60));
       setNl(IDLE);
       notify("Thesis locked + saved to the archive", "ok");
     } catch (e) {
@@ -3844,7 +3820,7 @@ export default function Overwatch() {
     setViewingNewsletter(null);
     setNl((s) => ({ ...s, status: "loading", error: null }));
     try {
-      const edition = Math.max(1, newsletterHistory.length + 1);
+      const edition = Math.max(1, archiveHistory.filter((e) => e._type === "newsletter").length + 1);
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
       const focusInstrument = thesis.data?.instrument || instrument;
       const prompt = newsletterPrompt({ market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes, instrument: focusInstrument });
@@ -3870,9 +3846,14 @@ export default function Overwatch() {
         _risk: risk,
         _notes: notes,
       };
-      setNl({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
-      setNewsletterHistory((h) => [entry, ...h].slice(0, 60));
-      notify("Morning note saved to the newsletter archive", "ok");
+      const nlEntry = { ...entry, _type: "newsletter" };
+      setNl({ status: "ready", data: nlEntry, error: null, at: { ts: Date.now(), label: stampNow() } });
+      setArchiveHistory((h) => {
+        // Replace the standalone thesis entry with this newsletter+thesis pair
+        const withoutThesis = h.filter((x) => !(x._type === "thesis" && x._id === thesis.data?._id));
+        return [nlEntry, ...withoutThesis].slice(0, 60);
+      });
+      notify("Morning note saved to the archive", "ok");
     } catch (e) {
       setNl((s) => ({ ...s, status: "error", error: e.message }));
       notify("The note didn't compile — regenerate", "err");
@@ -3883,20 +3864,17 @@ export default function Overwatch() {
     setNotes((n) => (n ? n + "\n" : "") + "• " + title);
     notify("Pinned to desk notes", "ok");
   };
-  const deleteHist = (id) => {
-    setHistory((h) => h.filter((x) => x._id !== id));
+  const deleteArchiveEntry = (id) => {
+    setArchiveHistory((h) => h.filter((x) => x._id !== id));
     setViewing((v) => (v && v._id === id ? null : v));
-    notify("Archived thesis deleted", "ok");
+    setViewingNewsletter((v) => (v && v._id === id ? null : v));
+    notify("Entry deleted from archive", "ok");
   };
   const clearHistory = () => {
-    setHistory([]);
+    setArchiveHistory([]);
     setViewing(null);
-    notify("Thesis archive cleared", "ok");
-  };
-  const deleteNewsletter = (id) => {
-    setNewsletterHistory((h) => h.filter((x) => x._id !== id));
-    setViewingNewsletter((v) => (v && v._id === id ? null : v));
-    notify("Archived newsletter deleted", "ok");
+    setViewingNewsletter(null);
+    notify("Archive cleared", "ok");
   };
   const deleteBrief = (id) => {
     setBriefHistory((h) => h.filter((x) => x._id !== id));
@@ -3905,13 +3883,15 @@ export default function Overwatch() {
 
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
-  const newsletterBadge = newsletterHistory.length || null;
-  const archiveBadge = (history.length + newsletterHistory.length + briefHistory.length) || null;
+  const nlHistory = archiveHistory.filter((e) => e._type === "newsletter");
+  const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
+  const newsletterBadge = nlHistory.length || null;
+  const archiveBadge = (archiveHistory.length + briefHistory.length) || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", icon: Activity, badge: market.data?.tickers?.length },
     { id: "news", label: "News Intel", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", icon: CalendarDays, badge: calendarBadge },
-    { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: history.length || null },
+    { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "newsletter", label: "Newsletter", icon: Mail, badge: newsletterBadge },
     { id: "archives", label: "Archives", icon: History, badge: archiveBadge },
   ];
@@ -3919,7 +3899,7 @@ export default function Overwatch() {
   const steps = [
     { n: 1, label: "Sync live data", done: anyData, now: !anyData, go: () => setTab("pulse") },
     { n: 2, label: "Build the thesis", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
-    { n: 3, label: "Publish the note", done: !!nl.data || !!newsletterHistory.length, now: !!thesis.data && !nl.data, go: () => setTab("newsletter") },
+    { n: 3, label: "Publish the note", done: !!nl.data || !!nlHistory.length, now: !!thesis.data && !nl.data, go: () => setTab("newsletter") },
   ];
 
   return (
@@ -3983,33 +3963,31 @@ export default function Overwatch() {
             risk={risk} setRisk={setRisk}
             notes={notes} setNotes={setNotes}
             thesis={thesis} onGenerate={generateThesis}
-            history={history} viewing={viewing} setViewing={setViewing}
-            onDeleteHist={deleteHist} anyData={anyData}
+            history={thesisHistory} viewing={viewing} setViewing={setViewing}
+            onDeleteHist={deleteArchiveEntry} anyData={anyData}
             onGoNewsletter={() => setTab("newsletter")}
           />
         )}
         {tab === "newsletter" && (
           <NewsletterTab
             nl={nl} thesis={thesis} market={market.data} points={points.data}
-            edition={Math.max(1, newsletterHistory.length + 1)}
-            newsletterHistory={newsletterHistory}
+            edition={Math.max(1, nlHistory.length + 1)}
+            newsletterHistory={nlHistory}
             viewingNewsletter={viewingNewsletter}
             setViewingNewsletter={setViewingNewsletter}
-            onDeleteNewsletter={deleteNewsletter}
+            onDeleteNewsletter={deleteArchiveEntry}
             onGenerate={generateNewsletter} onGoThesis={() => setTab("thesis")} notify={notify}
             brief={brief.data} briefStatus={brief.status} onRefreshBrief={refreshBrief}
           />
         )}
         {tab === "archives" && (
           <ArchiveTab
-            history={history}
+            archiveHistory={archiveHistory}
             viewing={viewing}
             setViewing={setViewing}
-            onDeleteHist={deleteHist}
-            newsletterHistory={newsletterHistory}
             viewingNewsletter={viewingNewsletter}
             setViewingNewsletter={setViewingNewsletter}
-            onDeleteNewsletter={deleteNewsletter}
+            onDeleteEntry={deleteArchiveEntry}
             briefHistory={briefHistory}
             onDeleteBrief={deleteBrief}
             onGoThesis={() => setTab("thesis")}
