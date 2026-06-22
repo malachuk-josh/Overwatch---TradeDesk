@@ -1,7 +1,7 @@
 # Overwatch — Daily Bias Desk
 
 ## Project Overview
-React + Vite trading intelligence dashboard. Fetches live market data, synthesizes a daily thesis, generates a newsletter, and now displays a pre-market brief from the 5 AM daily research routine.
+React + Vite trading intelligence dashboard. Fetches live market data, synthesizes a daily thesis, generates a newsletter, and displays a pre-market brief from the 5 AM daily research routine.
 
 ## Daily Research Routine Integration
 
