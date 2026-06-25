@@ -23,6 +23,7 @@ import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right.mjs";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
+import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -32,11 +33,14 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
 
 const DEFAULT_WATCHLIST = [
   { symbol: "SPX", name: "S&P 500 Index" },
-  { symbol: "DJI", name: "Dow Jones Industrial Average" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF" },
   { symbol: "ES", name: "E-mini S&P Futures (front month)" },
-  { symbol: "NQ", name: "E-mini Nasdaq-100 Futures (front month)" },
-  { symbol: "YM", name: "E-mini Dow Futures (front month)" },
   { symbol: "NDX", name: "Nasdaq 100" },
+  { symbol: "QQQ", name: "Invesco QQQ ETF" },
+  { symbol: "NQ", name: "E-mini Nasdaq-100 Futures (front month)" },
+  { symbol: "DJI", name: "Dow Jones Industrial Average" },
+  { symbol: "DIA", name: "SPDR Dow Jones ETF" },
+  { symbol: "YM", name: "E-mini Dow Futures (front month)" },
   { symbol: "VIX", name: "CBOE Volatility Index" },
   { symbol: "DXY", name: "US Dollar Index" },
   { symbol: "US10Y", name: "US 10-Year Treasury Yield" },
@@ -45,7 +49,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "BTC", name: "Bitcoin" },
 ];
 const LEGACY_DEFAULT_SYMBOLS = ["SPX", "ES", "NDX", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"];
-const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM"]);
+const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM", "SPY", "QQQ", "DIA"]);
 
 const reconcileWatchlist = (items) => {
   if (!Array.isArray(items) || !items.length) return DEFAULT_WATCHLIST;
@@ -93,7 +97,7 @@ const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const NEWSLETTER_HISTORY_KEY = "overwatch:newsletter-history";
 const ARCHIVE_KEY = "overwatch:archive";
-const TOP_ASSET_CARD_ORDER = ["SPX", "ES", "NDX", "NQ", "DJI", "YM"];
+const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
 /* ---------------- formatting helpers ---------------- */
 
@@ -1650,6 +1654,28 @@ const FactorRadarChart = ({ weights }) => {
   );
 };
 
+const LEVEL_MAP_GROUPS = [
+  { keys: ["SPX", "SPY", "ES"], subs: { SPX: "S&P 500 Index", SPY: "S&P 500 ETF", ES: "E-mini S&P Futures" } },
+  { keys: ["NDX", "QQQ", "NQ"], subs: { NDX: "Nasdaq 100 Index", QQQ: "Nasdaq 100 ETF", NQ: "E-mini Nasdaq Futures" } },
+  { keys: ["DJI", "DIA", "YM"], subs: { DJI: "Dow Jones Index", DIA: "Dow Jones ETF", YM: "E-mini Dow Futures" } },
+];
+
+const LevelMapCard = ({ group, points }) => {
+  const [active, setActive] = useState(group.keys[0]);
+  const dataKey = active.toLowerCase();
+  const data = points?.[dataKey];
+  return (
+    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]}>
+      <div className="seg" style={{ marginBottom: 10 }}>
+        {group.keys.map((k) => (
+          <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
+        ))}
+      </div>
+      <LevelsLadder spx={data} label={active} />
+    </Card>
+  );
+};
+
 /* ================================================================
    TAB — MARKET PULSE
    ================================================================ */
@@ -1750,15 +1776,9 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         ))}
       </div>
       <div className="grid g-data" style={{ alignItems: "start" }}>
-        <Card icon={Crosshair} title="SPX level map" sub="Nearest supports & resistances vs spot">
-          <LevelsLadder spx={points?.spx} label="SPX" />
-        </Card>
-        <Card icon={Crosshair} title="NDX level map" sub="Nasdaq 100 supports & resistances">
-          <LevelsLadder spx={points?.ndx} label="NDX" />
-        </Card>
-        <Card icon={Crosshair} title="DJI level map" sub="Dow Jones supports & resistances">
-          <LevelsLadder spx={points?.dji} label="DJI" />
-        </Card>
+        {LEVEL_MAP_GROUPS.map((g) => (
+          <LevelMapCard key={g.keys[0]} group={g} points={points} />
+        ))}
       </div>
       <div className="grid g-market-read">
         <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
@@ -3441,12 +3461,14 @@ export default function Overwatch() {
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
       }
-      // Load archive: Upstash first (cross-device), fall back to localStorage
+      // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
       let ah = null;
+      let fromKV = false;
       try {
         ah = await callDesk("getarchive");
+        fromKV = Array.isArray(ah);
       } catch {}
-      if (!Array.isArray(ah) || !ah.length) {
+      if (!fromKV) {
         ah = await loadStored(ARCHIVE_KEY, null);
       }
       if (Array.isArray(ah) && ah.length) {
