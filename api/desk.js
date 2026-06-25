@@ -154,42 +154,6 @@ let newsCache;
 let calendarCache;
 let flowCache;
 
-// Morning brief cache — persists in warm Lambda instances; optionally backed by Upstash/Vercel KV
-let _briefCache = null;
-const _kvUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const _kvToken = () => process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-
-const storeBrief = async (data) => {
-  _briefCache = { ...data, _storedAt: Date.now() };
-  const kvUrl = _kvUrl(), kvToken = _kvToken();
-  if (kvUrl && kvToken) {
-    try {
-      await fetch(kvUrl, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify(["SET", "overwatch:brief", JSON.stringify(_briefCache), "EX", "86400"]),
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch { /* KV optional */ }
-  }
-};
-
-const getBrief = async () => {
-  if (_briefCache && (Date.now() - _briefCache._storedAt) < 86_400_000) return _briefCache;
-  const kvUrl = _kvUrl(), kvToken = _kvToken();
-  if (kvUrl && kvToken) {
-    try {
-      const res = await fetch(`${kvUrl}/get/overwatch:brief`, {
-        headers: { Authorization: `Bearer ${kvToken}` },
-        signal: AbortSignal.timeout(5000),
-      });
-      const { result } = await res.json();
-      if (result) { _briefCache = JSON.parse(result); return _briefCache; }
-    } catch { /* KV optional */ }
-  }
-  return null;
-};
-
 const json = (res, status, body) => {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -1834,14 +1798,6 @@ export default async function handler(req, res) {
           tradePlan: fallback.tradePlan,
         }
         : fallback;
-    } else if (operation === "brief") {
-      const secret = process.env.BRIEF_SECRET;
-      if (secret && payload.secret !== secret) return json(res, 401, { error: "Unauthorized" });
-      const briefData = payload.brief || payload;
-      await storeBrief({ ...briefData, _receivedAt: new Date().toISOString() });
-      data = { ok: true, stored: true };
-    } else if (operation === "getbrief") {
-      data = await getBrief();
     } else {
       return json(res, 400, { error: "Unknown desk operation" });
     }
