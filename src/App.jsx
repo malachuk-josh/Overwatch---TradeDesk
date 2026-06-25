@@ -3461,12 +3461,14 @@ export default function Overwatch() {
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
       }
-      // Load archive: Upstash first (cross-device), fall back to localStorage
+      // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
       let ah = null;
+      let fromKV = false;
       try {
         ah = await callDesk("getarchive");
+        fromKV = Array.isArray(ah);
       } catch {}
-      if (!Array.isArray(ah) || !ah.length) {
+      if (!fromKV) {
         ah = await loadStored(ARCHIVE_KEY, null);
       }
       if (Array.isArray(ah) && ah.length) {
