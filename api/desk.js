@@ -5,6 +5,9 @@ const SYMBOLS = {
   NQ: "CME_MINI:NQ1!",
   YM: "CBOT_MINI:YM1!",
   NDX: "NASDAQ:NDX",
+  SPY: "AMEX:SPY",
+  QQQ: "NASDAQ:QQQ",
+  DIA: "AMEX:DIA",
   VIX: "CBOE:VIX",
   DXY: "TVC:DXY",
   US10Y: "TVC:US10Y",
@@ -1132,6 +1135,12 @@ const fetchPoints = async () => {
     const spx = scan.get(SYMBOLS.SPX);
     const ndx = scan.get(SYMBOLS.NDX);
     const dji = scan.get(SYMBOLS.DJI);
+    const spy = scan.get(SYMBOLS.SPY);
+    const qqq = scan.get(SYMBOLS.QQQ);
+    const dia = scan.get(SYMBOLS.DIA);
+    const es = scan.get(SYMBOLS.ES);
+    const nq = scan.get(SYMBOLS.NQ);
+    const ym = scan.get(SYMBOLS.YM);
     const vix = scan.get(SYMBOLS.VIX);
     if (!spx || !vix) throw new Error("Missing index data");
     const sectors = SECTORS.flatMap(([name, symbol]) => {
@@ -1146,6 +1155,12 @@ const fetchPoints = async () => {
       spx: indexLevels(spx),
       ndx: indexLevels(ndx),
       dji: indexLevels(dji),
+      spy: indexLevels(spy),
+      qqq: indexLevels(qqq),
+      dia: indexLevels(dia),
+      es: indexLevels(es),
+      nq: indexLevels(nq),
+      ym: indexLevels(ym),
       vix: {
         spot: round(vix.price),
         structure: internals.volDetail.structure,
@@ -1174,6 +1189,12 @@ const fetchPoints = async () => {
       spx: indexLevels(spx) || { spot: spx.price, pivot: 7342, supports: [7298, 7260, 7215], resistances: [7397, 7440, 7485] },
       ndx: indexLevels(ndx) || { spot: 26402, pivot: 26498, supports: [26280, 26150, 26020], resistances: [26812, 26990, 27160] },
       dji: indexLevels(dji) || { spot: 52000, pivot: 51968, supports: [51713, 51540, 51370], resistances: [52190, 52360, 52530] },
+      spy: null,
+      qqq: null,
+      dia: null,
+      es: null,
+      nq: null,
+      ym: null,
       vix: { spot: vix.price, structure: internals.volDetail.structure, note: "Sample volatility state: elevated enough to keep intraday ranges wide." },
       internals,
       calendar: sampleCalendar.flat,
