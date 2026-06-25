@@ -251,14 +251,14 @@ const avgChange = (tickers = [], symbols = []) => {
 const buildTimingSnapshot = ({ market, news, points } = {}) => {
   const session = marketSession();
   const tickers = market?.tickers || [];
-  const cashAvg = avgChange(tickers, ["SPX", "NDX", "DJI"]);
+  const cashAvg = avgChange(tickers, ["SPY", "QQQ", "DIA"]) ?? avgChange(tickers, ["SPX", "NDX", "DJI"]);
   const futuresAvg = avgChange(tickers, ["ES", "NQ", "YM"]);
   const spread = Number.isFinite(cashAvg) && Number.isFinite(futuresAvg) ? futuresAvg - cashAvg : null;
   const staleCashRisk = session.label !== "MARKET OPEN";
   const spreadText = Number.isFinite(spread) ? ` Futures/cash spread is ${fmtSigned(spread, 2, " pts")}.` : "";
   const generatedAt = dateLine();
   const timingNote = staleCashRisk
-    ? `${session.label}: generated ${generatedAt}. Cash indexes such as SPY, QQQ and DIA may still reflect the last regular session while ES, NQ and YM futures continue to trade.${spreadText}`
+    ? `${session.label}: generated ${generatedAt}. Cash index proxies such as SPY, QQQ and DIA may still reflect the last regular session while ES, NQ and YM futures continue to trade.${spreadText}`
     : `MARKET OPEN: generated ${generatedAt}. Cash indexes and futures should both be treated as live, but quote timestamps still matter.${spreadText}`;
   return {
     generatedAt,

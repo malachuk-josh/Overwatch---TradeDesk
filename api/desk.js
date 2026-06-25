@@ -1,10 +1,13 @@
 const SYMBOLS = {
   SPX: "SP:SPX",
+  SPY: "AMEX:SPY",
   DJI: "DJ:DJI",
+  DIA: "AMEX:DIA",
   ES: "CME_MINI:ES1!",
   NQ: "CME_MINI:NQ1!",
   YM: "CBOT_MINI:YM1!",
   NDX: "NASDAQ:NDX",
+  QQQ: "NASDAQ:QQQ",
   VIX: "CBOE:VIX",
   DXY: "TVC:DXY",
   US10Y: "TVC:US10Y",
@@ -108,12 +111,15 @@ const SAMPLE_MARKET = {
   asOf: "sample snapshot",
   summary: "Live quotes are temporarily unavailable, so Overwatch is showing its built-in sample tape.",
   tickers: [
-    { symbol: "SPX", name: "S&P 500", price: 7316.33, change: -80.23, changePct: -1.08, dayOpen: 7356.445, dayLow: 7297.79, dayHigh: 7396.56 },
-    { symbol: "DJI", name: "Dow Jones Industrial Average", price: 51999.68, change: 328.64, changePct: 0.64, dayOpen: 51835.36, dayLow: 51712.63, dayHigh: 52190.29 },
+    { symbol: "SPY", name: "S&P 500 ETF", price: 731.63, change: -8.02, changePct: -1.08, dayOpen: 735.64, dayLow: 729.78, dayHigh: 739.66 },
+    { symbol: "QQQ", name: "Nasdaq 100 ETF", price: 527.31, change: -8.01, changePct: -1.50, dayOpen: 535.34, dayLow: 526.4, dayHigh: 540.38 },
+    { symbol: "DIA", name: "Dow ETF", price: 520.0, change: 3.29, changePct: 0.64, dayOpen: 518.35, dayLow: 517.13, dayHigh: 521.9 },
     { symbol: "ES", name: "E-mini S&P", price: 7341.25, change: -78.5, changePct: -1.06, dayOpen: 7380.5, dayLow: 7319.5, dayHigh: 7420.75 },
     { symbol: "NQ", name: "E-mini Nasdaq-100", price: 30463.25, change: 149.5, changePct: 0.49, dayOpen: 30388.5, dayLow: 30306.5, dayHigh: 30472.5 },
     { symbol: "YM", name: "E-mini Dow", price: 52527, change: 57, changePct: 0.11, dayOpen: 52498.5, dayLow: 52408, dayHigh: 52568 },
+    { symbol: "SPX", name: "S&P 500", price: 7316.33, change: -80.23, changePct: -1.08, dayOpen: 7356.445, dayLow: 7297.79, dayHigh: 7396.56 },
     { symbol: "NDX", name: "Nasdaq 100", price: 26402.18, change: -408.61, changePct: -1.52, dayOpen: 26606.485, dayLow: 26280.14, dayHigh: 26812.42 },
+    { symbol: "DJI", name: "Dow Jones Industrial Average", price: 51999.68, change: 328.64, changePct: 0.64, dayOpen: 51835.36, dayLow: 51712.63, dayHigh: 52190.29 },
     { symbol: "VIX", name: "CBOE Volatility", price: 20.84, change: 2.11, changePct: 11.27, dayOpen: 19.785, dayLow: 18.8, dayHigh: 21.36 },
     { symbol: "DXY", name: "US Dollar Index", price: 101.7, change: 0.41, changePct: 0.4, dayOpen: 101.495, dayLow: 101.14, dayHigh: 101.92 },
     { symbol: "US10Y", name: "US 10-Year Yield", price: 4.528, change: 0.051, changePct: 1.14, dayOpen: 4.5225, dayLow: 4.513, dayHigh: 4.54 },
@@ -148,6 +154,18 @@ let scanCache;
 let newsCache;
 let calendarCache;
 let flowCache;
+
+const MARKET_SYMBOL_ALIASES = {
+  SPX: "SPY",
+  NDX: "QQQ",
+  DJI: "DIA",
+};
+
+const MARKET_SYMBOL_NAMES = {
+  SPY: "S&P 500 ETF",
+  QQQ: "Nasdaq 100 ETF",
+  DIA: "Dow ETF",
+};
 
 const json = (res, status, body) => {
   res.statusCode = status;
@@ -668,19 +686,20 @@ const fetchMarket = async (watchlist = []) => {
 
   const tickerResults = await Promise.allSettled(
     requested.map(async (item) => {
-      const scanSymbol = SYMBOLS[item.symbol];
+      const symbol = MARKET_SYMBOL_ALIASES[item.symbol] || item.symbol;
+      const scanSymbol = SYMBOLS[symbol];
       const result = scanSymbol && scan.get(scanSymbol)
         ? scan.get(scanSymbol)
-        : await quote(item.symbol);
-      const precision = item.symbol === "US10Y" ? 3 : 2;
+        : await quote(symbol);
+      const precision = symbol === "US10Y" ? 3 : 2;
       const dayOpen = Number.isFinite(Number(result.dayOpen))
         ? Number(result.dayOpen)
         : Number.isFinite(Number(result.previousClose))
           ? Number(result.previousClose)
           : null;
       return {
-        symbol: item.symbol,
-        name: item.name,
+        symbol,
+        name: MARKET_SYMBOL_NAMES[symbol] || item.name,
         price: round(result.price, precision),
         change: round(result.change, precision),
         changePct: round(result.changePct),
@@ -699,10 +718,10 @@ const fetchMarket = async (watchlist = []) => {
   });
   if (!tickers.length) return SAMPLE_MARKET;
 
-  const spx = tickers.find((item) => item.symbol === "SPX");
-  const ndx = tickers.find((item) => item.symbol === "NDX");
+  const spy = tickers.find((item) => item.symbol === "SPY");
+  const qqq = tickers.find((item) => item.symbol === "QQQ");
   const vix = tickers.find((item) => item.symbol === "VIX");
-  const tone = ((spx?.changePct || 0) + (ndx?.changePct || 0)) / 2;
+  const tone = ((spy?.changePct || 0) + (qqq?.changePct || 0)) / 2;
   const toneLabel = tone > 0.45 ? "risk-on" : tone < -0.45 ? "defensive" : "mixed";
   const vixLabel = vix?.price > 25 ? "with elevated volatility" : vix?.price < 16 ? "with subdued volatility" : "with a normal volatility backdrop";
   const fearGreed = await fearGreedPromise;
@@ -1152,7 +1171,8 @@ const fetchPoints = async () => {
       positioning,
     };
   } catch {
-    const sample = (symbol) => SAMPLE_MARKET.tickers.find((item) => item.symbol === symbol);
+    const sample = (symbol) => SAMPLE_MARKET.tickers.find((item) => item.symbol === symbol)
+      || SAMPLE_MARKET.tickers.find((item) => MARKET_SYMBOL_ALIASES[item.symbol] === symbol);
     const spx = sample("SPX");
     const ndx = sample("NDX");
     const dji = sample("DJI");
