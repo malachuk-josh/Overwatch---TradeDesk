@@ -1745,22 +1745,24 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
       </Card>
       <div className="grid g-pulse">
         {orderedTickers.map((t) => (
-          <div className="card tk" key={t.symbol}>
+          <div className="card tk" key={t.symbol} style={t._stale ? { opacity: 0.5 } : undefined}>
             <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
             <div className="tk-top">
               <span className="tk-sym">{t.symbol}</span>
-              {t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
+              {t._stale
+                ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
+                : t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
             </div>
             <div className="tk-body">
               <div className="tk-left">
                 <div className="tk-name">{t.name}</div>
-                <div className="tk-price">{fmtNum(t.price, t.symbol === "US10Y" ? 3 : 2)}</div>
+                <div className="tk-price">{t._stale ? "—" : fmtNum(t.price, t.symbol === "US10Y" ? 3 : 2)}</div>
                 <div className="tk-chg">
-                  <span style={{ color: chgColor(t.change) }}>{fmtSigned(t.change)}</span>
-                  <span style={{ color: chgColor(t.changePct) }}>{fmtSigned(t.changePct, 2, "%")}</span>
+                  <span style={{ color: chgColor(t.change) }}>{t._stale ? "—" : fmtSigned(t.change)}</span>
+                  <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
                 </div>
               </div>
-              <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} />
+              {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} />}
             </div>
           </div>
         ))}
@@ -2002,9 +2004,12 @@ const CalendarTab = ({ points, onRefresh }) => {
       <div className="calendar-hero">
         <div className="calendar-hero-top">
           <div className="calendar-next">
-            <span className={`chip ${next?.importance === "high" ? "b-bear" : next?.importance === "medium" ? "b-brass" : "b-info"}`}>
-              {next ? `${next.importance || "event"} impact` : "No major event"}
-            </span>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span className={`chip ${next?.importance === "high" ? "b-bear" : next?.importance === "medium" ? "b-brass" : "b-info"}`}>
+                {next ? `${next.importance || "event"} impact` : "No major event"}
+              </span>
+              {data?.calendarAsOf && <span style={{ fontSize: 10, color: C.muted, fontFamily: "monospace" }}>data as of {data.calendarAsOf}</span>}
+            </div>
             <h2>{next ? next.event : "No major U.S. event queued"}</h2>
             <p>
               {next
