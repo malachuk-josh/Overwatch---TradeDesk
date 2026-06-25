@@ -103,7 +103,12 @@ const C = {
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const NEWSLETTER_HISTORY_KEY = "overwatch:newsletter-history";
-const TOP_ASSET_CARD_ORDER = ["SPX", "ES", "NDX", "NQ", "DJI", "YM"];
+const TOP_ASSET_CARD_ORDER = ["SPY", "ES", "QQQ", "NQ", "DIA", "YM"];
+const MARKET_PULSE_ALIASES = {
+  SPX: "SPY",
+  NDX: "QQQ",
+  DJI: "DIA",
+};
 
 /* ---------------- formatting helpers ---------------- */
 
@@ -126,6 +131,8 @@ const sentColor = (s) => (s === "bullish" ? C.bull : s === "bearish" ? C.bear : 
 
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
 
+const pulseDisplaySymbol = (symbol = "") => MARKET_PULSE_ALIASES[symbol] || symbol;
+
 const orderAssetCards = (items = []) => {
   const rank = new Map(TOP_ASSET_CARD_ORDER.map((symbol, index) => [symbol, index]));
   return items
@@ -136,6 +143,35 @@ const orderAssetCards = (items = []) => {
       return aRank - bRank || a.index - b.index;
     })
     .map(({ item }) => item);
+};
+
+const orderPulseTickers = (tickers = []) => {
+  const replacedSymbols = new Set(Object.keys(MARKET_PULSE_ALIASES));
+  const bySymbol = new Map(tickers.map((ticker) => [ticker.symbol, ticker]));
+  const cards = [];
+  const used = new Set();
+
+  for (const symbol of TOP_ASSET_CARD_ORDER) {
+    const candidate = bySymbol.get(symbol) || Object.entries(MARKET_PULSE_ALIASES)
+      .map(([source, alias]) => (alias === symbol ? bySymbol.get(alias) || bySymbol.get(source) : null))
+      .find(Boolean);
+    if (candidate && !used.has(candidate.symbol)) {
+      cards.push(candidate);
+      used.add(candidate.symbol);
+    }
+  }
+
+  for (const ticker of tickers) {
+    if (replacedSymbols.has(ticker.symbol)) {
+      const aliasSymbol = MARKET_PULSE_ALIASES[ticker.symbol];
+      if (aliasSymbol && bySymbol.has(aliasSymbol)) continue;
+    }
+    if (used.has(ticker.symbol)) continue;
+    cards.push(ticker);
+    used.add(ticker.symbol);
+  }
+
+  return orderAssetCards(cards);
 };
 
 /* ---------------- New York time / session ---------------- */
@@ -222,7 +258,7 @@ const buildTimingSnapshot = ({ market, news, points } = {}) => {
   const spreadText = Number.isFinite(spread) ? ` Futures/cash spread is ${fmtSigned(spread, 2, " pts")}.` : "";
   const generatedAt = dateLine();
   const timingNote = staleCashRisk
-    ? `${session.label}: generated ${generatedAt}. Cash indexes such as SPX, NDX and DJI may still reflect the last regular session while ES, NQ and YM futures continue to trade.${spreadText}`
+    ? `${session.label}: generated ${generatedAt}. Cash indexes such as SPY, QQQ and DIA may still reflect the last regular session while ES, NQ and YM futures continue to trade.${spreadText}`
     : `MARKET OPEN: generated ${generatedAt}. Cash indexes and futures should both be treated as live, but quote timestamps still matter.${spreadText}`;
   return {
     generatedAt,
@@ -1405,11 +1441,12 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose }) => {
 const buildSessionRead = ({ market, points, news, recap }) => {
   const tickers = Array.isArray(market?.tickers) ? market.tickers : [];
   const bySymbol = (symbol) => tickers.find((t) => t.symbol === symbol);
-  const spx = bySymbol("SPX");
-  const ndx = bySymbol("NDX");
-  const dji = bySymbol("DJI");
+  const bySymbolAny = (symbols) => symbols.map(bySymbol).find(Boolean) || null;
+  const spy = bySymbolAny(["SPY", "SPX"]);
+  const qqq = bySymbolAny(["QQQ", "NDX"]);
+  const dia = bySymbolAny(["DIA", "DJI"]);
   const vix = bySymbol("VIX");
-  const indexMoves = [spx, ndx, dji].filter(Boolean);
+  const indexMoves = [spy, qqq, dia].filter(Boolean);
   const avgMove = indexMoves.length
     ? indexMoves.reduce((sum, item) => sum + (Number(item.changePct) || 0), 0) / indexMoves.length
     : 0;
@@ -1453,7 +1490,10 @@ const buildSessionRead = ({ market, points, news, recap }) => {
     : "No major U.S. event queued";
   const newsLine = news?.brief || news?.mood || "";
   const positioning = points?.positioning?.summary || "";
-  const indexLine = [spx, ndx, dji].filter(Boolean).map((t) => `${t.symbol} ${fmtSigned(t.changePct, 2, "%")}`).join(", ");
+  const indexLine = [spy, qqq, dia]
+    .filter(Boolean)
+    .map((t) => `${pulseDisplaySymbol(t.symbol)} ${fmtSigned(t.changePct, 2, "%")}`)
+    .join(", ");
   const summary = `${tone} read: ${indexLine || "major indexes are still loading"}. ${volRead} ${breadthRead}`;
   const cards = [
     {
@@ -1656,7 +1696,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   if (status === "error" && !data) return <ErrBlock msg={error} onRetry={onRefresh} />;
 
   const tickers = data?.tickers || [];
-  const orderedTickers = orderAssetCards(tickers);
+  const orderedTickers = orderPulseTickers(tickers);
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
@@ -1710,7 +1750,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           <div className="card tk" key={t.symbol}>
             <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
             <div className="tk-top">
-              <span className="tk-sym">{t.symbol}</span>
+              <span className="tk-sym">{pulseDisplaySymbol(t.symbol)}</span>
               {t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
             </div>
             <div className="tk-body">
@@ -1728,14 +1768,14 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         ))}
       </div>
       <div className="grid g-data" style={{ alignItems: "start" }}>
-        <Card icon={Crosshair} title="SPX level map" sub="Nearest supports & resistances vs spot">
-          <LevelsLadder spx={points?.spx} label="SPX" />
+        <Card icon={Crosshair} title="SPY level map" sub="Nearest supports & resistances vs spot">
+          <LevelsLadder spx={points?.spx} label="SPY" />
         </Card>
-        <Card icon={Crosshair} title="NDX level map" sub="Nasdaq 100 supports & resistances">
-          <LevelsLadder spx={points?.ndx} label="NDX" />
+        <Card icon={Crosshair} title="QQQ level map" sub="Nasdaq 100 supports & resistances">
+          <LevelsLadder spx={points?.ndx} label="QQQ" />
         </Card>
-        <Card icon={Crosshair} title="DJI level map" sub="Dow Jones supports & resistances">
-          <LevelsLadder spx={points?.dji} label="DJI" />
+        <Card icon={Crosshair} title="DIA level map" sub="Dow Jones supports & resistances">
+          <LevelsLadder spx={points?.dji} label="DIA" />
         </Card>
       </div>
       <div className="grid g-market-read">
@@ -2216,7 +2256,7 @@ const DataPointSection = ({ points, onRefresh }) => {
       <EmptyState
         icon={Crosshair}
         title="Internals not loaded"
-        body="Pull SPX, NDX, and DJI levels, VIX structure, put/call, breadth, the day's economic calendar and positioning notes."
+        body="Pull SPY, QQQ, and DIA levels, VIX structure, put/call, breadth, the day's economic calendar and positioning notes."
         action={<button className="btn btn-brass" onClick={onRefresh}><Crosshair size={15} /> Pull internals</button>}
       />
     );
