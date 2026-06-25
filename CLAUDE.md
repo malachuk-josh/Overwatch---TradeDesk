@@ -20,12 +20,18 @@ React + Vite trading intelligence dashboard. Fetches live market data, synthesiz
 | `recap` | fetch | Session summary |
 | `thesis` | fetch | Daily bias call |
 | `newsletter` | fetch | Morning note (includes trade plan) |
+| `getarchive` | fetch | Load archive from Upstash Redis |
+| `savearchive` | write | Persist archive to Upstash Redis |
 
 ### Environment Variables (Vercel)
 
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Claude AI synthesis (optional — falls back to template) |
+| `KV_REST_API_URL` | Upstash Redis REST URL for archive persistence |
+| `KV_REST_API_TOKEN` | Upstash Redis REST token for archive persistence |
+| `UPSTASH_REDIS_REST_URL` | Alias for KV_REST_API_URL |
+| `UPSTASH_REDIS_REST_TOKEN` | Alias for KV_REST_API_TOKEN |
 
 ## Vercel Deployment
 

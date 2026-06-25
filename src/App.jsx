@@ -3258,7 +3258,7 @@ const ArchiveTab = ({
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Card icon={History} title="Daily archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · persists between sessions` : "No archived entries yet"}>
+      <Card icon={History} title="Daily archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis and newsletter lands here automatically. Newsletters include the attached thesis so you always have the full picture.</div>
         )}
@@ -3421,6 +3421,7 @@ export default function Overwatch() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const autoSyncStarted = useRef(false);
+  const archiveSaveTimer = useRef(null);
   const storageOk = storageAvailable();
 
   /* clock */
@@ -3440,8 +3441,14 @@ export default function Overwatch() {
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
       }
-      // Load unified archive; migrate legacy separate keys on first run
-      const ah = await loadStored(ARCHIVE_KEY, null);
+      // Load archive: Upstash first (cross-device), fall back to localStorage
+      let ah = null;
+      try {
+        ah = await callDesk("getarchive");
+      } catch {}
+      if (!Array.isArray(ah) || !ah.length) {
+        ah = await loadStored(ARCHIVE_KEY, null);
+      }
       if (Array.isArray(ah) && ah.length) {
         setArchiveHistory(ah);
       } else {
@@ -3449,7 +3456,6 @@ export default function Overwatch() {
         const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
         const legacyNl = (await loadStored(NEWSLETTER_HISTORY_KEY, [])) || [];
         const nlIds = new Set(legacyNl.map((n) => n._thesisId).filter(Boolean));
-        // Keep thesis entries that don't have a newsletter counterpart
         const thesisOnly = legacyThesis.filter((t) => !nlIds.has(t._id)).map((t) => ({ ...t, _type: "thesis" }));
         const nlEntries = legacyNl.map((n) => ({ ...n, _type: "newsletter" }));
         const merged = [...thesisOnly, ...nlEntries].sort((a, b) => (b._ts || 0) - (a._ts || 0)).slice(0, 60);
@@ -3464,7 +3470,12 @@ export default function Overwatch() {
     if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk });
   }, [storageReady, watchlist, instrument, weights, lean, risk]);
   useEffect(() => {
-    if (storageReady) saveStored(ARCHIVE_KEY, archiveHistory);
+    if (!storageReady) return;
+    saveStored(ARCHIVE_KEY, archiveHistory);
+    if (archiveSaveTimer.current) clearTimeout(archiveSaveTimer.current);
+    archiveSaveTimer.current = setTimeout(() => {
+      callDesk("savearchive", undefined, { archive: archiveHistory }).catch(() => {});
+    }, 1500);
   }, [storageReady, archiveHistory]);
 
   const notify = useCallback((msg, kind = "ok") => {

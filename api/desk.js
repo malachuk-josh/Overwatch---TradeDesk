@@ -1741,6 +1741,33 @@ const makeSessionRecap = ({ market, news, points }) => {
   };
 };
 
+const _kvUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const _kvToken = () => process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+async function saveArchiveKV(archive) {
+  const kvUrl = _kvUrl();
+  const kvToken = _kvToken();
+  if (!kvUrl || !kvToken) return;
+  await fetch(kvUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(["SET", "overwatch:archive", JSON.stringify(archive), "EX", "31536000"]),
+    signal: AbortSignal.timeout(5000),
+  });
+}
+
+async function getArchiveKV() {
+  const kvUrl = _kvUrl();
+  const kvToken = _kvToken();
+  if (!kvUrl || !kvToken) return null;
+  const res = await fetch(`${kvUrl}/get/overwatch:archive`, {
+    headers: { Authorization: `Bearer ${kvToken}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  const { result } = await res.json();
+  return result ? JSON.parse(result) : null;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "Method not allowed" });
@@ -1798,6 +1825,11 @@ export default async function handler(req, res) {
           tradePlan: fallback.tradePlan,
         }
         : fallback;
+    } else if (operation === "getarchive") {
+      data = await getArchiveKV();
+    } else if (operation === "savearchive") {
+      await saveArchiveKV(payload.archive);
+      data = { ok: true };
     } else {
       return json(res, 400, { error: "Unknown desk operation" });
     }
