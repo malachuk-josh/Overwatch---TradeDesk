@@ -78,9 +78,15 @@ const FACTORS = [
 const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
 const DEFAULT_THESIS_INSTRUMENT = "SPX";
 const THESIS_INSTRUMENTS = [
-  { symbol: "SPX", label: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx", focusLabel: "SPX / ES" },
-  { symbol: "NDX", label: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx", focusLabel: "NDX / NQ" },
+  { symbol: "SPX", label: "SPX", name: "S&P 500 Index", futures: "ES", pointsKey: "spx", focusLabel: "SPX / ES" },
+  { symbol: "SPY", label: "SPY", name: "SPDR S&P 500 ETF", futures: "ES", pointsKey: "spy", focusLabel: "SPY / ES" },
+  { symbol: "ES",  label: "ES",  name: "E-mini S&P 500 Futures", futures: "ES", pointsKey: "es", focusLabel: "ES" },
+  { symbol: "NDX", label: "NDX", name: "Nasdaq 100 Index", futures: "NQ", pointsKey: "ndx", focusLabel: "NDX / NQ" },
+  { symbol: "QQQ", label: "QQQ", name: "Invesco QQQ ETF", futures: "NQ", pointsKey: "qqq", focusLabel: "QQQ / NQ" },
+  { symbol: "NQ",  label: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq", focusLabel: "NQ" },
   { symbol: "DJI", label: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji", focusLabel: "DJI / YM" },
+  { symbol: "DIA", label: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia", focusLabel: "DIA / YM" },
+  { symbol: "YM",  label: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym", focusLabel: "YM" },
 ];
 const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
   THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
@@ -2375,7 +2381,8 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
             ))}
           </div>
           <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>
-            Primary build target: <span style={{ color: "var(--text)" }}>{activeInstrument.name}</span> with {activeInstrument.futures} as the live execution proxy.
+            Primary build target: <span style={{ color: "var(--text)" }}>{activeInstrument.name}</span>
+            {activeInstrument.futures !== activeInstrument.symbol && <> with {activeInstrument.futures} as the live execution proxy</>}.
           </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
