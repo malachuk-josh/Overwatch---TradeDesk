@@ -609,7 +609,7 @@ const fetchEconomicCalendar = async () => {
     };
   });
 
-  calendarCache = { expires: Date.now() + 10 * 60_000, data: promise };
+  calendarCache = { expires: Date.now() + 90_000, data: promise };
   try {
     return await promise;
   } catch (error) {
@@ -728,12 +728,17 @@ const fetchMarket = async (watchlist = []) => {
     }),
   );
 
-  const tickers = tickerResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  // Keep failed tickers as stale placeholders so the card grid stays intact
+  const tickers = tickerResults.map((result, i) => {
+    if (result.status === "fulfilled") return result.value;
+    const item = requested[i];
+    return { symbol: item.symbol, name: item.name, price: null, change: null, changePct: null, dayOpen: null, dayLow: null, dayHigh: null, previousClose: null, _stale: true };
+  });
   const sectors = SECTORS.flatMap(([name, symbol]) => {
     const result = scan.get(symbol);
     return result ? [{ name, changePct: round(result.changePct) }] : [];
   });
-  if (!tickers.length) return SAMPLE_MARKET;
+  if (!tickers.some((t) => t.price != null)) return SAMPLE_MARKET;
 
   const spx = tickers.find((item) => item.symbol === "SPX");
   const ndx = tickers.find((item) => item.symbol === "NDX");
@@ -1185,6 +1190,7 @@ const fetchPoints = async () => {
       calendar: calendarData.flat,
       calendarGroups: calendarData.groups,
       calendarSource: calendarData.source,
+      calendarAsOf: calendarData.asOf,
       positioning,
     };
   } catch {
@@ -1204,6 +1210,7 @@ const fetchPoints = async () => {
       calendar: sampleCalendar.flat,
       calendarGroups: sampleCalendar.groups,
       calendarSource: sampleCalendar.source,
+      calendarAsOf: new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
       positioning: SAMPLE_POSITIONING,
     };
   }
