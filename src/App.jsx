@@ -23,6 +23,7 @@ import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right.mjs";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
+import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
