@@ -1,6 +1,6 @@
 const SYMBOLS = {
-  SPX: "SP:SPX",
-  DJI: "DJ:DJI",
+  SPX: "CBOE:SPX",
+  DJI: "TVC:DJI",
   ES: "CME_MINI:ES1!",
   NQ: "CME_MINI:NQ1!",
   YM: "CBOT_MINI:YM1!",
@@ -138,7 +138,12 @@ const SAMPLE_MARKET = {
 };
 
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
-const round = (value, digits = 2) => Number(Number(value || 0).toFixed(digits));
+const round = (value, digits = 2) => {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return Number(num.toFixed(digits));
+};
 const signed = (value, digits = 2, suffix = "") => {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
