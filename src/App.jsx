@@ -73,14 +73,24 @@ const FACTORS = [
 ];
 
 const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
-const DEFAULT_THESIS_INSTRUMENT = "SPX";
+const DEFAULT_THESIS_INSTRUMENT = "SPY";
+const THESIS_INSTRUMENT_ALIASES = {
+  SPX: "SPY",
+  NDX: "QQQ",
+  DJI: "DIA",
+};
+const normalizeThesisInstrument = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
+  THESIS_INSTRUMENT_ALIASES[symbol] || symbol || DEFAULT_THESIS_INSTRUMENT;
 const THESIS_INSTRUMENTS = [
-  { symbol: "SPX", label: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx", focusLabel: "SPX / ES" },
-  { symbol: "NDX", label: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx", focusLabel: "NDX / NQ" },
-  { symbol: "DJI", label: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji", focusLabel: "DJI / YM" },
+  { symbol: "SPY", label: "SPY", name: "S&P 500 ETF", futures: "ES", pointsKey: "spx", focusLabel: "SPY / ES" },
+  { symbol: "QQQ", label: "QQQ", name: "Nasdaq 100 ETF", futures: "NQ", pointsKey: "ndx", focusLabel: "QQQ / NQ" },
+  { symbol: "DIA", label: "DIA", name: "Dow Jones ETF", futures: "YM", pointsKey: "dji", focusLabel: "DIA / YM" },
+  { symbol: "ES", label: "ES", name: "E-mini S&P 500 Futures", futures: "SPY", pointsKey: "spx", focusLabel: "ES / SPY" },
+  { symbol: "NQ", label: "NQ", name: "E-mini Nasdaq-100 Futures", futures: "QQQ", pointsKey: "ndx", focusLabel: "NQ / QQQ" },
+  { symbol: "YM", label: "YM", name: "E-mini Dow Futures", futures: "DIA", pointsKey: "dji", focusLabel: "YM / DIA" },
 ];
 const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
-  THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
+  THESIS_INSTRUMENTS.find((item) => item.symbol === normalizeThesisInstrument(symbol)) || THESIS_INSTRUMENTS[0];
 
 const C = {
   bull: "#3DD68C",
@@ -2314,7 +2324,12 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         <Card icon={NotebookPen} title="Instrument focus" sub="Choose which index the thesis and note are built for">
           <div className="seg">
             {THESIS_INSTRUMENTS.map((item) => (
-              <button key={item.symbol} className={instrument === item.symbol ? "on" : ""} onClick={() => setInstrument(item.symbol)}>
+              <button
+                key={item.symbol}
+                type="button"
+                className={instrument === item.symbol ? "on" : ""}
+                onClick={() => setInstrument(item.symbol)}
+              >
                 {item.symbol}
               </button>
             ))}

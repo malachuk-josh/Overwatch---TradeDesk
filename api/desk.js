@@ -1380,15 +1380,25 @@ const buildMarketOutlook = ({ news, points, timing }) => {
   return `${recentLine} ${currentLine} ${upcomingLine}${timingLine}`;
 };
 
-const THESIS_INSTRUMENTS = {
-  SPX: { symbol: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx" },
-  NDX: { symbol: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx" },
-  DJI: { symbol: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji" },
+const THESIS_INSTRUMENT_ALIASES = {
+  SPX: "SPY",
+  NDX: "QQQ",
+  DJI: "DIA",
 };
 
-const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
+const THESIS_INSTRUMENTS = {
+  SPY: { symbol: "SPY", name: "S&P 500 ETF", futures: "ES", pointsKey: "spx", focusLabel: "SPY / ES" },
+  QQQ: { symbol: "QQQ", name: "Nasdaq 100 ETF", futures: "NQ", pointsKey: "ndx", focusLabel: "QQQ / NQ" },
+  DIA: { symbol: "DIA", name: "Dow Jones ETF", futures: "YM", pointsKey: "dji", focusLabel: "DIA / YM" },
+  ES: { symbol: "ES", name: "E-mini S&P 500 Futures", futures: "SPY", pointsKey: "spx", focusLabel: "ES / SPY" },
+  NQ: { symbol: "NQ", name: "E-mini Nasdaq-100 Futures", futures: "QQQ", pointsKey: "ndx", focusLabel: "NQ / QQQ" },
+  YM: { symbol: "YM", name: "E-mini Dow Futures", futures: "DIA", pointsKey: "dji", focusLabel: "YM / DIA" },
+};
 
-const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX" }) => {
+const normalizeThesisInstrument = (instrument = "SPY") => THESIS_INSTRUMENT_ALIASES[instrument] || instrument || "SPY";
+const getThesisInstrument = (instrument = "SPY") => THESIS_INSTRUMENTS[normalizeThesisInstrument(instrument)] || THESIS_INSTRUMENTS.SPY;
+
+const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPY" }) => {
   const focus = getThesisInstrument(instrument);
   const tickers = market?.tickers || [];
   const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"].map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct).filter(Number.isFinite);
@@ -1505,7 +1515,7 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   };
 };
 
-const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced", instrument = thesis?.instrument || "SPX" }) => {
+const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced", instrument = thesis?.instrument || "SPY" }) => {
   const focus = getThesisInstrument(instrument);
   const spx = market?.tickers?.find((item) => item.symbol === "SPX");
   const ndx = market?.tickers?.find((item) => item.symbol === "NDX");
