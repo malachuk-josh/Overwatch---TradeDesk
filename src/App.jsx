@@ -2617,7 +2617,7 @@ const TradePlanSection = ({ plan }) => {
     <>
       <div className="tp-divider">
         <div className="tp-divider-line" />
-        <div className="tp-divider-label">Daily Trade Plan — SPY</div>
+        <div className="tp-divider-label">Daily Trade Plan — {plan.etfLabel || "SPY"}</div>
         <div className="tp-divider-line" />
       </div>
 
@@ -2661,7 +2661,7 @@ const TradePlanSection = ({ plan }) => {
       {/* Key S/R */}
       {(plan.levels?.spyResistance?.length || plan.levels?.spySupport?.length) ? (
         <>
-          <div className="np-sec">Key Support & Resistance — SPY</div>
+          <div className="np-sec">Key Support & Resistance — {plan.etfLabel || "SPY"}</div>
           <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>
             {plan.levels.spyResistance?.length > 0 && (
               <div>
@@ -2857,7 +2857,7 @@ const buildMarkdown = ({ d, thesis, market, points, edition }) => {
     lines.push("");
     lines.push("---");
     lines.push("");
-    lines.push(`## Daily Trade Plan — SPY`);
+    lines.push(`## Daily Trade Plan — ${tp.etfLabel || "SPY"}`);
     lines.push(`**Bias:** ${tp.biasLabel} · VIX ${tp.internals?.vixPrice || "—"}`);
     if (tp.macroRisk) lines.push(`\n> **Macro Risk:** ${tp.macroRisk}`);
     lines.push("");
