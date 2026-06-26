@@ -1567,7 +1567,10 @@ const buildSessionRead = ({ market, points, news, recap }) => {
   };
 };
 
-const LevelsLadder = ({ spx, label = "SPX" }) => {
+const ETF_INSTRUMENTS = new Set(["SPY", "QQQ", "DIA"]);
+
+const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
+  const dec = decimals != null ? decimals : (ETF_INSTRUMENTS.has(label) ? 2 : 0);
   if (!spx || spx.spot == null) return <div style={{ color: C.muted, fontSize: 12 }}>No {label} levels in last sync.</div>;
   const rows = [
     ...(spx.resistances || []).map((v, i) => ({ v, type: "res", label: `R${i + 1}` })),
@@ -1580,6 +1583,8 @@ const LevelsLadder = ({ spx, label = "SPX" }) => {
   const H = 252, W = 330;
   const y = (v) => 14 + ((max + pad - v) / (max - min + 2 * pad)) * (H - 28);
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
+  const spotRectW = dec > 0 ? 102 : 86;
+  const spotCenterX = 80 + spotRectW / 2;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
       <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E2935" strokeWidth="1" />
@@ -1590,7 +1595,7 @@ const LevelsLadder = ({ spx, label = "SPX" }) => {
             {r.label}
           </text>
           <text x={W - 12} y={y(r.v) - 4} textAnchor="end" fontSize="10.5" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace">
-            {fmtNum(r.v, 0)}
+            {fmtNum(r.v, dec)}
           </text>
         </g>
       ))}
@@ -1599,9 +1604,9 @@ const LevelsLadder = ({ spx, label = "SPX" }) => {
         <circle cx="74" cy={y(spx.spot)} r="4.5" fill="#E8EDF2">
           <animate attributeName="r" values="4;5.5;4" dur="2s" repeatCount="indefinite" />
         </circle>
-        <rect x="80" y={y(spx.spot) - 19} rx="4" width="86" height="17" fill="#E8EDF2" />
-        <text x="123" y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#0B0F14" fontWeight="700" fontFamily="JetBrains Mono, monospace">
-          {label} {fmtNum(spx.spot, 0)}
+        <rect x="80" y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E8EDF2" />
+        <text x={spotCenterX} y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#0B0F14" fontWeight="700" fontFamily="JetBrains Mono, monospace">
+          {label} {fmtNum(spx.spot, dec)}
         </text>
       </g>
     </svg>
