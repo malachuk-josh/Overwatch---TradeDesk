@@ -899,7 +899,7 @@ const fetchNews = async () => {
   }
 };
 
-const indexLevels = (item) => {
+const indexLevels = (item, decimals = 0) => {
   if (!item) return null;
   const price = Number(item.price);
   const high = Number(item.dayHigh);
@@ -908,13 +908,13 @@ const indexLevels = (item) => {
   const range = Math.max(high - low, price * 0.0025);
   const pivot = (high + low + price) / 3;
   return {
-    spot: round(price, 0),
-    pivot: round(pivot, 0),
+    spot: round(price, decimals),
+    pivot: round(pivot, decimals),
     changePct: round(item.changePct),
-    dayLow: round(low, 0),
-    dayHigh: round(high, 0),
-    supports: [low, price - range * 0.65, price - range].map((value) => round(value, 0)).sort((a, b) => b - a),
-    resistances: [high, Math.max(pivot, high + range * 0.35), high + range].map((value) => round(value, 0)).sort((a, b) => a - b),
+    dayLow: round(low, decimals),
+    dayHigh: round(high, decimals),
+    supports: [low, price - range * 0.65, price - range].map((value) => round(value, decimals)).sort((a, b) => b - a),
+    resistances: [high, Math.max(pivot, high + range * 0.35), high + range].map((value) => round(value, decimals)).sort((a, b) => a - b),
   };
 };
 
@@ -1155,9 +1155,9 @@ const fetchPoints = async () => {
       spx: indexLevels(spx),
       ndx: indexLevels(ndx),
       dji: indexLevels(dji),
-      spy: indexLevels(spy),
-      qqq: indexLevels(qqq),
-      dia: indexLevels(dia),
+      spy: indexLevels(spy, 2),
+      qqq: indexLevels(qqq, 2),
+      dia: indexLevels(dia, 2),
       es: indexLevels(es),
       nq: indexLevels(nq),
       ym: indexLevels(ym),
