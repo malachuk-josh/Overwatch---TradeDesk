@@ -1414,9 +1414,15 @@ const buildMarketOutlook = ({ news, points, timing }) => {
 };
 
 const THESIS_INSTRUMENTS = {
-  SPX: { symbol: "SPX", name: "S&P 500", futures: "ES", pointsKey: "spx" },
-  NDX: { symbol: "NDX", name: "Nasdaq 100", futures: "NQ", pointsKey: "ndx" },
+  SPX: { symbol: "SPX", name: "S&P 500 Index", futures: "ES", pointsKey: "spx" },
+  SPY: { symbol: "SPY", name: "SPDR S&P 500 ETF", futures: "ES", pointsKey: "spy" },
+  ES:  { symbol: "ES",  name: "E-mini S&P 500 Futures", futures: "ES", pointsKey: "es" },
+  NDX: { symbol: "NDX", name: "Nasdaq 100 Index", futures: "NQ", pointsKey: "ndx" },
+  QQQ: { symbol: "QQQ", name: "Invesco QQQ ETF", futures: "NQ", pointsKey: "qqq" },
+  NQ:  { symbol: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq" },
   DJI: { symbol: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji" },
+  DIA: { symbol: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia" },
+  YM:  { symbol: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym" },
 };
 
 const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
