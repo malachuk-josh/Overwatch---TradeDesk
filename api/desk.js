@@ -1544,6 +1544,17 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   };
 };
 
+const ETF_KEY_FOR_INSTRUMENT = {
+  SPX: "spy", ES: "spy", SPY: "spy",
+  NDX: "qqq", NQ: "qqq", QQQ: "qqq",
+  DJI: "dia", YM: "dia", DIA: "dia",
+};
+const ETF_LABEL_FOR_INSTRUMENT = {
+  SPX: "SPY", ES: "SPY", SPY: "SPY",
+  NDX: "QQQ", NQ: "QQQ", QQQ: "QQQ",
+  DJI: "DIA", YM: "DIA", DIA: "DIA",
+};
+
 const makeTradePlan = ({ market, news, points, thesis }) => {
   if (!thesis || !market) return null;
   const bySymbol = (sym) => (market?.tickers || []).find((t) => t.symbol === sym);
@@ -1556,18 +1567,20 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   const vix = bySymbol("VIX");
 
   const focus = thesis.instrument || "SPX";
-  const focusLevels = points?.[focus.toLowerCase()] || points?.spx || {};
-  const supports = (focusLevels.supports || []).filter((v) => Number.isFinite(Number(v)));
-  const resistances = (focusLevels.resistances || []).filter((v) => Number.isFinite(Number(v)));
-  const pivot = focusLevels.pivot;
+  const etfKey = ETF_KEY_FOR_INSTRUMENT[focus] || "spy";
+  const etfLabel = ETF_LABEL_FOR_INSTRUMENT[focus] || "SPY";
 
-  const toSpy = (v) => (Number.isFinite(Number(v)) ? round(Number(v) / 10, 1) : null);
-  const r1 = resistances[0] != null ? Number(resistances[0]) : null;
-  const r2 = resistances[1] != null ? Number(resistances[1]) : null;
-  const s1 = supports[0] != null ? Number(supports[0]) : null;
-  const s2 = supports[1] != null ? Number(supports[1]) : null;
-  const piv = pivot != null ? Number(pivot) : null;
-  const spy = { r1: toSpy(r1), r2: toSpy(r2), s1: toSpy(s1), s2: toSpy(s2), piv: toSpy(piv) };
+  // Use ETF levels directly — they carry proper prices (SPY ~540, QQQ ~470, DIA ~420)
+  const etfLevels = points?.[etfKey] || {};
+  const etfSupports = (etfLevels.supports || []).filter((v) => Number.isFinite(Number(v)));
+  const etfResistances = (etfLevels.resistances || []).filter((v) => Number.isFinite(Number(v)));
+
+  const r1 = etfResistances[0] != null ? Number(etfResistances[0]) : null;
+  const r2 = etfResistances[1] != null ? Number(etfResistances[1]) : null;
+  const s1 = etfSupports[0] != null ? Number(etfSupports[0]) : null;
+  const s2 = etfSupports[1] != null ? Number(etfSupports[1]) : null;
+  const piv = etfLevels.pivot != null ? Number(etfLevels.pivot) : null;
+  const etf = { r1, r2, s1, s2, piv };
 
   const bias = thesis.bias || "neutral";
   const score = Number(thesis.score || 0);
@@ -1580,13 +1593,13 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
     : news?.mood || "No major scheduled catalysts — price action may be technically driven.";
 
   const bullishSetups = [];
-  if (spy.s1 && spy.r1) bullishSetups.push({ label: "Bounce Play", entry: `${spy.s1}${spy.s2 ? `–${spy.s2}` : ""}`, target: `${spy.r1}${spy.r2 ? ` → ${spy.r2}` : ""}`, stop: `< ${round(spy.s1 - 1.5, 1)}`, options: `${Math.round(spy.s1)}C or ${Math.round(spy.s1)}C/${Math.round(spy.r1)}C spread` });
-  if (spy.r1) bullishSetups.push({ label: "Breakout", entry: `> ${spy.r1}`, target: spy.r2 ? `${spy.r2} → ${round(spy.r2 + 2, 1)}` : `${round(spy.r1 + 3, 1)}`, stop: `~ ${round(spy.r1 - 2, 1)}`, options: spy.r1 ? `${Math.round(spy.r1)}C or ${Math.round(spy.r1)}C/${Math.round(spy.r1 + 3)}C spread` : null });
+  if (etf.s1 && etf.r1) bullishSetups.push({ label: "Bounce Play", entry: `${etf.s1}${etf.s2 ? `–${etf.s2}` : ""}`, target: `${etf.r1}${etf.r2 ? ` → ${etf.r2}` : ""}`, stop: `< ${round(etf.s1 - 1.5, 2)}`, options: `${Math.round(etf.s1)}C or ${Math.round(etf.s1)}C/${Math.round(etf.r1)}C spread` });
+  if (etf.r1) bullishSetups.push({ label: "Breakout", entry: `> ${etf.r1}`, target: etf.r2 ? `${etf.r2} → ${round(etf.r2 + 2, 2)}` : `${round(etf.r1 + 3, 2)}`, stop: `~ ${round(etf.r1 - 2, 2)}`, options: etf.r1 ? `${Math.round(etf.r1)}C or ${Math.round(etf.r1)}C/${Math.round(etf.r1 + 3)}C spread` : null });
   if (!bullishSetups.length) bullishSetups.push({ label: "Long Entry", entry: thesis.levels?.action || "Opening-range acceptance", target: thesis.levels?.upside || "Next resistance", stop: "Below action level", options: null });
 
   const bearishSetups = [];
-  if (spy.r1 && spy.s1) bearishSetups.push({ label: "Resistance Fade", entry: `~ ${spy.r1}${spy.r2 ? `/${spy.r2}` : ""}`, target: `${spy.s1}${spy.s2 ? ` → ${spy.s2}` : ""}`, stop: `> ${round(spy.r1 + 2, 1)}`, options: `${Math.round(spy.r1)}P or ${Math.round(spy.r1)}P/${Math.round(spy.s1)}P spread` });
-  if (spy.s1) bearishSetups.push({ label: "Breakdown", entry: `< ${spy.s1}`, target: spy.s2 ? `${spy.s2} → ${round(spy.s2 - 2, 1)}` : `${round(spy.s1 - 4, 1)}`, stop: `> ${round(spy.s1 + 2, 1)}`, options: spy.s1 ? `${Math.round(spy.s1)}P or ${Math.round(spy.s1 - 4)}P spread` : null });
+  if (etf.r1 && etf.s1) bearishSetups.push({ label: "Resistance Fade", entry: `~ ${etf.r1}${etf.r2 ? `/${etf.r2}` : ""}`, target: `${etf.s1}${etf.s2 ? ` → ${etf.s2}` : ""}`, stop: `> ${round(etf.r1 + 2, 2)}`, options: `${Math.round(etf.r1)}P or ${Math.round(etf.r1)}P/${Math.round(etf.s1)}P spread` });
+  if (etf.s1) bearishSetups.push({ label: "Breakdown", entry: `< ${etf.s1}`, target: etf.s2 ? `${etf.s2} → ${round(etf.s2 - 2, 2)}` : `${round(etf.s1 - 4, 2)}`, stop: `> ${round(etf.s1 + 2, 2)}`, options: etf.s1 ? `${Math.round(etf.s1)}P or ${Math.round(etf.s1 - 4)}P spread` : null });
   if (!bearishSetups.length) bearishSetups.push({ label: "Short Entry", entry: thesis.levels?.action || "Opening-range rejection", target: thesis.levels?.downside || "Next support", stop: "Above action level", options: null });
 
   const futuresBias = [
@@ -1606,7 +1619,7 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   const sortedSectors = [...(market?.sectors || [])].filter((s) => Number.isFinite(Number(s.changePct))).sort((a, b) => Number(b.changePct) - Number(a.changePct));
   const leaders = sortedSectors.slice(0, 2).map((s) => s.name).join(", ") || "N/A";
   const laggards = sortedSectors.slice(-2).map((s) => s.name).join(", ") || "N/A";
-  const gammaStrikes = [spy.piv, spy.r1].filter((v) => v != null).join(", ") || "N/A";
+  const gammaStrikes = [etf.piv, etf.r1].filter((v) => v != null).join(", ") || "N/A";
 
   const calHighlights = [...(points?.calendarGroups?.today || []), ...(points?.calendarGroups?.tomorrow || []), ...(points?.calendarGroups?.upcoming || [])].filter((e) => e?.importance !== "low").slice(0, 4);
 
@@ -1615,13 +1628,14 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
     bias,
     score,
     macroRisk,
+    etfLabel,
     levels: {
-      resistance: resistances.slice(0, 3).map((v) => round(v, 0)),
-      support: supports.slice(0, 3).map((v) => round(v, 0)),
-      pivot: piv ? round(piv, 0) : null,
-      spyResistance: [spy.r1, spy.r2].filter(Boolean),
-      spySupport: [spy.s1, spy.s2].filter(Boolean),
-      spyPivot: spy.piv,
+      resistance: [r1, r2].filter(Boolean),
+      support: [s1, s2].filter(Boolean),
+      pivot: piv,
+      spyResistance: [r1, r2].filter(Boolean),
+      spySupport: [s1, s2].filter(Boolean),
+      spyPivot: piv,
     },
     bullishSetups,
     bearishSetups,
@@ -1631,7 +1645,7 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
     confirmationRule: "Valid moves require a 5m close beyond the key level with above-average volume. No confirmation → fakeout risk. Respect stops.",
     checklist: {
       overnightConditions: es ? (Number(es.changePct) >= 0.3 ? `Gap up — ES futures +${round(es.changePct, 2)}%` : Number(es.changePct) <= -0.3 ? `Gap down — ES futures ${round(es.changePct, 2)}%` : `Flat — ES futures ${round(es.changePct, 2)}%`) : "Pending pre-market data",
-      keyLevels: [spy.piv ? `SPY pivot ~${spy.piv}` : null, spy.r1 ? `Resistance: ${[spy.r1, spy.r2].filter(Boolean).join(" / ")}` : null, spy.s1 ? `Support: ${[spy.s1, spy.s2].filter(Boolean).join(" / ")}` : null].filter(Boolean).join(" | "),
+      keyLevels: [etf.piv ? `${etfLabel} pivot ~${etf.piv}` : null, etf.r1 ? `Resistance: ${[etf.r1, etf.r2].filter(Boolean).join(" / ")}` : null, etf.s1 ? `Support: ${[etf.s1, etf.s2].filter(Boolean).join(" / ")}` : null].filter(Boolean).join(" | "),
       economicEvents: calHighlights.length ? calHighlights.map((e) => `${e.event}${e.time ? ` @ ${e.time}` : ""}`).join("; ") : "No major scheduled events",
       gamePlan: thesis.gamePlan || "Wait for opening-range confirmation before sizing into directional trades",
       riskManagement: `Max daily loss: define before open. ${thesis.standAside || "Stand aside during headline gaps and failed breaks."}`,
