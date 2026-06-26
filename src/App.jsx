@@ -1714,9 +1714,9 @@ const FactorRadarChart = ({ weights }) => {
 };
 
 const LEVEL_MAP_GROUPS = [
-  { keys: ["SPX", "SPY", "ES"], subs: { SPX: "S&P 500 Index", SPY: "S&P 500 ETF", ES: "E-mini S&P Futures" } },
-  { keys: ["NDX", "QQQ", "NQ"], subs: { NDX: "Nasdaq 100 Index", QQQ: "Nasdaq 100 ETF", NQ: "E-mini Nasdaq Futures" } },
-  { keys: ["DJI", "DIA", "YM"], subs: { DJI: "Dow Jones Index", DIA: "Dow Jones ETF", YM: "E-mini Dow Futures" } },
+  { keys: ["SPY", "SPX", "ES"], subs: { SPY: "S&P 500 ETF", SPX: "S&P 500 Index", ES: "E-mini S&P Futures" } },
+  { keys: ["QQQ", "NDX", "NQ"], subs: { QQQ: "Nasdaq 100 ETF", NDX: "Nasdaq 100 Index", NQ: "E-mini Nasdaq Futures" } },
+  { keys: ["DIA", "DJI", "YM"], subs: { DIA: "Dow Jones ETF", DJI: "Dow Jones Index", YM: "E-mini Dow Futures" } },
 ];
 
 const LevelMapCard = ({ group, points }) => {
