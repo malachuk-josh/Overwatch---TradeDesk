@@ -434,6 +434,21 @@ const fedFomcEventsForDate = (dateIso) => {
   ];
 };
 
+const etMinutesNow = () => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const h = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  const m = Number(parts.find((p) => p.type === "minute")?.value || 0);
+  return h * 60 + m;
+};
+
+const eventIsPast = (event) => {
+  const mins = calendarMinutes(event.time);
+  if (!mins || mins >= 24 * 60) return false;
+  return mins < etMinutesNow() - 30;
+};
+
 const calendarMinutes = (time = "") => {
   const match = String(time).match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
   if (!match) return 24 * 60;
@@ -569,7 +584,7 @@ const fetchEconomicCalendar = async () => {
       fedEvents.push(...fedFomcEventsForDate(day));
     }
     const events = mergeCalendarEvents([...fedEvents, ...tradingViewEvents]).sort(calendarSort);
-    const todayEvents = selectCalendarGroup(events.filter((event) => event.date === today), 5);
+    const todayEvents = selectCalendarGroup(events.filter((event) => event.date === today && !eventIsPast(event)), 5);
     const tomorrowEvents = selectCalendarGroup(events.filter((event) => event.date === tomorrow), 5);
     const upcoming = selectMajorUpcomingEvents(events.filter((event) => event.date > tomorrow), 5);
     return {
