@@ -24,6 +24,8 @@ import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right.mjs";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen.mjs";
+import Sun from "lucide-react/dist/esm/icons/sun.mjs";
+import Moon from "lucide-react/dist/esm/icons/moon.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -1118,7 +1120,53 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
 @media (prefers-reduced-motion: reduce){
   .bd-root *,.bd-root *::before,.bd-root *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
+
+/* ========== LIGHT MODE ========== */
+.bd-root.light{
+  --ink:#F5F7FA; --panel:#FFFFFF; --panel2:#EFF2F7; --panel3:#E4E9F2;
+  --line:#D2D9E6; --line2:#B8C4D4;
+  --text:#0F1721; --muted:#506070; --faint:#8A96A8;
+  --brass-dim:rgba(180,120,20,.14);
+  --bull-dim:rgba(20,160,90,.12);
+  --bear-dim:rgba(200,50,55,.12);
+  --info-dim:rgba(50,130,210,.12);
+  background-image:radial-gradient(rgba(0,30,60,.06) 1px, transparent 1px);
+}
+.bd-root.light .bd-header{
+  background:linear-gradient(180deg,#FFFFFF 0%,#F5F7FA 100%);
+}
+.bd-root.light .bd-mark{
+  background:linear-gradient(135deg,#DDE4EF,#C8D2E4);
+}
+.bd-root.light .bd-flow{background:var(--panel)}
+.bd-root.light .card{
+  background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.6) 38%),var(--panel);
+}
+.bd-root.light .internals-hero{
+  background:radial-gradient(120% 130% at 0% 0%,rgba(232,180,90,.08),transparent 55%),linear-gradient(135deg,rgba(90,167,232,.04),transparent),var(--panel2);
+}
+.bd-root.light .calendar-summary-tile,
+.bd-root.light .internals-scorecard{background:var(--panel3)}
+.bd-root.light .internals-section{background:var(--panel2)}
+.bd-root.light .th-hero{
+  background:radial-gradient(120% 150% at 50% -20%,rgba(232,180,90,.06),transparent 55%),var(--panel);
+}
+.bd-root.light .spectrum-caret{background:var(--text);box-shadow:0 0 10px rgba(0,0,0,.35)}
+.bd-root.light .vol-marker{background:var(--text);box-shadow:0 0 12px rgba(0,0,0,.25)}
+.bd-root.light input[type=range].bd-range::-webkit-slider-thumb{border-color:#F5F7FA}
+.bd-root.light input[type=range].bd-range::-moz-range-thumb{border-color:#F5F7FA}
+.bd-root.light .overlay{background:rgba(80,100,130,.5)}
+.bd-root.light .drawer{background:var(--panel);border-left-color:var(--line2)}
+.bd-root.light .toast{background:var(--panel);box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.bd-root.light .btn{background:var(--panel3);border-color:var(--line2)}
+.bd-root.light .btn:hover{background:var(--panel2);border-color:var(--line)}
+.bd-root.light .btn-ghost{background:transparent;border-color:transparent}
+.bd-root.light .btn-ghost:hover{background:var(--panel3);border-color:transparent}
+.bd-root.light .bd-session{background:var(--panel2);border-color:var(--line2)}
+.bd-root.light .skel{background:var(--panel3)}
+.bd-root.light .skel::after{background:linear-gradient(90deg,transparent,rgba(180,140,60,.1),transparent)}
 `;
+
 
 /* ================================================================
    PRIMITIVES
@@ -3447,6 +3495,9 @@ export default function Overwatch() {
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [lightMode, setLightMode] = useState(() => { try { return localStorage.getItem("overwatch:light") === "1"; } catch { return false; } });
+
+  useEffect(() => { try { localStorage.setItem("overwatch:light", lightMode ? "1" : "0"); } catch {} }, [lightMode]);
   const autoSyncStarted = useRef(false);
   const archiveSaveTimer = useRef(null);
   const storageOk = storageAvailable();
@@ -3695,7 +3746,7 @@ export default function Overwatch() {
   ];
 
   return (
-    <div className="bd-root">
+    <div className={`bd-root${lightMode ? " light" : ""}`}>
       <style>{CSS}</style>
 
       <header className="bd-header">
@@ -3714,6 +3765,9 @@ export default function Overwatch() {
           </span>
           <button className="btn btn-brass" onClick={syncAll} disabled={anyLoading}>
             {anyLoading ? <><RefreshCw size={14} className="spin" /> Syncing…</> : <><Zap size={14} /> Sync live data</>}
+          </button>
+          <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
+            {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
         </div>
