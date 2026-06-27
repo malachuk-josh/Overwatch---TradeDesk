@@ -1128,6 +1128,25 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
   .bd-root *,.bd-root *::before,.bd-root *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
 
+/* ========== CHARTS MOBILE SYMBOL STRIP ========== */
+.chart-symbol-strip{
+  display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;
+  scrollbar-width:none;
+}
+.chart-symbol-strip::-webkit-scrollbar{display:none}
+.chart-symbol-pill{
+  flex-shrink:0;padding:6px 14px;border-radius:20px;
+  background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;
+  cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.chart-symbol-pill.on{
+  background:var(--brass);border-color:var(--brass);color:#000;
+}
+.chart-symbol-pill.pinned:not(.on){
+  border-color:var(--brass);color:var(--brass);
+}
+
 /* ========== COLLAPSIBLE HEADER ========== */
 .collapsible-header{
   display:flex;align-items:center;gap:7px;
@@ -3583,6 +3602,7 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D" }) => {
 };
 
 const ChartsTab = ({ lightMode }) => {
+  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
   const [selected, setSelected] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("overwatch:charts") || "null");
@@ -3591,10 +3611,17 @@ const ChartsTab = ({ lightMode }) => {
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
+  // Mobile: single active symbol; desktop: multi-chart grid
+  const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
 
   useEffect(() => {
     try { localStorage.setItem("overwatch:charts", JSON.stringify(selected)); } catch {}
   }, [selected]);
+
+  // Keep activeSymbol valid when selected changes
+  useEffect(() => {
+    if (!selected.includes(activeSymbol)) setActiveSymbol(selected[0]);
+  }, [selected, activeSymbol]);
 
   const toggle = (sym) => {
     setSelected((prev) => {
@@ -3605,6 +3632,42 @@ const ChartsTab = ({ lightMode }) => {
 
   const cols = selected.length <= 2 ? 1 : 2;
   const chartH = selected.length <= 2 ? 520 : 420;
+
+  if (isMobileView) {
+    return (
+      <div className="tab-charts">
+        <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
+          {/* Timeframe row */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <div className="seg">
+              {TV_INTERVALS.map((iv) => (
+                <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
+              ))}
+            </div>
+          </div>
+          {/* Full-width single chart */}
+          <div key={`${activeSymbol}-${interval}`} style={{ height: 420, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12 }}>
+            <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
+          </div>
+          {/* Horizontal symbol strip */}
+          <div className="chart-symbol-strip">
+            {CHART_PRESETS.map((p) => (
+              <button
+                key={p.symbol}
+                className={`chart-symbol-pill${activeSymbol === p.symbol ? " on" : ""}${selected.includes(p.symbol) ? " pinned" : ""}`}
+                onClick={() => {
+                  setActiveSymbol(p.symbol);
+                  if (!selected.includes(p.symbol)) setSelected((prev) => [...prev, p.symbol]);
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="tab-charts">
