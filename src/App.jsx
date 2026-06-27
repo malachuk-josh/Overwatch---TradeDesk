@@ -93,19 +93,47 @@ const FACTORS = [
 
 const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
 const DEFAULT_THESIS_INSTRUMENT = "SPY";
-// Retail-tradable instruments only — ETFs and futures (directly or via options). No cash indexes.
+// Retail-tradable instruments — index ETFs, index futures, and mega-cap stocks
+// (traded directly or via options). No cash indexes.
 const THESIS_INSTRUMENTS = [
-  { symbol: "SPY", label: "SPY", name: "SPDR S&P 500 ETF", futures: "ES", pointsKey: "spy", focusLabel: "SPY / ES" },
-  { symbol: "ES",  label: "ES",  name: "E-mini S&P 500 Futures", futures: "ES", pointsKey: "es", focusLabel: "ES" },
-  { symbol: "QQQ", label: "QQQ", name: "Invesco QQQ ETF", futures: "NQ", pointsKey: "qqq", focusLabel: "QQQ / NQ" },
-  { symbol: "NQ",  label: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq", focusLabel: "NQ" },
-  { symbol: "DIA", label: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia", focusLabel: "DIA / YM" },
-  { symbol: "YM",  label: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym", focusLabel: "YM" },
-  { symbol: "IWM", label: "IWM", name: "iShares Russell 2000 ETF", futures: "RTY", pointsKey: "iwm", focusLabel: "IWM / RTY" },
-  { symbol: "RTY", label: "RTY", name: "E-mini Russell 2000 Futures", futures: "RTY", pointsKey: "rty", focusLabel: "RTY" },
+  // Index ETFs
+  { symbol: "SPY", label: "SPY", name: "SPDR S&P 500 ETF", futures: "ES", pointsKey: "spy", focusLabel: "SPY / ES", group: "etf" },
+  { symbol: "QQQ", label: "QQQ", name: "Invesco QQQ ETF", futures: "NQ", pointsKey: "qqq", focusLabel: "QQQ / NQ", group: "etf" },
+  { symbol: "DIA", label: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia", focusLabel: "DIA / YM", group: "etf" },
+  { symbol: "IWM", label: "IWM", name: "iShares Russell 2000 ETF", futures: "RTY", pointsKey: "iwm", focusLabel: "IWM / RTY", group: "etf" },
+  // Index futures
+  { symbol: "ES",  label: "ES",  name: "E-mini S&P 500 Futures", futures: "ES", pointsKey: "es", focusLabel: "ES", group: "futures" },
+  { symbol: "NQ",  label: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq", focusLabel: "NQ", group: "futures" },
+  { symbol: "YM",  label: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym", focusLabel: "YM", group: "futures" },
+  { symbol: "RTY", label: "RTY", name: "E-mini Russell 2000 Futures", futures: "RTY", pointsKey: "rty", focusLabel: "RTY", group: "futures" },
+  // Mega-cap stocks (Magnificent Seven) — NQ as the index hedge proxy
+  { symbol: "AAPL",  label: "AAPL",  name: "Apple", futures: "NQ", pointsKey: "aapl", focusLabel: "AAPL", group: "stock" },
+  { symbol: "MSFT",  label: "MSFT",  name: "Microsoft", futures: "NQ", pointsKey: "msft", focusLabel: "MSFT", group: "stock" },
+  { symbol: "NVDA",  label: "NVDA",  name: "Nvidia", futures: "NQ", pointsKey: "nvda", focusLabel: "NVDA", group: "stock" },
+  { symbol: "AMZN",  label: "AMZN",  name: "Amazon", futures: "NQ", pointsKey: "amzn", focusLabel: "AMZN", group: "stock" },
+  { symbol: "META",  label: "META",  name: "Meta Platforms", futures: "NQ", pointsKey: "meta", focusLabel: "META", group: "stock" },
+  { symbol: "GOOGL", label: "GOOGL", name: "Alphabet", futures: "NQ", pointsKey: "googl", focusLabel: "GOOGL", group: "stock" },
+  { symbol: "TSLA",  label: "TSLA",  name: "Tesla", futures: "NQ", pointsKey: "tsla", focusLabel: "TSLA", group: "stock" },
+];
+const INSTRUMENT_GROUPS = [
+  { group: "etf", label: "Index ETFs" },
+  { group: "futures", label: "Index Futures" },
+  { group: "stock", label: "Mega-cap Stocks" },
 ];
 const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
   THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
+
+const InstrumentSelect = ({ value, onChange, className = "bd-in", style }) => (
+  <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
+    {INSTRUMENT_GROUPS.map((g) => (
+      <optgroup key={g.group} label={g.label}>
+        {THESIS_INSTRUMENTS.filter((it) => it.group === g.group).map((it) => (
+          <option key={it.symbol} value={it.symbol}>{it.symbol} — {it.name}</option>
+        ))}
+      </optgroup>
+    ))}
+  </select>
+);
 
 const C = {
   bull: "#3DD68C",
@@ -1039,6 +1067,16 @@ input.bd-in{
 }
 input.bd-in:focus{border-color:var(--brass)}
 input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:uppercase}
+select.bd-in{
+  background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--text);
+  font-family:'Inter',sans-serif;font-size:13px;padding:9px 12px;outline:none;width:100%;cursor:pointer;
+  appearance:none;-webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237E8CA0' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;
+}
+select.bd-in:focus{border-color:var(--brass)}
+select.bd-in optgroup{background:var(--panel);color:var(--faint);font-style:normal}
+select.bd-in option{background:var(--panel);color:var(--text)}
 
 /* ---------- states ---------- */
 .skel{position:relative;overflow:hidden;background:var(--panel3);border-radius:7px}
@@ -2700,7 +2738,8 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
         `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → buy ~${fmtNum(contracts, 1)} ${live.cfg.symbol} ${fmtNum(k, 0)} puts (cost ≈ ${fmtUsd(pb.price * 100 * contracts)}) to neutralize ${fmtUsd(notional)} of delta.`
       );
     } else {
-      const contracts = live.spot > 0 ? notional / (live.spot * live.futMult) : 0;
+      const futPrice = live.priceOf(live.futSym) ?? live.spot;
+      const contracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
       lines.push(
         `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → short ~${fmtNum(contracts, 2)} ${live.futSym} futures (×${live.futMult}) to offset ${fmtUsd(notional)} of exposure.`
       );
@@ -2883,7 +2922,10 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
   const pv = numOr(b.portfolioValue, 0);
   const beta = numOr(b.beta, 1);
   const notional = pv * beta;
-  const futContracts = live.spot > 0 ? notional / (live.spot * live.futMult) : 0;
+  // A futures contract is priced at the index level (e.g. ES ≈ 10× SPY), so size off the
+  // futures' own price — not the focus instrument's spot. Falls back to spot if unavailable.
+  const futPrice = live.priceOf(live.futSym) ?? live.spot;
+  const futContracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
   const putStrike = roundStrike(S * (1 - numOr(b.putOtmPct, 5) / 100));
   const putBs = blackScholes({ S, K: putStrike, T, r, q, sigma, type: "put" });
   const putContracts = S > 0 && putBs.delta !== 0 ? notional / (S * 100 * Math.abs(putBs.delta)) : 0;
@@ -2933,7 +2975,7 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
           <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>Exposure to neutralize: <b style={{ color: "var(--text)" }}>{fmtUsd(notional)}</b> (book × beta).</div>
           {b.mode === "futures" ? (
             <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-              <ToolStat k={`Short ${live.futSym}`} v={fmtNum(futContracts, 2)} color={C.brass} sub={`contracts (×${live.futMult})`} />
+              <ToolStat k={`Short ${live.futSym}`} v={fmtNum(futContracts, 2)} color={C.brass} sub={futPrice > 0 ? `×${live.futMult} @ ${fmtNum(futPrice, 2)}` : `contracts (×${live.futMult})`} />
               <ToolStat k="Rounded" v={fmtNum(Math.round(futContracts), 0)} sub="whole contracts" />
               <ToolStat k="SPY-share equiv" v={fmtNum(spyShares, 0)} sub={spyPrice > 0 ? `shares @ ${fmtNum(spyPrice, 2)}` : "SPY not synced"} />
             </div>
@@ -3002,21 +3044,17 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
       )}
 
       {/* Pairs / ratio */}
-      <StructToggle on={pr.on} onToggle={(on) => setHedge("pairs", "on", on)} icon={Scale} label="Pairs / ratio hedge" sub="Long one index vs short a correlated one at a beta-neutral ratio" />
+      <StructToggle on={pr.on} onToggle={(on) => setHedge("pairs", "on", on)} icon={Scale} label="Pairs / ratio hedge" sub="Long one instrument vs short a correlated one at a beta-neutral ratio" />
       {pr.on && (
         <Card>
           <div className="grid g-2" style={{ gap: 10 }}>
             <div className="lab-field" style={{ marginTop: 0 }}>
               <span className="lab-label">Long {prLongP ? `· ${fmtNum(prLongP, 2)}` : ""}</span>
-              <select className="bd-in" value={pr.longSym} onChange={(e) => setHedge("pairs", "longSym", e.target.value)}>
-                {THESIS_INSTRUMENTS.map((it) => <option key={it.symbol} value={it.symbol}>{it.symbol}</option>)}
-              </select>
+              <InstrumentSelect value={pr.longSym} onChange={(val) => setHedge("pairs", "longSym", val)} />
             </div>
             <div className="lab-field" style={{ marginTop: 0 }}>
               <span className="lab-label">Short {prShortP ? `· ${fmtNum(prShortP, 2)}` : ""}</span>
-              <select className="bd-in" value={pr.shortSym} onChange={(e) => setHedge("pairs", "shortSym", e.target.value)}>
-                {THESIS_INSTRUMENTS.map((it) => <option key={it.symbol} value={it.symbol}>{it.symbol}</option>)}
-              </select>
+              <InstrumentSelect value={pr.shortSym} onChange={(val) => setHedge("pairs", "shortSym", val)} />
             </div>
             <NumField label="Long beta" value={pr.betaLong} placeholder="1.20" onChange={(val) => setHedge("pairs", "betaLong", val)} />
             <NumField label="Short beta" value={pr.betaShort} placeholder="1.00" onChange={(val) => setHedge("pairs", "betaShort", val)} />
@@ -3103,17 +3141,14 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
           ))}
           <FactorRadarChart weights={weights} />
         </Card>
-        <Card icon={NotebookPen} title="Instrument focus" sub="Choose which index the thesis and note are built for">
-          <div className="seg">
-            {THESIS_INSTRUMENTS.map((item) => (
-              <button key={item.symbol} className={instrument === item.symbol ? "on" : ""} onClick={() => setInstrument(item.symbol)}>
-                {item.symbol}
-              </button>
-            ))}
-          </div>
+        <Card icon={NotebookPen} title="Instrument focus" sub="Choose which instrument the thesis is built for">
+          <InstrumentSelect value={instrument} onChange={setInstrument} />
           <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>
             Primary build target: <span style={{ color: "var(--text)" }}>{activeInstrument.name}</span>
-            {activeInstrument.futures !== activeInstrument.symbol && <> with {activeInstrument.futures} as the live execution proxy</>}.
+            {activeInstrument.futures !== activeInstrument.symbol && (
+              <> with {activeInstrument.futures} as the {activeInstrument.group === "stock" ? "index hedge" : "live execution"} proxy</>
+            )}.
+            {activeInstrument.group === "stock" && <> Single stock — enter its spot manually in the options &amp; hedge tools.</>}
           </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
