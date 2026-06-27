@@ -655,15 +655,23 @@ const fetchEconomicCalendar = async () => {
     const allEvents = mergeCalendarEvents([...fedEvents, ...structureEvents, ...tradingViewEvents]).sort(calendarSort);
     const futureEvents = allEvents.filter((event) => event.date >= today);
     const todayEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === today && !eventIsPast(event)), 5);
-    const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow), 5);
+    const pastTodayEvents = allEvents.filter((event) => event.date === today && eventIsPast(event));
+    const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow && !eventIsPast(event)), 5);
     const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
-    const recentEvents = allEvents
-      .filter((event) => event.date < today && event.date >= weekStart && (event.importance === "high" || event.structural))
+    const recentEvents = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
+      .filter((event) => event.importance === "high" || event.structural)
       .sort((a, b) => String(b.date).localeCompare(String(a.date)) || calendarMinutes(b.time) - calendarMinutes(a.time))
       .slice(0, 10);
-    const nextStructural = allEvents
-      .filter((event) => event.structural && event.date >= today)
+    const nextStructuralFromCalendar = allEvents
+      .filter((event) => event.structural && event.date >= today && !eventIsPast(event))
       .sort(calendarSort)[0] || null;
+    const nextStructuralFromTable = Object.entries(LIQUIDITY_EVENTS)
+      .filter(([date]) => date >= today)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date]) => liquidityEventsForDate(date)[0])
+      .filter(Boolean)[0] || null;
+    const nextStructural = nextStructuralFromCalendar
+      || nextStructuralFromTable;
     const sources = ["TradingView Economic Calendar"];
     if (fedEvents.length) sources.push("Federal Reserve FOMC calendar");
     if (structureEvents.length) sources.push("Market Structure Calendar");
