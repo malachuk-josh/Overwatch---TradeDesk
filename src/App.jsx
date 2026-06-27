@@ -26,6 +26,7 @@ import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw.mjs";
 import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen.mjs";
 import Sun from "lucide-react/dist/esm/icons/sun.mjs";
 import Moon from "lucide-react/dist/esm/icons/moon.mjs";
+import CandlestickChart from "lucide-react/dist/esm/icons/chart-candlestick.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -3470,6 +3471,133 @@ const Toasts = ({ items }) => (
 );
 
 /* ================================================================
+   TAB — CHARTS
+   ================================================================ */
+
+const CHART_PRESETS = [
+  { symbol: "AMEX:SPY",       label: "SPY" },
+  { symbol: "NASDAQ:QQQ",     label: "QQQ" },
+  { symbol: "AMEX:DIA",       label: "DIA" },
+  { symbol: "AMEX:IWM",       label: "IWM" },
+  { symbol: "CBOE:VIX",       label: "VIX" },
+  { symbol: "TVC:DXY",        label: "DXY" },
+  { symbol: "TVC:US10Y",      label: "US10Y" },
+  { symbol: "COMEX:GC1!",     label: "Gold" },
+  { symbol: "NYMEX:CL1!",     label: "Crude" },
+  { symbol: "COINBASE:BTCUSD", label: "BTC" },
+];
+
+const TV_INTERVALS = [
+  { value: "5",   label: "5m" },
+  { value: "15",  label: "15m" },
+  { value: "60",  label: "1H" },
+  { value: "D",   label: "1D" },
+  { value: "W",   label: "1W" },
+];
+
+let tvScriptPromise = null;
+const loadTvScript = () => {
+  if (window.TradingView) return Promise.resolve();
+  if (tvScriptPromise) return tvScriptPromise;
+  tvScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/tv.js";
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return tvScriptPromise;
+};
+
+const TradingViewChart = ({ symbol, lightMode, interval = "D" }) => {
+  const containerRef = useRef(null);
+  const widgetRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let cancelled = false;
+    containerRef.current.innerHTML = "";
+    loadTvScript().then(() => {
+      if (cancelled || !containerRef.current || !window.TradingView) return;
+      widgetRef.current = new window.TradingView.widget({
+        container_id: containerRef.current.id,
+        symbol,
+        interval,
+        timezone: "America/New_York",
+        theme: lightMode ? "light" : "dark",
+        style: "1",
+        locale: "en",
+        toolbar_bg: lightMode ? "#FFFFFF" : "#0D1117",
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        save_image: false,
+        autosize: true,
+        studies: ["MASimple@tv-basicstudies"],
+      });
+    });
+    return () => {
+      cancelled = true;
+      widgetRef.current = null;
+    };
+  }, [symbol, lightMode, interval]);
+
+  const id = `tv-chart-${symbol.replace(/[^a-zA-Z0-9]/g, "-")}`;
+  return <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />;
+};
+
+const ChartsTab = ({ lightMode }) => {
+  const [selected, setSelected] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("overwatch:charts") || "null");
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {}
+    return ["AMEX:SPY", "NASDAQ:QQQ", "CBOE:VIX", "TVC:DXY"];
+  });
+  const [interval, setInterval] = useState("D");
+
+  useEffect(() => {
+    try { localStorage.setItem("overwatch:charts", JSON.stringify(selected)); } catch {}
+  }, [selected]);
+
+  const toggle = (sym) => {
+    setSelected((prev) => {
+      if (prev.includes(sym)) return prev.length > 1 ? prev.filter((s) => s !== sym) : prev;
+      return [...prev, sym];
+    });
+  };
+
+  const cols = selected.length <= 2 ? 1 : 2;
+  const chartH = selected.length <= 2 ? 520 : 420;
+
+  return (
+    <div className="tab-charts">
+      <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
+          <div className="seg">
+            {CHART_PRESETS.map((p) => (
+              <button key={p.symbol} className={selected.includes(p.symbol) ? "on" : ""} onClick={() => toggle(p.symbol)}>{p.label}</button>
+            ))}
+          </div>
+          <div className="seg" style={{ marginLeft: "auto" }}>
+            {TV_INTERVALS.map((iv) => (
+              <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
+          {selected.map((sym) => (
+            <div key={`${sym}-${interval}`} style={{ height: chartH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}>
+              <TradingViewChart symbol={sym} lightMode={lightMode} interval={interval} />
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ================================================================
    ROOT APP
    ================================================================ */
 
@@ -3741,6 +3869,7 @@ export default function Overwatch() {
     { id: "calendar", label: "Calendar", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "newsletter", label: "Newsletter", icon: Mail, badge: newsletterBadge },
+    { id: "charts", label: "Charts", icon: CandlestickChart },
     { id: "archives", label: "Archives", icon: History, badge: archiveBadge },
   ];
 
@@ -3830,6 +3959,7 @@ export default function Overwatch() {
             onGenerate={generateNewsletter} onGoThesis={() => setTab("thesis")} notify={notify}
           />
         )}
+        {tab === "charts" && <ChartsTab lightMode={lightMode} />}
         {tab === "archives" && (
           <ArchiveTab
             archiveHistory={archiveHistory}
