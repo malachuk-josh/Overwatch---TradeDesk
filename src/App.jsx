@@ -1992,6 +1992,8 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
+  const [expanded, setExpanded] = useState(false);
+  const PAGE = 5;
 
   if (status === "idle")
     return (
@@ -2013,10 +2015,12 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
 
   const heads = data?.headlines || [];
   const cats = ["all", ...Array.from(new Set(heads.map((h) => h.category).filter(Boolean)))];
-  const shown = heads.filter((h) =>
+  const filtered = heads.filter((h) =>
     (cat === "all" || h.category === cat) &&
     (tone === "all" || h.sentiment === tone)
   );
+  const shown = expanded ? filtered : filtered.slice(0, PAGE);
+  const hiddenCount = filtered.length - shown.length;
   const catalysts = data?.catalysts || [];
   const maxCatImpact = Math.max(1, ...catalysts.map((c) => c.maxImpact || 0));
 
@@ -2033,11 +2037,11 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
         </div>
         <div className="filter-row">
           {cats.map((c) => (
-            <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>
+            <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => { setCat(c); setExpanded(false); }}>{c}</button>
           ))}
           <span style={{ flex: 1 }} />
           {["all", "bullish", "bearish", "neutral"].map((t) => (
-            <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => setTone(t)} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
+            <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => { setTone(t); setExpanded(false); }} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
           ))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2064,7 +2068,19 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
               </button>
             </div>
           ))}
-          {!shown.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
+          {!filtered.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
+          {filtered.length > PAGE && (
+            <button
+              className="btn btn-ghost"
+              style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6 }}
+              onClick={() => setExpanded((e) => !e)}
+            >
+              {expanded
+                ? <><ChevronUp size={14} /> Show less</>
+                : <><ChevronDown size={14} /> Show {hiddenCount} more article{hiddenCount !== 1 ? "s" : ""}</>
+              }
+            </button>
+          )}
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 86 }}>
