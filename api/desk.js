@@ -658,9 +658,15 @@ const fetchEconomicCalendar = async () => {
     const pastTodayEvents = allEvents.filter((event) => event.date === today && eventIsPast(event));
     const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow && !eventIsPast(event)), 5);
     const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
-    const isFedSpeaker = (e) => /\b(speaks?|speech|remarks|testimony|appearance)\b/i.test(e.event || "");
+    const isCatalystGrade = (e) => {
+      if (e.structural) return true;
+      const name = (e.event || "").toLowerCase();
+      if (/\b(speaks?|speech|remarks|testimony|appearance)\b/.test(name)) return false;
+      const keep = /\b(fomc|rate decision|fed minutes|federal funds|cpi|consumer price|ppi|producer price|pce|personal consumption|nonfarm|non-farm|payroll|jobs report|employment situation|gdp|gross domestic|retail sales|ism\s*(manufacturing|services|non-manufacturing)|pmi)\b/;
+      return keep.test(name);
+    };
     const recentEvents = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
-      .filter((event) => (event.importance === "high" || event.structural) && !isFedSpeaker(event))
+      .filter((event) => isCatalystGrade(event))
       .sort((a, b) => {
         const sigA = (a.structural ? 0 : 1);
         const sigB = (b.structural ? 0 : 1);
