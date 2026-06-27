@@ -54,7 +54,10 @@ const DEFAULT_WATCHLIST = [
   { symbol: "CL", name: "WTI Crude Oil" },
   { symbol: "BTC", name: "Bitcoin" },
 ];
-const LEGACY_DEFAULT_SYMBOLS = ["SPX", "ES", "NDX", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"];
+const LEGACY_DEFAULT_SYMBOLS = [
+  ["SPX", "ES", "NDX", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"].join("|"),
+  ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"].join("|"),
+];
 const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM", "SPY", "QQQ", "DIA", "RUT", "IWM", "RTY"]);
 
 const reconcileWatchlist = (items) => {
@@ -62,11 +65,11 @@ const reconcileWatchlist = (items) => {
   const cleaned = items
     .filter((item) => item && item.symbol)
     .map((item) => ({ symbol: String(item.symbol).toUpperCase(), name: item.name || item.symbol }));
-  const symbols = cleaned.map((item) => item.symbol);
-  if (symbols.join("|") === LEGACY_DEFAULT_SYMBOLS.join("|")) return DEFAULT_WATCHLIST;
+  const symbols = cleaned.map((item) => item.symbol).join("|");
+  if (LEGACY_DEFAULT_SYMBOLS.includes(symbols)) return DEFAULT_WATCHLIST;
   const merged = [...cleaned];
   for (const item of DEFAULT_WATCHLIST) {
-    if (REQUIRED_NEW_SYMBOLS.has(item.symbol) && !merged.some((existing) => existing.symbol === item.symbol) && merged.length < 12) {
+    if (REQUIRED_NEW_SYMBOLS.has(item.symbol) && !merged.some((existing) => existing.symbol === item.symbol) && merged.length < 21) {
       merged.push(item);
     }
   }
