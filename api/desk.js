@@ -665,7 +665,19 @@ const fetchEconomicCalendar = async () => {
       const keep = /\b(fomc|rate decision|fed minutes|federal funds|cpi|consumer price|ppi|producer price|pce|personal consumption|nonfarm|non-farm|payroll|jobs report|employment situation|gdp|gross domestic|retail sales|ism\s*(manufacturing|services|non-manufacturing)|pmi)\b/;
       return keep.test(name);
     };
-    const recentEvents = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
+    const catalystFamily = (name) => {
+      const n = (name || "").toLowerCase();
+      if (/pce|personal consumption/.test(n)) return "pce";
+      if (/cpi|consumer price/.test(n)) return "cpi";
+      if (/ppi|producer price/.test(n)) return "ppi";
+      if (/gdp|gross domestic/.test(n)) return "gdp";
+      if (/nonfarm|non-farm|payroll|jobs report|employment situation/.test(n)) return "nfp";
+      if (/fomc|rate decision|fed minutes|federal funds/.test(n)) return "fomc";
+      if (/retail sales/.test(n)) return "retail";
+      if (/ism/.test(n)) return n.includes("services") || n.includes("non-manufacturing") ? "ism-svc" : "ism-mfg";
+      return n;
+    };
+    const recentSorted = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
       .filter((event) => isCatalystGrade(event))
       .sort((a, b) => {
         const sigA = (a.structural ? 0 : 1);
@@ -675,8 +687,16 @@ const fetchEconomicCalendar = async () => {
         const impB = b.importance === "high" ? 0 : b.importance === "medium" ? 1 : 2;
         if (impA !== impB) return impA - impB;
         return String(b.date).localeCompare(String(a.date)) || calendarMinutes(b.time) - calendarMinutes(a.time);
-      })
-      .slice(0, 5);
+      });
+    const seenFamilies = new Set();
+    const recentEvents = [];
+    for (const event of recentSorted) {
+      const fam = event.structural ? `struct-${event.date}` : catalystFamily(event.event);
+      if (seenFamilies.has(fam)) continue;
+      seenFamilies.add(fam);
+      recentEvents.push(event);
+      if (recentEvents.length >= 5) break;
+    }
     const nextStructuralFromCalendar = allEvents
       .filter((event) => event.structural && event.date >= today && !eventIsPast(event))
       .sort(calendarSort)[0] || null;
