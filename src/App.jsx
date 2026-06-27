@@ -92,15 +92,13 @@ const FACTORS = [
 ];
 
 const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
-const DEFAULT_THESIS_INSTRUMENT = "SPX";
+const DEFAULT_THESIS_INSTRUMENT = "SPY";
+// Retail-tradable instruments only — ETFs and futures (directly or via options). No cash indexes.
 const THESIS_INSTRUMENTS = [
-  { symbol: "SPX", label: "SPX", name: "S&P 500 Index", futures: "ES", pointsKey: "spx", focusLabel: "SPX / ES" },
   { symbol: "SPY", label: "SPY", name: "SPDR S&P 500 ETF", futures: "ES", pointsKey: "spy", focusLabel: "SPY / ES" },
   { symbol: "ES",  label: "ES",  name: "E-mini S&P 500 Futures", futures: "ES", pointsKey: "es", focusLabel: "ES" },
-  { symbol: "NDX", label: "NDX", name: "Nasdaq 100 Index", futures: "NQ", pointsKey: "ndx", focusLabel: "NDX / NQ" },
   { symbol: "QQQ", label: "QQQ", name: "Invesco QQQ ETF", futures: "NQ", pointsKey: "qqq", focusLabel: "QQQ / NQ" },
   { symbol: "NQ",  label: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq", focusLabel: "NQ" },
-  { symbol: "DJI", label: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji", focusLabel: "DJI / YM" },
   { symbol: "DIA", label: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia", focusLabel: "DIA / YM" },
   { symbol: "YM",  label: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym", focusLabel: "YM" },
 ];
@@ -2657,7 +2655,7 @@ const DEFAULT_DESK_TOOLS = {
     beta: { on: true, portfolioValue: "100000", beta: "1.00", mode: "futures", putOtmPct: "5" },
     vertical: { on: false, type: "call", longStrike: "", shortStrike: "", contracts: "1" },
     calendar: { on: false, type: "call", strike: "", farStrike: "", nearDays: "7", farDays: "37", contracts: "1" },
-    pairs: { on: false, longSym: "NDX", shortSym: "SPX", betaLong: "1.20", betaShort: "1.00", notional: "100000" },
+    pairs: { on: false, longSym: "QQQ", shortSym: "SPY", betaLong: "1.20", betaShort: "1.00", notional: "100000" },
   },
 };
 
@@ -3785,18 +3783,27 @@ export default function Overwatch() {
         if (s.weights) setWeights((w) => ({ ...w, ...s.weights }));
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
-        if (s.deskTools) setDeskTools((d) => ({
-          ...d,
-          ...s.deskTools,
-          env: { ...d.env, ...(s.deskTools.env || {}) },
-          options: { ...d.options, ...(s.deskTools.options || {}) },
-          hedge: {
-            beta: { ...d.hedge.beta, ...(s.deskTools.hedge?.beta || {}) },
-            vertical: { ...d.hedge.vertical, ...(s.deskTools.hedge?.vertical || {}) },
-            calendar: { ...d.hedge.calendar, ...(s.deskTools.hedge?.calendar || {}) },
-            pairs: { ...d.hedge.pairs, ...(s.deskTools.hedge?.pairs || {}) },
-          },
-        }));
+        if (s.deskTools) setDeskTools((d) => {
+          const savedPairs = s.deskTools.hedge?.pairs || {};
+          const validSym = (sym, fallback) => THESIS_INSTRUMENTS.some((it) => it.symbol === sym) ? sym : fallback;
+          return {
+            ...d,
+            ...s.deskTools,
+            env: { ...d.env, ...(s.deskTools.env || {}) },
+            options: { ...d.options, ...(s.deskTools.options || {}) },
+            hedge: {
+              beta: { ...d.hedge.beta, ...(s.deskTools.hedge?.beta || {}) },
+              vertical: { ...d.hedge.vertical, ...(s.deskTools.hedge?.vertical || {}) },
+              calendar: { ...d.hedge.calendar, ...(s.deskTools.hedge?.calendar || {}) },
+              pairs: {
+                ...d.hedge.pairs,
+                ...savedPairs,
+                longSym: validSym(savedPairs.longSym, d.hedge.pairs.longSym),
+                shortSym: validSym(savedPairs.shortSym, d.hedge.pairs.shortSym),
+              },
+            },
+          };
+        });
       }
       // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
       let ah = null;
