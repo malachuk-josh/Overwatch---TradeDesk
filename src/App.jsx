@@ -32,6 +32,10 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
+import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
+import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
+import Scale from "lucide-react/dist/esm/icons/scale.mjs";
+import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -487,7 +491,7 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
 If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
 
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument }) => {
+const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext }) => {
   const focus = thesisInstrumentConfig(instrument);
   return `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
 
@@ -507,7 +511,11 @@ Directional lean: ${lean === "auto" ? "none — derive direction purely from the
 Risk appetite: ${risk}.
 Primary instrument focus: ${focus.symbol} (${focus.name}) with ${focus.futures} futures as the live execution proxy when relevant.
 Trader notes: ${notes ? notes : "none"}.
-
+${deskContext ? `
+=== DESK HEDGE & OPTIONS STRUCTURES (trader is actively considering these) ===
+${deskContext}
+Weave these into the game plan: comment on whether the hedge sizing and option structures fit today's bias, conviction, and risk appetite, and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
+` : ""}
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
 {"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete SPX/ES/NQ/YM approach for this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
 
@@ -2481,15 +2489,601 @@ const DataPointSection = ({ points, onRefresh }) => {
 };
 
 /* ================================================================
+   QUANT TOOLS — Black-Scholes pricing, Greeks, implied vol, hedges
+   ================================================================ */
+
+const numOr = (v, fallback) => {
+  const n = Number(v);
+  return v === "" || v === null || v === undefined || Number.isNaN(n) ? fallback : n;
+};
+
+const fmtUsd = (n, dp = 0) =>
+  Number.isFinite(Number(n))
+    ? (Number(n) < 0 ? "−$" : "$") +
+      Math.abs(Number(n)).toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp })
+    : "—";
+
+const roundStrike = (S) => {
+  if (!(S > 0)) return 0;
+  const step = S >= 2000 ? 25 : S >= 1000 ? 10 : S >= 100 ? 5 : 1;
+  return Math.round(S / step) * step;
+};
+
+const _normPDF = (x) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
+const _normCDF = (x) => {
+  // Abramowitz & Stegun 7.1.26
+  const t = 1 / (1 + 0.2316419 * Math.abs(x));
+  const d = 0.3989422804014327 * Math.exp((-x * x) / 2);
+  const p = d * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return x >= 0 ? 1 - p : p;
+};
+
+// Black-Scholes-Merton with continuous dividend yield. T in years, sigma/r/q as decimals.
+// vega per 1 vol point, theta per calendar day, rho per 1% rate.
+const blackScholes = ({ S, K, T, r = 0, q = 0, sigma, type = "call" }) => {
+  S = Number(S); K = Number(K); T = Number(T); r = Number(r); q = Number(q); sigma = Number(sigma);
+  const isPut = type === "put";
+  if (!(S > 0) || !(K > 0) || !(sigma > 0) || !(T > 0)) {
+    const intrinsic = isPut ? Math.max(K - S, 0) : Math.max(S - K, 0);
+    return { price: intrinsic, delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+  }
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(S / K) + (r - q + 0.5 * sigma * sigma) * T) / (sigma * sqrtT);
+  const d2 = d1 - sigma * sqrtT;
+  const eqt = Math.exp(-q * T);
+  const ert = Math.exp(-r * T);
+  const pdf = _normPDF(d1);
+  const gamma = (eqt * pdf) / (S * sigma * sqrtT);
+  const vega = (S * eqt * pdf * sqrtT) / 100;
+  let price, delta, rho, theta;
+  if (isPut) {
+    const nNd1 = _normCDF(-d1), nNd2 = _normCDF(-d2);
+    price = K * ert * nNd2 - S * eqt * nNd1;
+    delta = -eqt * nNd1;
+    rho = (-K * T * ert * nNd2) / 100;
+    theta = ((-(S * eqt * pdf * sigma)) / (2 * sqrtT) + q * S * eqt * nNd1 - r * K * ert * nNd2) / 365;
+  } else {
+    const Nd1 = _normCDF(d1), Nd2 = _normCDF(d2);
+    price = S * eqt * Nd1 - K * ert * Nd2;
+    delta = eqt * Nd1;
+    rho = (K * T * ert * Nd2) / 100;
+    theta = ((-(S * eqt * pdf * sigma)) / (2 * sqrtT) - q * S * eqt * Nd1 + r * K * ert * Nd2) / 365;
+  }
+  return { price, delta, gamma, theta, vega, rho };
+};
+
+// Implied volatility via bisection — robust across the full price range.
+const impliedVol = ({ S, K, T, r = 0, q = 0, type = "call", marketPrice }) => {
+  S = Number(S); K = Number(K); T = Number(T); marketPrice = Number(marketPrice);
+  if (!(marketPrice > 0) || !(S > 0) || !(K > 0) || !(T > 0)) return null;
+  const priceAt = (v) => blackScholes({ S, K, T, r, q, sigma: v, type }).price;
+  let lo = 1e-4, hi = 5, mid = 0;
+  if (marketPrice <= priceAt(lo) || marketPrice >= priceAt(hi)) return null;
+  for (let i = 0; i < 80; i++) {
+    mid = (lo + hi) / 2;
+    const p = priceAt(mid);
+    if (Math.abs(p - marketPrice) < 1e-5) break;
+    if (p > marketPrice) hi = mid; else lo = mid;
+  }
+  return mid;
+};
+
+const FUTURES_MULT = { ES: 50, NQ: 20, YM: 5 };
+
+// Generic two-leg vertical spread (same type, long one strike, short another).
+// Handles debit/credit and bull/bear from the strike ordering; values in $ (×100×contracts).
+const evalVertical = ({ type, kLong, kShort, premLong, premShort, contracts = 1 }) => {
+  const pay = (K, S) => (type === "put" ? Math.max(K - S, 0) : Math.max(S - K, 0));
+  const net = premLong - premShort; // >0 = net debit paid
+  const lo = Math.min(kLong, kShort), hi = Math.max(kLong, kShort);
+  const plAt = (S) => pay(kLong, S) - pay(kShort, S) - net;
+  const pls = [0, lo, hi, hi * 2 + 1000].map(plAt);
+  const maxP = Math.max(...pls), maxL = Math.min(...pls);
+  let be = null, prev = plAt(lo);
+  const steps = 2000;
+  for (let i = 1; i <= steps; i++) {
+    const S = lo + ((hi - lo) * i) / steps;
+    const cur = plAt(S);
+    if ((prev <= 0 && cur >= 0) || (prev >= 0 && cur <= 0)) { be = S; break; }
+    prev = cur;
+  }
+  return {
+    net,
+    isDebit: net > 0,
+    width: hi - lo,
+    maxProfit: maxP * 100 * contracts,
+    maxLoss: maxL * 100 * contracts,
+    breakeven: be,
+    rr: maxL !== 0 ? maxP / Math.abs(maxL) : null,
+  };
+};
+
+// Calendar / diagonal: long far-dated, short near-dated. Value estimated at the near expiry
+// assuming spot is unchanged, using the far leg's remaining time value.
+const evalCalendar = ({ type, kNear, kFar, premNear, premFar, contracts = 1, S, sigma, r, q, nearDays, farDays }) => {
+  const net = premFar - premNear; // net debit paid
+  const remT = Math.max(farDays - nearDays, 0) / 365;
+  const farRemain = blackScholes({ S, K: kFar, T: remT, r, q, sigma, type }).price;
+  const nearIntrinsic = type === "put" ? Math.max(kNear - S, 0) : Math.max(S - kNear, 0);
+  const valAtNear = farRemain - nearIntrinsic;
+  return {
+    net,
+    debit: net * 100 * contracts,
+    valueAtNearExpiry: valAtNear * 100 * contracts,
+    estPnl: (valAtNear - net) * 100 * contracts,
+  };
+};
+
+// Pairs / ratio hedge between two correlated instruments.
+const evalPairs = ({ priceLong, priceShort, betaLong, betaShort, notional }) => {
+  if (!(priceLong > 0) || !(priceShort > 0) || !(betaShort > 0)) return null;
+  const ratio = (priceLong * betaLong) / (priceShort * betaShort); // short units per 1 long unit
+  const unitsLong = notional / priceLong;
+  const shortNotional = notional * (betaLong / betaShort); // beta-neutral
+  const unitsShort = shortNotional / priceShort;
+  return { ratio, unitsLong, unitsShort, longNotional: notional, shortNotional };
+};
+
+// Reads spot / vol / rate from the live feed for auto-fill (every field stays editable).
+const deskLiveContext = (market, points, instrument) => {
+  const cfg = thesisInstrumentConfig(instrument);
+  const tickers = market?.tickers || [];
+  const find = (sym) => tickers.find((x) => x.symbol === sym);
+  const priceOf = (sym) => {
+    const tk = find(sym);
+    if (tk && Number.isFinite(Number(tk.price))) return Number(tk.price);
+    const c = thesisInstrumentConfig(sym);
+    const pt = points?.[c.pointsKey]?.spot;
+    return Number.isFinite(Number(pt)) ? Number(pt) : null;
+  };
+  const vix = find("VIX")?.price ?? points?.vix?.spot;
+  const us10 = find("US10Y")?.price;
+  return {
+    cfg,
+    spot: priceOf(cfg.symbol),
+    sigmaPct: Number.isFinite(Number(vix)) ? Number(vix) : null, // VIX ≈ annualized IV in %
+    ratePct: Number.isFinite(Number(us10)) ? Number(us10) : null,
+    futSym: cfg.futures,
+    futMult: FUTURES_MULT[cfg.futures] || 50,
+    priceOf,
+  };
+};
+
+const DEFAULT_DESK_TOOLS = {
+  feedToThesis: false,
+  env: { spot: "", sigmaPct: "", ratePct: "", divPct: "1.3", days: "30" },
+  options: { strike: "", type: "call", marketPrice: "" },
+  hedge: {
+    beta: { on: true, portfolioValue: "100000", beta: "1.00", mode: "futures", putOtmPct: "5" },
+    vertical: { on: false, type: "call", longStrike: "", shortStrike: "", contracts: "1" },
+    calendar: { on: false, type: "call", strike: "", farStrike: "", nearDays: "7", farDays: "37", contracts: "1" },
+    pairs: { on: false, longSym: "NDX", shortSym: "SPX", betaLong: "1.20", betaShort: "1.00", notional: "100000" },
+  },
+};
+
+// Resolves the shared pricing environment (auto-fill + overrides) into numeric values.
+const resolveEnv = (env, live) => ({
+  S: numOr(env.spot, live.spot ?? 0),
+  sigma: numOr(env.sigmaPct, live.sigmaPct ?? 20) / 100,
+  r: numOr(env.ratePct, live.ratePct ?? 4.3) / 100,
+  q: numOr(env.divPct, 1.3) / 100,
+  days: numOr(env.days, 30),
+  T: numOr(env.days, 30) / 365,
+});
+
+// Builds a compact human-readable summary of the enabled desk tools for the AI synthesis.
+const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
+  const live = deskLiveContext(market, points, instrument);
+  const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
+  if (!(S > 0)) return null;
+  const lines = [];
+  lines.push(
+    `Pricing environment: spot ${fmtNum(S, 2)}, IV ${fmtNum(sigma * 100, 1)}%, ${days}d to expiry, rate ${fmtNum(r * 100, 2)}%, dividend ${fmtNum(q * 100, 2)}%.`
+  );
+
+  const oStrike = numOr(deskTools.options.strike, roundStrike(S));
+  const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
+  lines.push(
+    `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
+  );
+
+  const h = deskTools.hedge;
+  if (h.beta.on) {
+    const pv = numOr(h.beta.portfolioValue, 0);
+    const beta = numOr(h.beta.beta, 1);
+    const notional = pv * beta;
+    if (h.beta.mode === "puts") {
+      const k = roundStrike(S * (1 - numOr(h.beta.putOtmPct, 5) / 100));
+      const pb = blackScholes({ S, K: k, T, r, q, sigma, type: "put" });
+      const contracts = pb.delta !== 0 ? notional / (S * 100 * Math.abs(pb.delta)) : 0;
+      lines.push(
+        `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → buy ~${fmtNum(contracts, 1)} ${live.cfg.symbol} ${fmtNum(k, 0)} puts (cost ≈ ${fmtUsd(pb.price * 100 * contracts)}) to neutralize ${fmtUsd(notional)} of delta.`
+      );
+    } else {
+      const contracts = live.spot > 0 ? notional / (live.spot * live.futMult) : 0;
+      lines.push(
+        `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → short ~${fmtNum(contracts, 2)} ${live.futSym} futures (×${live.futMult}) to offset ${fmtUsd(notional)} of exposure.`
+      );
+    }
+  }
+  if (h.vertical.on) {
+    const kL = numOr(h.vertical.longStrike, roundStrike(S));
+    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
+    const premL = blackScholes({ S, K: kL, T, r, q, sigma, type: h.vertical.type }).price;
+    const premS = blackScholes({ S, K: kS, T, r, q, sigma, type: h.vertical.type }).price;
+    const v = evalVertical({ type: h.vertical.type, kLong: kL, kShort: kS, premLong: premL, premShort: premS, contracts: numOr(h.vertical.contracts, 1) });
+    lines.push(
+      `Vertical spread: ${h.vertical.type} ${fmtNum(kL, 0)}/${fmtNum(kS, 0)} (${v.isDebit ? "debit" : "credit"}) — max profit ${fmtUsd(v.maxProfit)}, max loss ${fmtUsd(v.maxLoss)}, BE ${fmtNum(v.breakeven, 0)}, R/R ${fmtNum(v.rr, 2)}.`
+    );
+  }
+  if (h.calendar.on) {
+    const kNear = numOr(h.calendar.strike, roundStrike(S));
+    const kFar = numOr(h.calendar.farStrike, kNear);
+    const nearDays = numOr(h.calendar.nearDays, 7);
+    const farDays = numOr(h.calendar.farDays, 37);
+    const premNear = blackScholes({ S, K: kNear, T: nearDays / 365, r, q, sigma, type: h.calendar.type }).price;
+    const premFar = blackScholes({ S, K: kFar, T: farDays / 365, r, q, sigma, type: h.calendar.type }).price;
+    const c = evalCalendar({ type: h.calendar.type, kNear, kFar, premNear, premFar, contracts: numOr(h.calendar.contracts, 1), S, sigma, r, q, nearDays, farDays });
+    lines.push(
+      `${kNear === kFar ? "Calendar" : "Diagonal"} spread: ${h.calendar.type} ${fmtNum(kNear, 0)}${kNear === kFar ? "" : "/" + fmtNum(kFar, 0)} ${nearDays}d vs ${farDays}d — net debit ${fmtUsd(c.debit)}, est P/L at near expiry (spot flat) ${fmtUsd(c.estPnl)}.`
+    );
+  }
+  if (h.pairs.on) {
+    const priceLong = live.priceOf(h.pairs.longSym);
+    const priceShort = live.priceOf(h.pairs.shortSym);
+    const p = evalPairs({ priceLong, priceShort, betaLong: numOr(h.pairs.betaLong, 1), betaShort: numOr(h.pairs.betaShort, 1), notional: numOr(h.pairs.notional, 0) });
+    if (p) {
+      lines.push(
+        `Pairs/ratio: long ${h.pairs.longSym} vs short ${h.pairs.shortSym} — hedge ratio ${fmtNum(p.ratio, 3)} (short units per long), beta-neutral short notional ${fmtUsd(p.shortNotional)}.`
+      );
+    }
+  }
+  return lines.join("\n");
+};
+
+/* ---------- small shared tool UI primitives ---------- */
+
+const NumField = ({ label, hint, value, onChange, step = "any", suffix, placeholder }) => (
+  <label className="lab-field" style={{ marginTop: 0, display: "block" }}>
+    <span className="lab-label">
+      {label}
+      {hint && <span style={{ color: C.muted, marginLeft: 6, letterSpacing: 0, textTransform: "none" }}>{hint}</span>}
+    </span>
+    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+      <input
+        className="bd-in mono-in"
+        style={{ textTransform: "none", paddingRight: suffix ? 30 : undefined }}
+        type="number"
+        inputMode="decimal"
+        step={step}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {suffix && <span className="mono" style={{ position: "absolute", right: 11, color: C.muted, fontSize: 11 }}>{suffix}</span>}
+    </div>
+  </label>
+);
+
+const ToolStat = ({ k, v, color, sub }) => (
+  <div className="metric">
+    <span className="metric-k" style={color ? { color } : undefined}>{k}</span>
+    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 16, fontWeight: 700, color: color || "var(--text)" }}>{v}</span>
+    {sub && <span className="metric-note">{sub}</span>}
+  </div>
+);
+
+const StructToggle = ({ on, onToggle, icon: Ic, label, sub }) => (
+  <button
+    onClick={() => onToggle(!on)}
+    className="card"
+    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", cursor: "pointer", textAlign: "left", borderColor: on ? "var(--brass)" : undefined, width: "100%", background: "var(--panel2)" }}
+  >
+    <span style={{ width: 36, height: 21, borderRadius: 21, background: on ? C.brass : "var(--line2)", position: "relative", flex: "none", transition: ".2s" }}>
+      <span style={{ position: "absolute", top: 2.5, left: on ? 17 : 2.5, width: 16, height: 16, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+    </span>
+    {Ic && <Ic size={15} color={on ? C.brass : C.muted} style={{ flex: "none" }} />}
+    <span style={{ minWidth: 0 }}>
+      <b style={{ fontSize: 13 }}>{label}</b>
+      <div style={{ fontSize: 11.5, color: C.muted }}>{sub}</div>
+    </span>
+  </button>
+);
+
+const FeedToggle = ({ on, onToggle }) => (
+  <div className="card" style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px" }}>
+    <button
+      onClick={() => onToggle(!on)}
+      style={{ width: 40, height: 23, borderRadius: 23, border: "none", background: on ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+      title="Feed these structures into the AI thesis"
+    >
+      <span style={{ position: "absolute", top: 2.5, left: on ? 19 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+    </button>
+    <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
+      <b style={{ color: "var(--text)", fontSize: 13 }}>Feed into thesis synthesis</b>
+      <div>When on, the desk's next thesis run references your active hedge structures and the options scenario.</div>
+    </div>
+  </div>
+);
+
+/* ---------- Options pricing calculator ---------- */
+
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
+  const { S, sigma, r, q, days, T } = resolveEnv(env, live);
+  const K = numOr(opt.strike, roundStrike(S));
+  const bs = blackScholes({ S, K, T, r, q, sigma, type: opt.type });
+  const iv = impliedVol({ S, K, T, r, q, type: opt.type, marketPrice: opt.marketPrice });
+  const valid = S > 0 && K > 0 && T > 0 && sigma > 0;
+  const moneyness = K > 0 && S > 0 ? S / K : null;
+  const itm = K < S ? (opt.type === "call" ? "in" : "out of") : K > S ? (opt.type === "call" ? "out of" : "in") : "at";
+
+  return (
+    <div className="grid g-2" style={{ alignItems: "start" }}>
+      <Card icon={Calculator} title="Inputs" sub="Auto-filled from the live feed — override any field">
+        <div className="seg" style={{ marginBottom: 14 }}>
+          {["call", "put"].map((ty) => (
+            <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
+          ))}
+        </div>
+        <div className="grid g-3" style={{ gap: 10 }}>
+          <NumField label="Spot" value={env.spot} placeholder={fmtNum(live.spot ?? 0, 2)} onChange={(v) => setEnv("spot", v)} />
+          <NumField label="Strike" value={opt.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(v) => setOpt("strike", v)} />
+          <NumField label="Days" hint="to expiry" value={env.days} placeholder="30" onChange={(v) => setEnv("days", v)} />
+          <NumField label="Impl vol" suffix="%" value={env.sigmaPct} placeholder={fmtNum(live.sigmaPct ?? 20, 1)} onChange={(v) => setEnv("sigmaPct", v)} />
+          <NumField label="Rate" suffix="%" value={env.ratePct} placeholder={fmtNum(live.ratePct ?? 4.3, 2)} onChange={(v) => setEnv("ratePct", v)} />
+          <NumField label="Div yld" suffix="%" value={env.divPct} placeholder="1.3" onChange={(v) => setEnv("divPct", v)} />
+        </div>
+        <div className="lab-field">
+          <span className="lab-label">Implied vol solver</span>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input className="bd-in mono-in" style={{ textTransform: "none" }} type="number" inputMode="decimal" placeholder="market option price" value={opt.marketPrice} onChange={(e) => setOpt("marketPrice", e.target.value)} />
+            <button className="btn btn-sm" disabled={iv == null} onClick={() => setEnv("sigmaPct", fmtNum(iv * 100, 2))} title="Use the solved IV above">Apply IV</button>
+          </div>
+          <div style={{ marginTop: 8, fontSize: 12.5, color: C.muted }}>
+            {opt.marketPrice
+              ? iv != null
+                ? <>Solved IV: <b style={{ color: C.brass }}>{fmtNum(iv * 100, 2)}%</b> — press Apply to price the Greeks at this vol.</>
+                : "No solution — that price is outside the no-arbitrage bounds."
+              : "Enter a quoted price to back out its implied volatility."}
+          </div>
+        </div>
+      </Card>
+
+      <Card icon={Sigma} title="Theoretical value & Greeks" sub={`${opt.type.toUpperCase()} ${fmtNum(K, 0)} · ${days}d · IV ${fmtNum(sigma * 100, 1)}%`}>
+        {!valid ? (
+          <EmptyState icon={Calculator} title="Need a spot price" body="Sync the Market Pulse so the calculator can read a live spot, or type one into the Spot field." />
+        ) : (
+          <>
+            <div className="grid g-3" style={{ gap: 10 }}>
+              <ToolStat k="Theo price" v={fmtNum(bs.price, 2)} color={C.brass} sub={`${fmtUsd(bs.price * 100, 0)} / contract`} />
+              <ToolStat k="Delta" v={fmtNum(bs.delta, 3)} sub="per $1 spot" />
+              <ToolStat k="Gamma" v={fmtNum(bs.gamma, 4)} sub="Δ change / $1" />
+              <ToolStat k="Theta" v={fmtNum(bs.theta, 2)} color={C.bear} sub="decay / day" />
+              <ToolStat k="Vega" v={fmtNum(bs.vega, 2)} sub="per 1 vol pt" />
+              <ToolStat k="Rho" v={fmtNum(bs.rho, 2)} sub="per 1% rate" />
+            </div>
+            <div style={{ marginTop: 13, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+              Spot is <b style={{ color: "var(--text)" }}>{fmtNum((moneyness || 0) * 100, 1)}%</b> of strike — this {opt.type} is <b style={{ color: itm === "in" ? C.bull : itm === "out of" ? C.bear : C.brass }}>{itm}-the-money</b>.
+              {" "}One contract controls {fmtUsd(S * 100, 0)} of notional.
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+};
+
+/* ---------- Hedge & spread builder ---------- */
+
+const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
+  const { S, sigma, r, q, days, T } = resolveEnv(env, live);
+  const b = hedge.beta, v = hedge.vertical, cal = hedge.calendar, pr = hedge.pairs;
+
+  // Beta-weighted hedge
+  const pv = numOr(b.portfolioValue, 0);
+  const beta = numOr(b.beta, 1);
+  const notional = pv * beta;
+  const futContracts = live.spot > 0 ? notional / (live.spot * live.futMult) : 0;
+  const putStrike = roundStrike(S * (1 - numOr(b.putOtmPct, 5) / 100));
+  const putBs = blackScholes({ S, K: putStrike, T, r, q, sigma, type: "put" });
+  const putContracts = S > 0 && putBs.delta !== 0 ? notional / (S * 100 * Math.abs(putBs.delta)) : 0;
+  const putCost = putBs.price * 100 * putContracts;
+  const spyPrice = live.priceOf("SPY");
+  const spyShares = spyPrice > 0 ? notional / spyPrice : 0;
+
+  // Vertical
+  const vL = numOr(v.longStrike, roundStrike(S));
+  const vShort = numOr(v.shortStrike, roundStrike(S * (v.type === "call" ? 1.02 : 0.98)));
+  const vPremL = blackScholes({ S, K: vL, T, r, q, sigma, type: v.type }).price;
+  const vPremS = blackScholes({ S, K: vShort, T, r, q, sigma, type: v.type }).price;
+  const vres = evalVertical({ type: v.type, kLong: vL, kShort: vShort, premLong: vPremL, premShort: vPremS, contracts: numOr(v.contracts, 1) });
+
+  // Calendar / diagonal
+  const cNear = numOr(cal.strike, roundStrike(S));
+  const cFar = numOr(cal.farStrike, cNear);
+  const cNearDays = numOr(cal.nearDays, 7);
+  const cFarDays = numOr(cal.farDays, 37);
+  const cPremNear = blackScholes({ S, K: cNear, T: cNearDays / 365, r, q, sigma, type: cal.type }).price;
+  const cPremFar = blackScholes({ S, K: cFar, T: cFarDays / 365, r, q, sigma, type: cal.type }).price;
+  const cres = evalCalendar({ type: cal.type, kNear: cNear, kFar: cFar, premNear: cPremNear, premFar: cPremFar, contracts: numOr(cal.contracts, 1), S, sigma, r, q, nearDays: cNearDays, farDays: cFarDays });
+
+  // Pairs
+  const prLongP = live.priceOf(pr.longSym);
+  const prShortP = live.priceOf(pr.shortSym);
+  const pres = evalPairs({ priceLong: prLongP, priceShort: prShortP, betaLong: numOr(pr.betaLong, 1), betaShort: numOr(pr.betaShort, 1), notional: numOr(pr.notional, 0) });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* Beta-weighted hedge */}
+      <StructToggle on={b.on} onToggle={(on) => setHedge("beta", "on", on)} icon={Shield} label="Beta-weighted portfolio hedge" sub="Neutralize directional exposure with futures or protective puts" />
+      {b.on && (
+        <Card>
+          <div className="grid g-3" style={{ gap: 10 }}>
+            <NumField label="Book value" suffix="$" value={b.portfolioValue} onChange={(val) => setHedge("beta", "portfolioValue", val)} />
+            <NumField label="Portfolio beta" value={b.beta} placeholder="1.00" onChange={(val) => setHedge("beta", "beta", val)} />
+            <div className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label">Hedge vehicle</span>
+              <div className="seg">
+                {[["futures", `${live.futSym} fut`], ["puts", `${live.cfg.symbol} puts`]].map(([m, lbl]) => (
+                  <button key={m} className={b.mode === m ? "on" : ""} onClick={() => setHedge("beta", "mode", m)}>{lbl}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>Exposure to neutralize: <b style={{ color: "var(--text)" }}>{fmtUsd(notional)}</b> (book × beta).</div>
+          {b.mode === "futures" ? (
+            <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
+              <ToolStat k={`Short ${live.futSym}`} v={fmtNum(futContracts, 2)} color={C.brass} sub={`contracts (×${live.futMult})`} />
+              <ToolStat k="Rounded" v={fmtNum(Math.round(futContracts), 0)} sub="whole contracts" />
+              <ToolStat k="SPY-share equiv" v={fmtNum(spyShares, 0)} sub={spyPrice > 0 ? `shares @ ${fmtNum(spyPrice, 2)}` : "SPY not synced"} />
+            </div>
+          ) : (
+            <>
+              <div style={{ marginTop: 12 }}>
+                <NumField label="Put OTM %" hint={`strike ≈ ${fmtNum(putStrike, 0)}`} suffix="%" value={b.putOtmPct} placeholder="5" onChange={(val) => setHedge("beta", "putOtmPct", val)} />
+              </div>
+              <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
+                <ToolStat k="Buy puts" v={fmtNum(putContracts, 1)} color={C.brass} sub={`${live.cfg.symbol} ${fmtNum(putStrike, 0)}P`} />
+                <ToolStat k="Put delta" v={fmtNum(putBs.delta, 3)} sub={`@ ${fmtNum(putBs.price, 2)}`} />
+                <ToolStat k="Hedge cost" v={fmtUsd(putCost)} color={C.bear} sub={notional > 0 ? `${fmtNum((putCost / notional) * 100, 2)}% of book` : "—"} />
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
+      {/* Vertical spread */}
+      <StructToggle on={v.on} onToggle={(on) => setHedge("vertical", "on", on)} icon={Layers} label="Vertical spread" sub="Debit or credit call/put spread — risk, reward & breakeven" />
+      {v.on && (
+        <Card>
+          <div className="seg" style={{ marginBottom: 12, maxWidth: 220 }}>
+            {["call", "put"].map((ty) => (
+              <button key={ty} className={v.type === ty ? "on" : ""} onClick={() => setHedge("vertical", "type", ty)}>{ty.toUpperCase()}</button>
+            ))}
+          </div>
+          <div className="grid g-3" style={{ gap: 10 }}>
+            <NumField label="Long strike" hint={`@ ${fmtNum(vPremL, 2)}`} value={v.longStrike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(val) => setHedge("vertical", "longStrike", val)} />
+            <NumField label="Short strike" hint={`@ ${fmtNum(vPremS, 2)}`} value={v.shortStrike} placeholder={fmtNum(roundStrike(S * (v.type === "call" ? 1.02 : 0.98)), 0)} onChange={(val) => setHedge("vertical", "shortStrike", val)} />
+            <NumField label="Contracts" value={v.contracts} placeholder="1" onChange={(val) => setHedge("vertical", "contracts", val)} />
+          </div>
+          <div className="grid g-2" style={{ gap: 10, marginTop: 12 }}>
+            <ToolStat k={vres.isDebit ? "Net debit" : "Net credit"} v={fmtUsd(Math.abs(vres.net) * 100 * numOr(v.contracts, 1), 0)} color={C.brass} sub={`${fmtNum(Math.abs(vres.net), 2)} / spread · ${fmtNum(vres.width, 0)} wide`} />
+            <ToolStat k="Breakeven" v={fmtNum(vres.breakeven, 2)} sub="at expiry" />
+            <ToolStat k="Max profit" v={fmtUsd(vres.maxProfit, 0)} color={C.bull} sub="at expiry" />
+            <ToolStat k="Max loss" v={fmtUsd(vres.maxLoss, 0)} color={C.bear} sub={vres.rr != null ? `R/R ${fmtNum(vres.rr, 2)}` : ""} />
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>Legs auto-priced from the shared environment (IV {fmtNum(sigma * 100, 1)}%, {days}d). Adjust strikes to reshape the payoff.</div>
+        </Card>
+      )}
+
+      {/* Calendar / diagonal */}
+      <StructToggle on={cal.on} onToggle={(on) => setHedge("calendar", "on", on)} icon={CalendarDays} label="Calendar / diagonal spread" sub="Sell near-dated, buy far-dated — same or different strike" />
+      {cal.on && (
+        <Card>
+          <div className="seg" style={{ marginBottom: 12, maxWidth: 220 }}>
+            {["call", "put"].map((ty) => (
+              <button key={ty} className={cal.type === ty ? "on" : ""} onClick={() => setHedge("calendar", "type", ty)}>{ty.toUpperCase()}</button>
+            ))}
+          </div>
+          <div className="grid g-2" style={{ gap: 10 }}>
+            <NumField label="Near strike (short)" hint={`@ ${fmtNum(cPremNear, 2)}`} value={cal.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(val) => setHedge("calendar", "strike", val)} />
+            <NumField label="Far strike (long)" hint={`@ ${fmtNum(cPremFar, 2)} · = near for calendar`} value={cal.farStrike} placeholder={fmtNum(cNear, 0)} onChange={(val) => setHedge("calendar", "farStrike", val)} />
+            <NumField label="Near days" value={cal.nearDays} placeholder="7" onChange={(val) => setHedge("calendar", "nearDays", val)} />
+            <NumField label="Far days" value={cal.farDays} placeholder="37" onChange={(val) => setHedge("calendar", "farDays", val)} />
+          </div>
+          <NumField label="Contracts" value={cal.contracts} placeholder="1" onChange={(val) => setHedge("calendar", "contracts", val)} />
+          <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
+            <ToolStat k="Net debit" v={fmtUsd(cres.debit, 0)} color={C.brass} sub={`${cNear === cFar ? "calendar" : "diagonal"} · ${cNearDays}d vs ${cFarDays}d`} />
+            <ToolStat k="Value @ near exp" v={fmtUsd(cres.valueAtNearExpiry, 0)} sub="if spot unchanged" />
+            <ToolStat k="Est. P/L" v={fmtUsd(cres.estPnl, 0)} color={cres.estPnl >= 0 ? C.bull : C.bear} sub="spot flat at near exp" />
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>Calendars profit most when spot finishes near the strike at the near expiry with the far leg holding time value.</div>
+        </Card>
+      )}
+
+      {/* Pairs / ratio */}
+      <StructToggle on={pr.on} onToggle={(on) => setHedge("pairs", "on", on)} icon={Scale} label="Pairs / ratio hedge" sub="Long one index vs short a correlated one at a beta-neutral ratio" />
+      {pr.on && (
+        <Card>
+          <div className="grid g-2" style={{ gap: 10 }}>
+            <div className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label">Long {prLongP ? `· ${fmtNum(prLongP, 2)}` : ""}</span>
+              <select className="bd-in" value={pr.longSym} onChange={(e) => setHedge("pairs", "longSym", e.target.value)}>
+                {THESIS_INSTRUMENTS.map((it) => <option key={it.symbol} value={it.symbol}>{it.symbol}</option>)}
+              </select>
+            </div>
+            <div className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label">Short {prShortP ? `· ${fmtNum(prShortP, 2)}` : ""}</span>
+              <select className="bd-in" value={pr.shortSym} onChange={(e) => setHedge("pairs", "shortSym", e.target.value)}>
+                {THESIS_INSTRUMENTS.map((it) => <option key={it.symbol} value={it.symbol}>{it.symbol}</option>)}
+              </select>
+            </div>
+            <NumField label="Long beta" value={pr.betaLong} placeholder="1.20" onChange={(val) => setHedge("pairs", "betaLong", val)} />
+            <NumField label="Short beta" value={pr.betaShort} placeholder="1.00" onChange={(val) => setHedge("pairs", "betaShort", val)} />
+          </div>
+          <NumField label="Long notional" suffix="$" value={pr.notional} onChange={(val) => setHedge("pairs", "notional", val)} />
+          {pres ? (
+            <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
+              <ToolStat k="Hedge ratio" v={fmtNum(pres.ratio, 3)} color={C.brass} sub={`short ${pr.shortSym} per long ${pr.longSym}`} />
+              <ToolStat k={`Long ${pr.longSym}`} v={fmtNum(pres.unitsLong, 1)} sub={`units · ${fmtUsd(pres.longNotional, 0)}`} />
+              <ToolStat k={`Short ${pr.shortSym}`} v={fmtNum(pres.unitsShort, 1)} sub={`units · ${fmtUsd(pres.shortNotional, 0)} (β-neutral)`} />
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>Sync the Market Pulse so both legs have a live price, or pick instruments that are loaded.</div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData }) => {
+const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   const activeInstrument = thesisInstrumentConfig(instrument);
+  const [toolView, setToolView] = useState("synthesis");
+
+  const live = deskLiveContext(market, points, instrument);
+  const setEnv = (k, val) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: val } }));
+  const setOpt = (k, val) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: val } }));
+  const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
+  const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
+  const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
+
+  if (toolView !== "synthesis") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div className="seg" style={{ maxWidth: 560 }}>
+          <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
+          <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
+          <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
+        </div>
+        <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} />
+        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} live={live} />}
+        {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
+      </div>
+    );
+  }
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="seg" style={{ maxWidth: 560 }}>
+        <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
+        <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
+        <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
+      </div>
+      {deskTools.feedToThesis && (
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
+          <Scale size={14} color={C.brass} />
+          <span style={{ fontSize: 12.5, color: C.muted }}>
+            Desk tools are feeding the synthesis — the options scenario{activeHedges ? ` and ${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : ""} will be referenced in the next thesis run.
+          </span>
+        </div>
+      )}
     <div className="grid g-thesis" style={{ alignItems: "start" }}>
       {/* controls */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2655,6 +3249,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         )}
 
       </div>
+    </div>
     </div>
   );
 };
@@ -3155,6 +3750,7 @@ export default function Overwatch() {
   const [lean, setLean] = useState("auto");
   const [risk, setRisk] = useState("balanced");
   const [notes, setNotes] = useState("");
+  const [deskTools, setDeskTools] = useState(DEFAULT_DESK_TOOLS);
 
   const [market, setMarket] = useState(IDLE);
   const [news, setNews] = useState(IDLE);
@@ -3189,6 +3785,18 @@ export default function Overwatch() {
         if (s.weights) setWeights((w) => ({ ...w, ...s.weights }));
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
+        if (s.deskTools) setDeskTools((d) => ({
+          ...d,
+          ...s.deskTools,
+          env: { ...d.env, ...(s.deskTools.env || {}) },
+          options: { ...d.options, ...(s.deskTools.options || {}) },
+          hedge: {
+            beta: { ...d.hedge.beta, ...(s.deskTools.hedge?.beta || {}) },
+            vertical: { ...d.hedge.vertical, ...(s.deskTools.hedge?.vertical || {}) },
+            calendar: { ...d.hedge.calendar, ...(s.deskTools.hedge?.calendar || {}) },
+            pairs: { ...d.hedge.pairs, ...(s.deskTools.hedge?.pairs || {}) },
+          },
+        }));
       }
       // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
       let ah = null;
@@ -3213,8 +3821,8 @@ export default function Overwatch() {
 
   /* persist on change */
   useEffect(() => {
-    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk });
-  }, [storageReady, watchlist, instrument, weights, lean, risk]);
+    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk, deskTools });
+  }, [storageReady, watchlist, instrument, weights, lean, risk, deskTools]);
   useEffect(() => {
     if (!storageReady) return;
     saveStored(ARCHIVE_KEY, archiveHistory);
@@ -3298,8 +3906,11 @@ export default function Overwatch() {
     setThesis((s) => ({ ...s, status: "loading", error: null }));
     try {
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument });
+      const deskContext = deskTools.feedToThesis
+        ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument })
+        : null;
+      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext });
+      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext });
       const entry = {
         ...data,
         instrument,
@@ -3437,6 +4048,8 @@ export default function Overwatch() {
             thesis={thesis} onGenerate={generateThesis}
             history={thesisHistory} viewing={viewing} setViewing={setViewing}
             onDeleteHist={deleteArchiveEntry} anyData={anyData}
+            deskTools={deskTools} setDeskTools={setDeskTools}
+            market={market.data} points={points.data}
           />
         )}
         {tab === "charts" && <ChartsTab lightMode={lightMode} />}
