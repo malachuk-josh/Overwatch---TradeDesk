@@ -353,7 +353,7 @@ const calendarImportance = (value, title = "") => {
   return "low";
 };
 
-const majorCalendarEvent = (event) => event.importance === "high" || /fed|fomc|powell|cpi|ppi|pce|payroll|jobs|unemployment|gdp|retail sales|ism|pmi|jobless claims|treasury auction|consumer confidence/i.test(event.event || "");
+const majorCalendarEvent = (event) => event.importance === "high" || /fed|fomc|powell|cpi|ppi|pce|payroll|jobs|unemployment|gdp|retail sales|ism|pmi|jobless claims|treasury auction|consumer confidence|quad witching|russell recon|monthly opex|msci|nasdaq-100 recon/i.test(event.event || "");
 
 const normalizeCalendarEvent = (item) => {
   const importance = calendarImportance(item.importance, item.title);
@@ -384,6 +384,64 @@ const FOMC_2026 = {
   "2026-09-16": { period: "September FOMC meeting", projections: true },
   "2026-10-28": { period: "October FOMC meeting", projections: false },
   "2026-12-09": { period: "December FOMC meeting", projections: true },
+};
+
+// Major scheduled liquidity events: quad/triple witching, index reconstitutions, MSCI rebalances.
+// Dates follow fixed rules (3rd Friday of expiry months, last Friday of June for Russell, etc.)
+// and are hardcoded per year for precision. Update each January.
+const LIQUIDITY_EVENTS = {
+  // ── 2026 ──────────────────────────────────────────────────────────────────
+  // Quad Witching + S&P 500 Quarterly Rebalance (always same day — 3rd Friday of March/June/Sep/Dec)
+  "2026-03-20": { type: "quad-witching", label: "Quad Witching + S&P 500 Quarterly Rebalance", note: "Equity options, index options, equity futures, and index futures all expire simultaneously. S&P 500 index rebalance (additions, deletions, float/share updates) also takes effect at the close — passive index funds amplify already-elevated MOC imbalances." },
+  "2026-06-19": { type: "quad-witching", label: "Quad Witching + S&P 500 Rebalance + Russell Recon", note: "The most structurally intense session of the year. Quad Witching, S&P 500 quarterly rebalance, and Russell Reconstitution all converge at the close. Trillions in passive AUM rebalance simultaneously — anticipate extreme volume, wide spreads, erratic intraday swings, and massive MOC imbalances." },
+  "2026-09-18": { type: "quad-witching", label: "Quad Witching + S&P 500 Quarterly Rebalance", note: "Equity options, index options, equity futures, and index futures all expire simultaneously. S&P 500 index rebalance also takes effect at the close — passive index funds amplify already-elevated MOC imbalances." },
+  "2026-12-18": { type: "quad-witching", label: "Quad Witching + S&P 500 Rebalance + Nasdaq-100 Recon", note: "Quad Witching, S&P 500 quarterly rebalance, and annual Nasdaq-100 reconstitution all land on the same close. Elevated program trading and MOC imbalances into the bell." },
+  // Russell Index Reconstitution (final additions/deletions go live — last Friday of June)
+  "2026-06-26": { type: "russell-recon", label: "Russell Reconstitution",            note: "Russell 1000/2000/3000 annual reconstitution takes effect. Trillions in passive AUM must rebalance simultaneously — historically the highest single-day volume event of the year. Massive MOC imbalances, wide spreads, and sharp moves in small-cap names." },
+  // Monthly OpEx (3rd Friday of non-witching months — equity and index options expire, no futures)
+  "2026-01-16": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-02-20": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-04-17": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-05-15": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-07-17": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-08-21": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-10-16": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  "2026-11-20": { type: "monthly-opex",  label: "Monthly OpEx",                     note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure, creating directional pressure into the close." },
+  // MSCI Semi-Annual Rebalance
+  "2026-05-29": { type: "msci-rebalance", label: "MSCI Semi-Annual Rebalance",      note: "MSCI global index semi-annual rebalance effective after close. Affects US-listed names with significant international passive AUM — typically produces elevated MOC volume in large-cap US names." },
+  "2026-11-27": { type: "msci-rebalance", label: "MSCI Semi-Annual Rebalance",      note: "MSCI global index semi-annual rebalance effective after close. Affects US-listed names with significant international passive AUM — typically produces elevated MOC volume in large-cap US names." },
+  // ── 2027 ──────────────────────────────────────────────────────────────────
+  "2027-01-15": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-02-19": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-03-19": { type: "quad-witching",   label: "Quad Witching",                   note: "Equity options, index options, equity futures, and index futures all expire simultaneously. Expect highest intraday volume of the quarter into the close." },
+  "2027-04-16": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-05-21": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-06-18": { type: "quad-witching",   label: "Quad Witching",                   note: "Equity options, index options, equity futures, and index futures all expire simultaneously. Expect highest intraday volume of the quarter into the close." },
+  "2027-06-25": { type: "russell-recon",   label: "Russell Reconstitution",           note: "Russell 1000/2000/3000 annual reconstitution takes effect. Historically the highest single-day volume event of the year — massive MOC imbalances in small-cap names." },
+  "2027-07-16": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-08-20": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-09-17": { type: "quad-witching",   label: "Quad Witching",                   note: "Equity options, index options, equity futures, and index futures all expire simultaneously. Expect highest intraday volume of the quarter into the close." },
+  "2027-10-15": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-11-19": { type: "monthly-opex",    label: "Monthly OpEx",                    note: "Equity and index options expire. Dealers unwind delta hedges and gamma exposure into the close." },
+  "2027-12-17": { type: "quad-witching",   label: "Quad Witching + Nasdaq-100 Recon", note: "Quad Witching coincides with the annual Nasdaq-100 reconstitution. Index rebalancing flows layer on top of standard expiration pressure." },
+};
+
+const liquidityEventsForDate = (dateIso) => {
+  const entry = LIQUIDITY_EVENTS[dateIso];
+  if (!entry) return [];
+  const isHigh = entry.type === "quad-witching" || entry.type === "russell-recon";
+  return [{
+    date: dateIso,
+    time: "4:00 PM ET",
+    event: entry.label,
+    importance: isHigh ? "high" : "medium",
+    period: null,
+    actual: null,
+    forecast: null,
+    previous: null,
+    source: "Market Structure Calendar",
+    note: entry.note,
+  }];
 };
 
 const isFomcEvent = (event = {}) => /fomc|federal open market|rate decision|press conference|projection/i.test(event.event || "");
@@ -580,15 +638,20 @@ const fetchEconomicCalendar = async () => {
       .filter((event) => event.date >= today && event.date <= weekEnd)
       .sort(calendarSort);
     const fedEvents = [];
+    const structureEvents = [];
     for (let day = today; day <= weekEnd; day = addIsoDays(day, 1)) {
       fedEvents.push(...fedFomcEventsForDate(day));
+      structureEvents.push(...liquidityEventsForDate(day));
     }
-    const events = mergeCalendarEvents([...fedEvents, ...tradingViewEvents]).sort(calendarSort);
+    const events = mergeCalendarEvents([...fedEvents, ...structureEvents, ...tradingViewEvents]).sort(calendarSort);
     const todayEvents = selectCalendarGroup(events.filter((event) => event.date === today && !eventIsPast(event)), 5);
     const tomorrowEvents = selectCalendarGroup(events.filter((event) => event.date === tomorrow), 5);
     const upcoming = selectMajorUpcomingEvents(events.filter((event) => event.date > tomorrow), 5);
+    const sources = ["TradingView Economic Calendar"];
+    if (fedEvents.length) sources.push("Federal Reserve FOMC calendar");
+    if (structureEvents.length) sources.push("Market Structure Calendar");
     return {
-      source: fedEvents.length ? "TradingView Economic Calendar + Federal Reserve FOMC calendar" : "TradingView Economic Calendar",
+      source: sources.join(" + "),
       asOf: new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
       range: { today, tomorrow, weekEnd },
       groups: { today: todayEvents, tomorrow: tomorrowEvents, upcoming },
