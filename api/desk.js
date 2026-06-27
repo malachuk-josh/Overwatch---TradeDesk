@@ -658,8 +658,9 @@ const fetchEconomicCalendar = async () => {
     const pastTodayEvents = allEvents.filter((event) => event.date === today && eventIsPast(event));
     const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow && !eventIsPast(event)), 5);
     const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
+    const isFedSpeaker = (e) => /\b(speaks?|speech|remarks|testimony|appearance)\b/i.test(e.event || "");
     const recentEvents = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
-      .filter((event) => event.importance === "high" || event.structural)
+      .filter((event) => (event.importance === "high" || event.structural) && !isFedSpeaker(event))
       .sort((a, b) => {
         const sigA = (a.structural ? 0 : 1);
         const sigB = (b.structural ? 0 : 1);
