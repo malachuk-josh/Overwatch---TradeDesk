@@ -31,6 +31,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -2217,6 +2218,9 @@ const CalendarTab = ({ points, onRefresh }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
+        <a href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--brass)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}>
+          TradingView Calendar <ExternalLink size={11} />
+        </a>
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
