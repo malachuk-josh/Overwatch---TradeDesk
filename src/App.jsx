@@ -36,7 +36,7 @@ import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
    Live market data + news via Claude API web search → daily bias
-   thesis → editorial newsletter. Persistent across sessions.
+   thesis → archive. Persistent across sessions.
    ================================================================ */
 
 const DEFAULT_WATCHLIST = [
@@ -113,7 +113,6 @@ const C = {
 
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
-const NEWSLETTER_HISTORY_KEY = "overwatch:newsletter-history";
 const ARCHIVE_KEY = "overwatch:archive";
 const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
@@ -518,47 +517,6 @@ Treat the desk stance as a constraint: directional lean may tilt the score, but 
 Focus the levels, game plan, invalidation, and watchpoints on ${focus.symbol} first. You can reference the broader index complex, but the trade expression should be built for ${focus.focusLabel}.
 The thesis must explicitly use the Internals regime: explain whether market breadth confirms or conflicts with price, what the trend state means in plain English, and whether the volatility structure supports risk-taking or argues for tighter risk.
 When session is PRE-MARKET, AFTER-HOURS, or CLOSED, explicitly account for the possibility that SPX/NDX/DJI reflect the last regular close while ES/NQ/YM futures are live. Weight ${focus.futures} more heavily when it diverges from ${focus.symbol}, and say that in timingNote.`;
-};
-
-const newsletterPrompt = ({ market, news, points, thesis, timing, edition, weights, lean, risk, notes, instrument }) => {
-  const focus = thesisInstrumentConfig(instrument);
-  return `Write today's edition (No. ${edition}) of "OVERWATCH DAILY BIAS" — a sharp institutional morning note from Overwatch Intelligence. Date: ${dateLine()}.
-
-=== TODAY'S DATA ===
-${condenseMarket(market)}
-
-${condenseNews(news)}
-
-${condensePoints(points)}
-
-=== TIMING CONTEXT ===
-${condenseTiming(timing)}
-
-=== TODAY'S THESIS ===
-Bias: ${thesis.bias} (score ${thesis.score}, conviction ${thesis.conviction}/10)
-Headline: ${thesis.headline}
-Summary: ${thesis.summary}
-Game plan: ${thesis.gamePlan}
-Invalidation: ${thesis.invalidation}
-Thesis timestamp: ${thesis.timestamp || thesis._generatedAt || timing?.generatedAt || "not supplied"}
-Thesis timing note: ${thesis.timingNote || timing?.timingNote || "not supplied"}
-Weighted pillar read: ${thesis.pillarRead || weightsLine(thesis.pillarWeights || weights)}
-Desk stance read: ${thesis.stanceRead || stanceLine({ lean, risk, notes })}
-
-=== CURRENT DESK CONFIGURATION ===
-Pillar weights: ${weightsLine(weights)}
-Desk stance: ${stanceLine({ lean, risk, notes })}
-Primary instrument focus: ${focus.symbol} (${focus.name}) with ${focus.futures} futures as the execution proxy when relevant.
-
-Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
-{"headline":"<edition headline, 5-10 words>","dek":"<one-line subtitle>","timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","executiveSummary":"<55-75 words>","marketRecap":"<70-90 words on tape, rates, vol, sectors — with numbers>","marketOutlook":"<95-130 words explaining recent, current, and upcoming events plus brief market impact analysis>","stanceRead":"<one sentence explaining how the desk stance and risk appetite shaped the note>","pillarRead":"<one sentence explaining which weighted pillars mattered most>","thesisNarrative":"<95-120 words articulating the bias, key levels, weighted pillars, stance, and the plan>","watchToday":["<3-4 short bullets: catalysts and levels to watch>"],"riskRadar":"<35-55 words on what could break the call>","finalWord":"<one closing sentence with desk personality>"}
-
-Tone: confident, concrete, zero fluff. Use actual numbers from the data.
-The newsletter must carry the thesis weighting through: mention the most influential pillar weights and explain how the desk stance/risk appetite shaped the plan. Do not treat stance as a generic footer.
-The newsletter must include a plain-English read of breadth, trend state, and volatility structure. Do not mention the Internals regime generically; translate it into what it means for an index trader today.
-The Market Outlook section must separate the catalyst story into recent headlines/data, current same-day events, and upcoming events this week. For each, state why it matters to ${focus.symbol}, ${focus.futures}, rates, volatility, or breadth.
-Keep the note centered on ${focus.focusLabel}. Cross-index context is useful, but the lead framing, key levels, and watch list should be written for ${focus.symbol}.
-If session is PRE-MARKET, AFTER-HOURS, or CLOSED, the newsletter must note that cash index data may be stale versus live futures when relevant, especially if ${focus.futures} diverges from ${focus.symbol}.`;
 };
 
 /* ================================================================
@@ -1056,44 +1014,6 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .hist-row:hover{border-color:var(--line2);background:var(--panel3)}
 .hist-row.viewing{border-color:var(--brass)}
 
-/* ---------- newsletter paper ---------- */
-.paper-wrap{display:flex;justify-content:center}
-.paper{
-  width:100%;max-width:760px;background:linear-gradient(180deg,var(--paper),var(--paper2));
-  color:var(--paper-ink);border-radius:4px;padding:46px 52px 40px;
-  font-family:'Lora',serif;box-shadow:0 24px 70px rgba(0,0,0,.55),0 3px 12px rgba(0,0,0,.4);
-  position:relative;
-}
-@media(max-width:760px){.paper{padding:28px 22px}}
-.paper::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(90deg,#C99B47,#E8B45A,#C99B47);border-radius:4px 4px 0 0}
-.np-mast{display:flex;align-items:baseline;justify-content:space-between;border-bottom:2.5px solid var(--paper-ink);padding-bottom:11px;flex-wrap:wrap;gap:6px}
-.np-brand{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:25px;letter-spacing:.03em}
-.np-brand span{color:#A87B2E}
-.np-meta{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--paper-muted);letter-spacing:.1em;text-transform:uppercase}
-.np-biasbar{display:flex;align-items:center;gap:13px;padding:11px 0;border-bottom:1px solid var(--paper-line);flex-wrap:wrap}
-.np-biasword{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13.5px;letter-spacing:.16em;text-transform:uppercase}
-.np-h1{font-weight:700;font-size:29px;line-height:1.22;margin-top:20px;letter-spacing:-.01em}
-.np-dek{font-style:italic;font-size:15.5px;color:var(--paper-muted);margin-top:7px}
-.np-time-note{border:1px solid var(--paper-line);border-left:3px solid #A87B2E;border-radius:5px;background:rgba(168,123,46,.07);padding:10px 12px;margin-top:14px;font-family:'Inter',sans-serif;font-size:12.5px;line-height:1.55;color:var(--paper-muted)}
-.np-time-note b{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#A87B2E;margin-right:6px}
-.np-config{border:1px solid var(--paper-line);border-left:3px solid #A87B2E;border-radius:6px;background:rgba(168,123,46,.06);padding:11px 13px;margin-top:14px;font-family:'Inter',sans-serif;display:flex;flex-direction:column;gap:8px}
-.np-config b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:#A87B2E;margin-bottom:3px}
-.np-config span{display:block;font-size:12.5px;line-height:1.55;color:var(--paper-muted)}
-.np-sec{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#A87B2E;margin:26px 0 9px;display:flex;align-items:center;gap:10px}
-.np-sec::after{content:'';flex:1;height:1px;background:var(--paper-line)}
-.np-body{font-size:14.5px;line-height:1.78}
-.np-lede{font-size:15.5px;line-height:1.8}
-.np-lede::first-letter{font-size:46px;font-weight:700;float:left;line-height:.84;padding:5px 9px 0 0;color:#A87B2E}
-.np-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11.5px;margin-top:5px}
-.np-table th{text-align:left;font-weight:600;color:var(--paper-muted);border-bottom:1px solid var(--paper-ink);padding:5px 7px;font-size:10px;letter-spacing:.09em;text-transform:uppercase}
-.np-table td{padding:6px 7px;border-bottom:1px solid var(--paper-line)}
-.np-watch{list-style:none;margin-top:4px}
-.np-watch li{padding:7px 0 7px 22px;position:relative;font-size:14px;line-height:1.6;border-bottom:1px dotted var(--paper-line)}
-.np-watch li::before{content:'▸';position:absolute;left:2px;color:#A87B2E;font-family:'Space Grotesk',sans-serif}
-.np-risk{border:1.5px solid #B8503F;border-radius:6px;background:rgba(184,80,63,.06);padding:13px 16px;font-size:13.5px;line-height:1.7;margin-top:5px}
-.np-final{font-style:italic;font-size:15px;margin-top:24px;padding-top:15px;border-top:2.5px solid var(--paper-ink);line-height:1.7}
-.np-foot{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--paper-muted);letter-spacing:.07em;margin-top:25px;text-transform:uppercase;line-height:1.8}
-
 /* ---------- drawer / overlay ---------- */
 .overlay{position:fixed;inset:0;background:rgba(5,8,12,.66);backdrop-filter:blur(2px);z-index:90}
 .drawer{
@@ -1124,36 +1044,6 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
 .empty p{color:var(--muted);font-size:13px;max-width:430px;line-height:1.6}
 .err{border:1px solid rgba(242,85,90,.4);background:var(--bear-dim);border-radius:10px;padding:15px 17px;display:flex;align-items:center;gap:12px;font-size:13px}
 .loading-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px;font-family:'JetBrains Mono',monospace}
-
-/* ---------- daily trade plan (inside newspaper) ---------- */
-.tp-divider{display:flex;align-items:center;gap:12px;margin:30px 0 20px}
-.tp-divider-line{flex:1;height:2px;background:var(--paper-ink)}
-.tp-divider-label{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#A87B2E;white-space:nowrap}
-.tp-checklist{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-bottom:4px}
-@media(max-width:640px){.tp-checklist{grid-template-columns:1fr}}
-.tp-check-item{display:flex;align-items:flex-start;gap:7px;font-family:'Inter',sans-serif;font-size:12px;line-height:1.55;padding:4px 0;border-bottom:1px dotted var(--paper-line)}
-.tp-check-item:last-child{border:none}
-.tp-check-label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#A87B2E;font-weight:700;flex:none;width:88px}
-.tp-setups-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px}
-@media(max-width:640px){.tp-setups-grid{grid-template-columns:1fr}}
-.tp-setup-box{border-radius:6px;padding:10px 12px;font-size:12px;line-height:1.6}
-.tp-setup-box.bull{background:rgba(30,122,79,.08);border:1px solid rgba(30,122,79,.3)}
-.tp-setup-box.bear{background:rgba(184,80,63,.08);border:1px solid rgba(184,80,63,.3)}
-.tp-setup-box h5{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:10px;letter-spacing:.12em;text-transform:uppercase;margin:0 0 7px}
-.tp-setup-box.bull h5{color:#1E7A4F}
-.tp-setup-box.bear h5{color:#B8503F}
-.tp-setup-row{display:flex;justify-content:space-between;border-bottom:1px dotted var(--paper-line);padding:2.5px 0}
-.tp-setup-row:last-child{border:none}
-.tp-setup-key{color:var(--paper-muted);font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.06em}
-.tp-futures-table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:4px}
-.tp-futures-table th{text-align:left;font-weight:600;color:var(--paper-muted);border-bottom:1px solid var(--paper-ink);padding:4px 6px;font-size:9.5px;letter-spacing:.09em;text-transform:uppercase}
-.tp-futures-table td{padding:5px 6px;border-bottom:1px solid var(--paper-line);vertical-align:top}
-.tp-internals-row{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:4px}
-@media(max-width:640px){.tp-internals-row{grid-template-columns:1fr}}
-.tp-internal-cell{border:1px solid var(--paper-line);border-radius:5px;padding:8px 10px}
-.tp-internal-cell .label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#A87B2E;margin-bottom:4px}
-.tp-internal-cell .val{font-size:12px;line-height:1.5}
-.tp-confirm{border-left:3px solid #A87B2E;background:rgba(168,123,46,.07);border-radius:0 5px 5px 0;padding:9px 12px;font-family:'Inter',sans-serif;font-size:12px;line-height:1.6;margin-top:4px;color:var(--paper-muted)}
 
 /* ---------- toasts ---------- */
 .toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:9px;z-index:200}
@@ -2594,7 +2484,7 @@ const DataPointSection = ({ points, onRefresh }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, onGoNewsletter }) => {
+const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   const activeInstrument = thesisInstrumentConfig(instrument);
@@ -2760,9 +2650,6 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
               <button className="btn" onClick={() => downloadPDF(buildThesisPrintHTML(t), `overwatch-thesis-${t._date || t.instrument || "today"}.pdf`)} title="Download thesis as PDF">
                 <FileText size={14} /> Download PDF
               </button>
-              {!viewing && thesis.data && (
-                <button className="btn" onClick={onGoNewsletter}>Publish the morning note <ArrowRight size={14} /></button>
-              )}
             </div>
           </>
         )}
@@ -2772,466 +2659,6 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   );
 };
 
-/* ================================================================
-   TAB — NEWSLETTER
-   ================================================================ */
-
-const copyText = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
-const PAPER_BIAS = { bullish: "#1E7A4F", bearish: "#B8503F", neutral: "#A87B2E" };
-
-/* ================================================================
-   DAILY TRADE PLAN SECTION — rendered inside the newsletter paper
-   ================================================================ */
-
-const TradePlanSection = ({ plan }) => {
-  if (!plan) return null;
-  const biasC = plan.bias === "bullish" ? "#1E7A4F" : plan.bias === "bearish" ? "#B8503F" : "#A87B2E";
-
-  return (
-    <>
-      <div className="tp-divider">
-        <div className="tp-divider-line" />
-        <div className="tp-divider-label">Daily Trade Plan — {plan.etfLabel || "SPY"}</div>
-        <div className="tp-divider-line" />
-      </div>
-
-      {/* Bias Meter */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <span style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: biasC }}>
-          ■ Bias: {plan.biasLabel}
-        </span>
-        {plan.internals?.vixPrice && (
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: "var(--paper-muted)" }}>
-            VIX {plan.internals.vixPrice} · {plan.internals.vixRead}
-          </span>
-        )}
-      </div>
-
-      {/* Macro Risk Note */}
-      {plan.macroRisk && (
-        <div style={{ border: "1.5px solid rgba(168,123,46,.35)", borderLeft: "3px solid #A87B2E", borderRadius: "0 5px 5px 0", background: "rgba(168,123,46,.07)", padding: "9px 13px", marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, color: "var(--paper-muted)" }}>
-          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", color: "#A87B2E", fontWeight: 700 }}>■■ Macro Risk Note: </span>
-          {plan.macroRisk}
-        </div>
-      )}
-
-      {/* Pre-Market Checklist */}
-      <div className="np-sec">Pre-Market Checklist</div>
-      <div className="tp-checklist">
-        {plan.checklist && Object.entries({
-          "Overnight": plan.checklist.overnightConditions,
-          "Key Levels": plan.checklist.keyLevels,
-          "Events": plan.checklist.economicEvents,
-          "Game Plan": plan.checklist.gamePlan,
-          "Risk Mgmt": plan.checklist.riskManagement,
-        }).filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className="tp-check-item">
-            <span className="tp-check-label">{k}</span>
-            <span style={{ fontSize: 11.5, lineHeight: 1.55 }}>{v}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Key S/R */}
-      {(plan.levels?.spyResistance?.length || plan.levels?.spySupport?.length) ? (
-        <>
-          <div className="np-sec">Key Support & Resistance — {plan.etfLabel || "SPY"}</div>
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap", fontFamily: "'JetBrains Mono',monospace", fontSize: 12 }}>
-            {plan.levels.spyResistance?.length > 0 && (
-              <div>
-                <span style={{ color: "#B8503F", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}>Resistance: </span>
-                {plan.levels.spyResistance.join(" · ")}
-              </div>
-            )}
-            {plan.levels.spySupport?.length > 0 && (
-              <div>
-                <span style={{ color: "#1E7A4F", fontWeight: 700, fontSize: 10, letterSpacing: ".08em", textTransform: "uppercase" }}>Support: </span>
-                {plan.levels.spySupport.join(" · ")}
-              </div>
-            )}
-          </div>
-        </>
-      ) : null}
-
-      {/* Bullish / Bearish Setups */}
-      <div className="np-sec">Trade Setups</div>
-      <div className="tp-setups-grid">
-        <div className="tp-setup-box bull">
-          <h5>Bullish Setups</h5>
-          {(plan.bullishSetups || []).map((s, i) => (
-            <div key={i} style={{ marginBottom: i < plan.bullishSetups.length - 1 ? 8 : 0 }}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 10.5, color: "#1E7A4F", marginBottom: 3 }}>{i + 1}. {s.label}</div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Entry</span><span>{s.entry}</span></div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Target</span><span>{s.target}</span></div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Stop</span><span>{s.stop}</span></div>
-              {s.options && <div className="tp-setup-row"><span className="tp-setup-key">Options</span><span style={{ fontSize: 10.5 }}>{s.options}</span></div>}
-            </div>
-          ))}
-        </div>
-        <div className="tp-setup-box bear">
-          <h5>Bearish Setups</h5>
-          {(plan.bearishSetups || []).map((s, i) => (
-            <div key={i} style={{ marginBottom: i < plan.bearishSetups.length - 1 ? 8 : 0 }}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 10.5, color: "#B8503F", marginBottom: 3 }}>{i + 1}. {s.label}</div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Entry</span><span>{s.entry}</span></div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Target</span><span>{s.target}</span></div>
-              <div className="tp-setup-row"><span className="tp-setup-key">Stop</span><span>{s.stop}</span></div>
-              {s.options && <div className="tp-setup-row"><span className="tp-setup-key">Options</span><span style={{ fontSize: 10.5 }}>{s.options}</span></div>}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Macro Futures Bias */}
-      <div className="np-sec">Macro Futures Bias</div>
-      <table className="tp-futures-table">
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Chg %</th>
-            <th>Read</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(plan.futuresBias || []).map((row) => (
-            <tr key={row.symbol}>
-              <td style={{ fontWeight: 700, fontFamily: "'JetBrains Mono',monospace" }}>{row.symbol}</td>
-              <td style={{ color: row.changePct == null ? C.muted : row.changePct >= 0 ? "#1E7A4F" : "#B8503F", fontWeight: 600 }}>
-                {row.changePct != null ? (row.changePct >= 0 ? "+" : "") + row.changePct + "%" : "—"}
-                {row.price != null ? ` (${row.price})` : ""}
-              </td>
-              <td style={{ color: "var(--paper-muted)", fontSize: 10.5 }}>{row.read}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      {/* Market Internals */}
-      <div className="np-sec">Market Internals</div>
-      <div className="tp-internals-row">
-        <div className="tp-internal-cell">
-          <div className="label">VIX Outlook</div>
-          <div className="val">{plan.internals?.vixPrice ? `VIX ${plan.internals.vixPrice}` : "—"}<br /><span style={{ fontSize: 10.5, color: "var(--paper-muted)" }}>{plan.internals?.vixRead || "—"}</span></div>
-        </div>
-        <div className="tp-internal-cell">
-          <div className="label">Top Gamma / Pivot</div>
-          <div className="val" style={{ fontFamily: "'JetBrains Mono',monospace" }}>{plan.internals?.gammaStrikes || "—"}</div>
-        </div>
-        <div className="tp-internal-cell">
-          <div className="label">Pre-Market Gap Map</div>
-          <div className="val" style={{ fontSize: 11 }}>
-            <span style={{ color: "#1E7A4F", fontWeight: 600 }}>Leaders:</span> {plan.internals?.leaders || "—"}<br />
-            <span style={{ color: "#B8503F", fontWeight: 600 }}>Laggards:</span> {plan.internals?.laggards || "—"}
-          </div>
-        </div>
-      </div>
-
-      {/* Economic Calendar */}
-      {plan.calendarHighlights?.length > 0 && (
-        <>
-          <div className="np-sec">Economic Calendar Highlights</div>
-          <ul className="np-watch">
-            {plan.calendarHighlights.map((c, i) => (
-              <li key={i}>
-                <span className="mono" style={{ fontSize: 11, color: c.importance === "high" ? "#B8503F" : "#A87B2E", fontWeight: 600 }}>{c.time}</span>
-                {" — "}{c.event}{" "}
-                <span style={{ fontSize: 10, color: "var(--paper-muted)" }}>({c.importance})</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {/* Confirmation Rule */}
-      {plan.confirmationRule && (
-        <>
-          <div className="np-sec">Notes & Risk Management</div>
-          <div className="tp-confirm">{plan.confirmationRule}</div>
-        </>
-      )}
-    </>
-  );
-};
-
-const buildMarkdown = ({ d, thesis, market, points, edition }) => {
-  const lines = [];
-  const stanceRead = d.stanceRead || thesis.stanceRead;
-  const pillarRead = d.pillarRead || thesis.pillarRead;
-  lines.push(`# OVERWATCH DAILY BIAS — No. ${edition}`);
-  lines.push(`**${d._date || dateShort()}** · Bias: **${(thesis.bias || "").toUpperCase()}** · Score ${fmtSigned(thesis.score, 0)} · Conviction ${thesis.conviction}/10`);
-  lines.push("");
-  lines.push(`## ${d.headline}`);
-  if (d.dek) lines.push(`*${d.dek}*`);
-  if (d.timestamp || d._generatedAt) lines.push(`Generated: ${d.timestamp || d._generatedAt}`);
-  if (d.timingNote) lines.push(`Timing note: ${d.timingNote}`);
-  if (stanceRead || pillarRead) {
-    lines.push("");
-    lines.push(`## Desk stance & weights`);
-    if (stanceRead) lines.push(`- **Desk stance:** ${stanceRead}`);
-    if (pillarRead) lines.push(`- **Pillar model:** ${pillarRead}`);
-  }
-  lines.push("");
-  lines.push(`**The lede.** ${d.executiveSummary}`);
-  lines.push("");
-  lines.push(`## Market recap`);
-  lines.push(d.marketRecap || "");
-  if (d.marketOutlook) {
-    lines.push("");
-    lines.push(`## Market outlook`);
-    lines.push(d.marketOutlook);
-  }
-  const tks = (market?.tickers || []).slice(0, 6);
-  if (tks.length) {
-    lines.push("");
-    lines.push("| Ticker | Last | Chg % |");
-    lines.push("|---|---|---|");
-    tks.forEach((t) => lines.push(`| ${t.symbol} | ${fmtNum(t.price)} | ${fmtSigned(t.changePct, 2, "%")} |`));
-  }
-  lines.push("");
-  lines.push(`## The call`);
-  lines.push(d.thesisNarrative || "");
-  lines.push("");
-  if (thesis.levels?.action) lines.push(`- **Action level:** ${thesis.levels.action}`);
-  if (thesis.levels?.upside) lines.push(`- **Upside:** ${thesis.levels.upside}`);
-  if (thesis.levels?.downside) lines.push(`- **Downside:** ${thesis.levels.downside}`);
-  if (thesis.gamePlan) lines.push(`- **Game plan:** ${thesis.gamePlan}`);
-  if (thesis.invalidation) lines.push(`- **Invalidation:** ${thesis.invalidation}`);
-  lines.push("");
-  lines.push(`## Watch today`);
-  (d.watchToday || []).forEach((w) => lines.push(`- ${w}`));
-  const calendarGroups = points?.calendarGroups || {};
-  const calendarPool = [
-    ...(calendarGroups.today || []),
-    ...(calendarGroups.tomorrow || []),
-    ...(calendarGroups.upcoming || []),
-    ...(points?.calendar || []),
-  ];
-  const primaryCal = pickCalendarCatalyst(calendarPool);
-  const seenCal = new Set();
-  const cal = [primaryCal, ...calendarPool]
-    .filter((c) => c && c.importance !== "low")
-    .filter((c) => {
-      const key = `${c.date || ""}|${c.time || ""}|${c.event || ""}`;
-      if (seenCal.has(key)) return false;
-      seenCal.add(key);
-      return true;
-    })
-    .slice(0, 5);
-  cal.forEach((c) => lines.push(`- ${c.time} — ${c.event} (${c.importance})`));
-  lines.push("");
-  lines.push(`## Risk radar`);
-  lines.push(d.riskRadar || "");
-  lines.push("");
-  lines.push(`*${d.finalWord || ""}*`);
-  lines.push("");
-  lines.push(`— Overwatch Daily Bias Desk · live public market data + optional AI synthesis · verify before trading · not financial advice`);
-
-  const tp = d.tradePlan;
-  if (tp) {
-    lines.push("");
-    lines.push("---");
-    lines.push("");
-    lines.push(`## Daily Trade Plan — ${tp.etfLabel || "SPY"}`);
-    lines.push(`**Bias:** ${tp.biasLabel} · VIX ${tp.internals?.vixPrice || "—"}`);
-    if (tp.macroRisk) lines.push(`\n> **Macro Risk:** ${tp.macroRisk}`);
-    lines.push("");
-    lines.push("### Pre-Market Checklist");
-    if (tp.checklist) {
-      Object.entries({ "Overnight Conditions": tp.checklist.overnightConditions, "Key Levels": tp.checklist.keyLevels, "Economic Events": tp.checklist.economicEvents, "Game Plan": tp.checklist.gamePlan, "Risk Management": tp.checklist.riskManagement }).filter(([, v]) => v).forEach(([k, v]) => lines.push(`- **${k}:** ${v}`));
-    }
-    if (tp.levels?.spyResistance?.length || tp.levels?.spySupport?.length) {
-      lines.push("");
-      lines.push("### Key Support & Resistance — SPY");
-      if (tp.levels.spyResistance?.length) lines.push(`- **Resistance:** ${tp.levels.spyResistance.join(", ")}`);
-      if (tp.levels.spySupport?.length) lines.push(`- **Support:** ${tp.levels.spySupport.join(", ")}`);
-    }
-    if (tp.bullishSetups?.length) {
-      lines.push("");
-      lines.push("### Bullish Setups");
-      tp.bullishSetups.forEach((s, i) => lines.push(`${i + 1}. **${s.label}** | Entry: ${s.entry} | Target: ${s.target} | Stop: ${s.stop}${s.options ? ` | ${s.options}` : ""}`));
-    }
-    if (tp.bearishSetups?.length) {
-      lines.push("");
-      lines.push("### Bearish Setups");
-      tp.bearishSetups.forEach((s, i) => lines.push(`${i + 1}. **${s.label}** | Entry: ${s.entry} | Target: ${s.target} | Stop: ${s.stop}${s.options ? ` | ${s.options}` : ""}`));
-    }
-    if (tp.futuresBias?.length) {
-      lines.push("");
-      lines.push("### Macro Futures Bias");
-      lines.push("| Symbol | Chg % | Read |");
-      lines.push("|---|---|---|");
-      tp.futuresBias.forEach((row) => lines.push(`| **${row.symbol}** | ${row.changePct != null ? (row.changePct >= 0 ? "+" : "") + row.changePct + "%" : "—"} | ${row.read} |`));
-    }
-    if (tp.calendarHighlights?.length) {
-      lines.push("");
-      lines.push("### Economic Calendar Highlights");
-      tp.calendarHighlights.forEach((c) => lines.push(`- **${c.time}** — ${c.event} (${c.importance})`));
-    }
-    if (tp.confirmationRule) {
-      lines.push("");
-      lines.push(`> **Confirmation Rule:** ${tp.confirmationRule}`);
-    }
-  }
-
-  return lines.join("\n");
-};
-
-const buildNewsletterPrintHTML = ({ d, thesis, market, points, edition }) => {
-  const t = d._thesis || thesis;
-  const biasColor = t?.bias === "bullish" ? "#22c55e" : t?.bias === "bearish" ? "#ef4444" : "#c9a84c";
-  const tp = d.tradePlan;
-  const cal = [
-    ...(points?.calendarGroups?.today || []),
-    ...(points?.calendarGroups?.tomorrow || []),
-    ...(points?.calendarGroups?.upcoming || []),
-    ...(points?.calendar || []),
-  ].filter((c) => c && c.importance !== "low").slice(0, 5);
-
-  const row = (label, val) => val ? `<tr><td class="lbl">${label}</td><td>${val}</td></tr>` : "";
-
-  const setupRows = (setups) => (setups || []).map((s) =>
-    `<tr><td><b>${s.label}</b></td><td>${s.entry}</td><td>${s.target}</td><td>${s.stop}</td><td>${s.options || "—"}</td></tr>`
-  ).join("");
-
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Overwatch No. ${edition} — ${d._date || ""}</title><style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Georgia,'Times New Roman',serif;font-size:13px;color:#111;background:#fff;padding:32px 48px;max-width:800px;margin:0 auto}
-    h1{font-size:22px;letter-spacing:.04em;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:6px}
-    .meta{font-size:11px;color:#555;margin-bottom:18px;font-family:Arial,sans-serif;letter-spacing:.02em}
-    .bias{font-size:28px;font-weight:900;letter-spacing:.08em;color:${biasColor};font-family:'Helvetica Neue',Arial,sans-serif}
-    h2{font-size:14px;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #ddd;padding-bottom:3px}
-    h3{font-size:12px;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;margin:12px 0 5px;text-transform:uppercase;letter-spacing:.04em}
-    p{margin-bottom:10px;line-height:1.65}
-    ul{margin:6px 0 10px 18px;line-height:1.7}
-    table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:11.5px}
-    th{background:#f0f0f0;padding:5px 8px;text-align:left;font-family:Arial,sans-serif;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
-    td{padding:4px 8px;border-bottom:1px solid #e8e8e8;vertical-align:top}
-    td.lbl{width:140px;color:#555;font-family:Arial,sans-serif;font-size:11px;font-weight:600}
-    .headline{font-size:18px;font-style:italic;margin:10px 0 4px;line-height:1.4}
-    .dek{font-size:13px;color:#444;font-style:italic;margin-bottom:14px}
-    .callout{background:#f8f8f8;border-left:3px solid #c9a84c;padding:10px 14px;margin:12px 0;font-size:12px;line-height:1.6}
-    .bull{color:#16a34a}.bear{color:#dc2626}.brass{color:#c9a84c}
-    .footer{margin-top:28px;padding-top:10px;border-top:1px solid #ccc;font-size:10px;color:#777;font-family:Arial,sans-serif}
-    .guard{padding:8px 12px;margin:6px 0;border-left:3px solid #999;font-size:12px;background:#fafafa}
-    .guard.red{border-color:#dc2626}.guard.amber{border-color:#d97706}
-    .tp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-    @media print{body{padding:20px 30px}h1{font-size:18px}.bias{font-size:22px}}
-  </style></head><body>
-    <h1>OVERWATCH DAILY BIAS — No. ${edition}</h1>
-    <div class="meta">${d._date || ""} &nbsp;·&nbsp; Bias: <b style="color:${biasColor}">${(t?.bias || "").toUpperCase()}</b> &nbsp;·&nbsp; Score ${t?.score >= 0 ? "+" : ""}${t?.score ?? 0} &nbsp;·&nbsp; Conviction ${t?.conviction ?? "—"}/10 &nbsp;·&nbsp; ${d.timestamp || d._generatedAt || ""}</div>
-
-    <div class="bias">${(t?.bias || "—").toUpperCase()}</div>
-    <div class="headline">"${d.headline}"</div>
-    ${d.dek ? `<div class="dek">${d.dek}</div>` : ""}
-
-    ${d.executiveSummary ? `<div class="callout"><b>The lede.</b> ${d.executiveSummary}</div>` : ""}
-
-    ${t?.stanceRead || t?.pillarRead ? `
-    <h2>Desk stance</h2>
-    <table><tbody>
-      ${row("Desk stance", t.stanceRead)}
-      ${row("Pillar model", t.pillarRead)}
-    </tbody></table>` : ""}
-
-    <h2>Market recap</h2>
-    <p>${d.marketRecap || "—"}</p>
-    ${d.marketOutlook ? `<h2>Market outlook</h2><p>${d.marketOutlook}</p>` : ""}
-
-    ${(market?.tickers || []).length ? `
-    <table><thead><tr><th>Ticker</th><th>Last</th><th>Chg %</th></tr></thead><tbody>
-      ${(market.tickers || []).slice(0, 6).map((tk) =>
-        `<tr><td><b>${tk.symbol}</b></td><td>${tk.price != null ? Number(tk.price).toLocaleString() : "—"}</td><td class="${Number(tk.changePct) >= 0 ? "bull" : "bear"}">${Number(tk.changePct) >= 0 ? "+" : ""}${Number(tk.changePct).toFixed(2)}%</td></tr>`
-      ).join("")}
-    </tbody></table>` : ""}
-
-    <h2>The call</h2>
-    <p>${d.thesisNarrative || "—"}</p>
-    <table><tbody>
-      ${row("Action level", t?.levels?.action)}
-      ${row("Upside target", t?.levels?.upside)}
-      ${row("Downside target", t?.levels?.downside)}
-      ${row("Game plan", t?.gamePlan)}
-      ${row("Invalidation", t?.invalidation)}
-    </tbody></table>
-
-    ${(d.watchToday || []).length ? `
-    <h2>Watch today</h2>
-    <ul>${(d.watchToday || []).map((w) => `<li>${w}</li>`).join("")}</ul>` : ""}
-
-    ${cal.length ? `
-    <h2>Economic calendar</h2>
-    <table><thead><tr><th>Time</th><th>Event</th><th>Importance</th></tr></thead><tbody>
-      ${cal.map((c) => `<tr><td>${c.time || "—"}</td><td>${c.event}</td><td>${c.importance}</td></tr>`).join("")}
-    </tbody></table>` : ""}
-
-    <h2>Risk radar</h2>
-    <p>${d.riskRadar || "—"}</p>
-
-    ${d.finalWord ? `<div class="callout"><i>${d.finalWord}</i></div>` : ""}
-
-    ${t?.invalidation || t?.standAside ? `
-    <div class="guard red"><b>Thesis invalidation:</b> ${t?.invalidation || "—"}</div>
-    <div class="guard amber"><b>Stand-aside conditions:</b> ${t?.standAside || "—"}</div>` : ""}
-
-    ${tp ? `
-    <h2>Daily trade plan — SPY</h2>
-    <p><b>Bias:</b> ${tp.biasLabel} &nbsp;·&nbsp; VIX ${tp.internals?.vixPrice || "—"}</p>
-    ${tp.macroRisk ? `<div class="callout"><b>Macro risk:</b> ${tp.macroRisk}</div>` : ""}
-
-    ${tp.checklist ? `
-    <h3>Pre-market checklist</h3>
-    <table><tbody>
-      ${row("Overnight", tp.checklist.overnightConditions)}
-      ${row("Key levels", tp.checklist.keyLevels)}
-      ${row("Events", tp.checklist.economicEvents)}
-      ${row("Game plan", tp.checklist.gamePlan)}
-      ${row("Risk mgmt", tp.checklist.riskManagement)}
-    </tbody></table>` : ""}
-
-    ${tp.bullishSetups?.length ? `
-    <h3>Bullish setups</h3>
-    <table><thead><tr><th>Setup</th><th>Entry</th><th>Target</th><th>Stop</th><th>Options</th></tr></thead><tbody>
-      ${setupRows(tp.bullishSetups)}
-    </tbody></table>` : ""}
-
-    ${tp.bearishSetups?.length ? `
-    <h3>Bearish setups</h3>
-    <table><thead><tr><th>Setup</th><th>Entry</th><th>Target</th><th>Stop</th><th>Options</th></tr></thead><tbody>
-      ${setupRows(tp.bearishSetups)}
-    </tbody></table>` : ""}
-
-    ${tp.futuresBias?.length ? `
-    <h3>Macro futures bias</h3>
-    <table><thead><tr><th>Symbol</th><th>Chg %</th><th>Read</th></tr></thead><tbody>
-      ${tp.futuresBias.map((r) => `<tr><td><b>${r.symbol}</b></td><td class="${r.changePct >= 0 ? "bull" : "bear"}">${r.changePct != null ? (r.changePct >= 0 ? "+" : "") + r.changePct + "%" : "—"}</td><td>${r.read}</td></tr>`).join("")}
-    </tbody></table>` : ""}
-
-    ${tp.confirmationRule ? `<div class="callout"><b>Confirmation rule:</b> ${tp.confirmationRule}</div>` : ""}
-    ` : ""}
-
-    <div class="footer">Overwatch Daily Bias Desk &nbsp;·&nbsp; Live public market data + optional AI synthesis &nbsp;·&nbsp; Verify before trading &nbsp;·&nbsp; Not financial advice</div>
-  </body></html>`;
-};
 
 const buildThesisPrintHTML = (t) => {
   if (!t) return "";
@@ -3310,212 +2737,6 @@ const downloadPDF = (html, filename) => {
   setTimeout(() => { win.print(); }, 400);
 };
 
-const NewsletterTab = ({
-  nl,
-  thesis,
-  market,
-  points,
-  edition,
-  newsletterHistory = [],
-  viewingNewsletter,
-  setViewingNewsletter,
-  onDeleteNewsletter,
-  onGenerate,
-  onGoThesis,
-  notify,
-}) => {
-  const [copied, setCopied] = useState(false);
-  const currentThesis = thesis.data;
-  const t = viewingNewsletter?._thesis || currentThesis;
-  const d = viewingNewsletter || nl.data;
-  const displayedEdition = d?._edition || edition;
-
-  if (!currentThesis && !newsletterHistory.length)
-    return (
-      <EmptyState
-        icon={Mail}
-        title="Nothing to publish yet"
-        body="The morning note is built from today's thesis. Run the synthesis in the Thesis Lab first, then come back to press print."
-        action={<button className="btn btn-brass" onClick={onGoThesis}><FlaskConical size={15} /> Go to Thesis Lab</button>}
-      />
-    );
-
-  const doCopy = async () => {
-    if (!d || !t) return;
-    const ok = await copyText(buildMarkdown({ d, thesis: t, market, points, edition: displayedEdition }));
-    setCopied(ok);
-    notify(ok ? "Newsletter copied as markdown" : "Copy failed — select the text manually", ok ? "ok" : "err");
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const doDownloadPDF = () => {
-    if (!d || !t) return;
-    const html = buildNewsletterPrintHTML({ d, thesis: t, market, points, edition: displayedEdition });
-    downloadPDF(html, `overwatch-no${displayedEdition}-${d._date || "today"}.pdf`);
-  };
-
-  const biasC = PAPER_BIAS[t?.bias] || PAPER_BIAS.neutral;
-  const pct = ((clamp(t?.score ?? 0, -100, 100) + 100) / 200) * 100;
-  const calendarGroups = points?.calendarGroups || {};
-  const calendarPool = [
-    ...(calendarGroups.today || []),
-    ...(calendarGroups.tomorrow || []),
-    ...(calendarGroups.upcoming || []),
-    ...(points?.calendar || []),
-  ];
-  const primaryCal = pickCalendarCatalyst(calendarPool);
-  const seenCal = new Set();
-  const cal = [primaryCal, ...calendarPool]
-    .filter((c) => c && c.importance !== "low")
-    .filter((c) => {
-      const key = `${c.date || ""}|${c.time || ""}|${c.event || ""}`;
-      if (seenCal.has(key)) return false;
-      seenCal.add(key);
-      return true;
-    })
-    .slice(0, 4);
-  const newsletterStanceRead = d?.stanceRead || t?.stanceRead;
-  const newsletterPillarRead = d?.pillarRead || t?.pillarRead;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ display: "flex", gap: 9, justifyContent: "center", flexWrap: "wrap" }}>
-        <button className="btn btn-brass" onClick={onGenerate} disabled={nl.status === "loading" || !currentThesis} title={!currentThesis ? "Build today's thesis first" : ""}>
-          {nl.status === "loading" ? <><RefreshCw size={14} className="spin" /> Writing the note…</> : nl.data ? <><RotateCcw size={14} /> Regenerate note</> : <><Mail size={14} /> Generate morning note</>}
-        </button>
-        {!currentThesis && (
-          <button className="btn" onClick={onGoThesis}><FlaskConical size={14} /> Build today's thesis</button>
-        )}
-        {d && (
-          <button className="btn" onClick={doCopy}>
-            {copied ? <><Check size={14} color={C.bull} /> Copied</> : <><Copy size={14} /> Copy as markdown</>}
-          </button>
-        )}
-        {d && t && (
-          <button className="btn" onClick={doDownloadPDF} title="Download as PDF">
-            <FileText size={14} /> Download PDF
-          </button>
-        )}
-      </div>
-
-      {viewingNewsletter && (
-        <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
-          <History size={14} color={C.brass} />
-          <span style={{ fontSize: 12.5, color: C.muted }}>Viewing archived newsletter — {archiveStamp(viewingNewsletter)} · No. {viewingNewsletter._edition || "—"}</span>
-          <button className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => setViewingNewsletter(null)}>Back to latest</button>
-        </div>
-      )}
-
-      {nl.status === "error" && <ErrBlock msg={nl.error} onRetry={onGenerate} />}
-      {nl.status === "loading" && !d && (
-        <div className="paper-wrap"><div className="paper"><LoadingBlock lines={6} msg="Setting type on today's edition…" /></div></div>
-      )}
-
-      {d && t && (
-        <div className="paper-wrap">
-          <div className="paper">
-            <div className="np-mast">
-              <div className="np-brand">OVERWATCH <span>DAILY BIAS</span></div>
-              <div className="np-meta">{d._date || dateShort()} · No. {displayedEdition}{(d.timestamp || d._generatedAt) ? ` · ${d.timestamp || d._generatedAt}` : ""}</div>
-            </div>
-            <div className="np-biasbar">
-              <span className="np-biasword" style={{ color: biasC }}>{(t.bias || "").toUpperCase()}</span>
-              <div style={{ position: "relative", width: 132, height: 8, borderRadius: 4, background: "linear-gradient(90deg,#B8503F,#D8CFBC 50%,#1E7A4F)" }}>
-                <div style={{ position: "absolute", top: -3, bottom: -3, width: 3.5, borderRadius: 2, background: "#1A1916", left: `${pct}%`, transform: "translateX(-50%)" }} />
-              </div>
-              <span className="np-meta">SCORE {fmtSigned(t.score, 0)} · CONVICTION {t.conviction}/10</span>
-            </div>
-
-            <h1 className="np-h1">{d.headline}</h1>
-            {d.dek && <div className="np-dek">{d.dek}</div>}
-            {d.timingNote && <div className="np-time-note"><b>Timing note</b>{d.timingNote}</div>}
-            {(newsletterStanceRead || newsletterPillarRead) && (
-              <div className="np-config">
-                {newsletterStanceRead && <div><b>Desk stance</b><span>{newsletterStanceRead}</span></div>}
-                {newsletterPillarRead && <div><b>Pillar model</b><span>{newsletterPillarRead}</span></div>}
-              </div>
-            )}
-
-            <div className="np-sec">The lede</div>
-            <p className="np-body np-lede">{d.executiveSummary}</p>
-
-            <div className="np-sec">Market recap</div>
-            <p className="np-body">{d.marketRecap}</p>
-            {(market?.tickers || []).length > 0 && (
-              <table className="np-table">
-                <thead><tr><th>Ticker</th><th>Last</th><th>Chg %</th></tr></thead>
-                <tbody>
-                  {(market.tickers || []).slice(0, 6).map((tk) => (
-                    <tr key={tk.symbol}>
-                      <td style={{ fontWeight: 700 }}>{tk.symbol}</td>
-                      <td>{fmtNum(tk.price, tk.symbol === "US10Y" ? 3 : 2)}</td>
-                      <td style={{ color: tk.changePct >= 0 ? "#1E7A4F" : "#B8503F", fontWeight: 600 }}>{fmtSigned(tk.changePct, 2, "%")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {d.marketOutlook && (
-              <>
-                <div className="np-sec">Market outlook</div>
-                <p className="np-body">{d.marketOutlook}</p>
-              </>
-            )}
-
-            <div className="np-sec">The call</div>
-            <p className="np-body">{d.thesisNarrative}</p>
-            <div style={{ border: "1px solid var(--paper-line)", borderRadius: 6, padding: "12px 16px", marginTop: 12, fontSize: 13.5, lineHeight: 1.75 }}>
-              {t.levels?.action && <div><b style={{ color: "#A87B2E" }}>Action level —</b> {t.levels.action}</div>}
-              {t.levels?.upside && <div><b style={{ color: "#1E7A4F" }}>Upside —</b> {t.levels.upside}</div>}
-              {t.levels?.downside && <div><b style={{ color: "#B8503F" }}>Downside —</b> {t.levels.downside}</div>}
-              {t.invalidation && <div><b>Invalidation —</b> {t.invalidation}</div>}
-            </div>
-
-            <div className="np-sec">Watch today</div>
-            <ul className="np-watch">
-              {(d.watchToday || []).map((w, i) => <li key={i}>{w}</li>)}
-              {cal.map((c, i) => (
-                <li key={`c${i}`}><span className="mono" style={{ fontSize: 11.5, color: "#A87B2E", fontWeight: 600 }}>{c.time}</span> — {c.event}</li>
-              ))}
-            </ul>
-
-            <div className="np-sec">Risk radar</div>
-            <div className="np-risk">{d.riskRadar}</div>
-
-            <div className="np-final">{d.finalWord} <span style={{ fontStyle: "normal", fontFamily: "'Space Grotesk',sans-serif", fontSize: 12.5, fontWeight: 700, letterSpacing: ".06em" }}>— THE OVERWATCH DESK</span></div>
-
-            <TradePlanSection plan={d.tradePlan || (t ? d : null)?.tradePlan} />
-
-            <div className="np-foot">Overwatch Daily Bias · internal desk note · generated {d.timestamp || d._generatedAt || d._date || stampNow()} · live public market data + optional AI synthesis · verify levels before trading · not financial advice</div>
-          </div>
-        </div>
-      )}
-
-      {!d && currentThesis && nl.status === "idle" && (
-        <div className="paper-wrap">
-          <div className="paper" style={{ textAlign: "center", padding: "56px 40px" }}>
-            <div className="np-brand" style={{ fontSize: 30 }}>OVERWATCH <span>DAILY BIAS</span></div>
-            <p style={{ fontFamily: "'Lora',serif", fontStyle: "italic", color: "var(--paper-muted)", marginTop: 14, fontSize: 15 }}>
-              Today's thesis is locked: {(t.bias || "").toUpperCase()} — "{t.headline}". Press generate and the desk will set today's edition in print.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {!currentThesis && newsletterHistory.length > 0 && !d && (
-        <EmptyState
-          icon={Mail}
-          title="No current thesis loaded"
-          body="You can reopen archived newsletters from the Archives tab, or build a fresh thesis to publish a new edition."
-          action={<button className="btn btn-brass" onClick={onGoThesis}><FlaskConical size={15} /> Go to Thesis Lab</button>}
-        />
-      )}
-
-    </div>
-  );
-};
-
 /* ================================================================
    TAB — ARCHIVES
    ================================================================ */
@@ -3578,51 +2799,40 @@ const ArchiveTab = ({
   archiveHistory,
   viewing,
   setViewing,
-  viewingNewsletter,
-  setViewingNewsletter,
   onDeleteEntry,
   onGoThesis,
-  onGoNewsletter,
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card icon={Mail} title="Automated newsletters" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
         <CloudNewsletterList />
       </Card>
-      <Card icon={History} title="Session archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · synced across devices` : "No archived entries yet"}>
+      <Card icon={History} title="Session archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
-          <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis and newsletter lands here automatically. Newsletters include the attached thesis so you always have the full picture.</div>
+          <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
           {archiveHistory.map((entry) => {
-            const isNl = entry._type === "newsletter";
-            const t = isNl ? entry._thesis : entry;
+            const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
-            const isViewingThis = isNl ? viewingNewsletter?._id === entry._id : viewing?._id === entry._id;
+            const isViewingThis = viewing?._id === entry._id;
             return (
               <div
                 key={entry._id}
                 className={`hist-row ${isViewingThis ? "viewing" : ""}`}
-                onClick={() => {
-                  if (isNl) { setViewingNewsletter(entry); onGoNewsletter?.(); }
-                  else { setViewing(entry); onGoThesis?.(); }
-                }}
+                onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }}
               >
                 <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
-                {isNl
-                  ? <span className="chip b-brass" style={{ flex: "none", fontSize: 10 }}>No. {entry._edition || "—"}</span>
-                  : <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
-                }
+                <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
                 <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
                 <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
-                  {isNl ? (entry.headline || "Untitled edition") : (entry.headline || "—")}
+                  {entry.headline || t?.headline || "—"}
                 </span>
                 {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
                 <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => {
                   e.stopPropagation();
-                  if (isNl) downloadPDF(buildNewsletterPrintHTML({ d: entry, thesis: entry._thesis, market: null, points: null, edition: entry._edition || "—" }), `overwatch-no${entry._edition || "0"}-${entry._date || "archived"}.pdf`);
-                  else downloadPDF(buildThesisPrintHTML(entry), `overwatch-thesis-${entry._date || entry.instrument || "archived"}.pdf`);
+                  downloadPDF(buildThesisPrintHTML(t || entry), `overwatch-thesis-${entry._date || entry.instrument || "archived"}.pdf`);
                 }}>
                   <FileText size={12} />
                 </button>
@@ -3701,7 +2911,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
         <div style={{ borderTop: "1px solid var(--line)", margin: "22px 0 14px" }} />
         <div className="mono" style={{ fontSize: 10.5, color: C.muted, lineHeight: 1.8, letterSpacing: ".03em" }}>
           {storageOk
-            ? "● Settings, thesis archive, and newsletter archive persist in this browser."
+            ? "● Settings and thesis archive persist in this browser."
             : "○ Persistent storage unavailable here — settings and archives live for this session only."}
         </div>
       </div>
@@ -3951,11 +3161,8 @@ export default function Overwatch() {
   const [points, setPoints] = useState(IDLE);
   const [recap, setRecap] = useState(IDLE);
   const [thesis, setThesis] = useState(IDLE);
-  const [nl, setNl] = useState(IDLE);
-
   const [archiveHistory, setArchiveHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
-  const [viewingNewsletter, setViewingNewsletter] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -3996,14 +3203,9 @@ export default function Overwatch() {
       if (Array.isArray(ah) && ah.length) {
         setArchiveHistory(ah);
       } else {
-        // Migration: merge old thesis history + newsletter history into one list
         const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
-        const legacyNl = (await loadStored(NEWSLETTER_HISTORY_KEY, [])) || [];
-        const nlIds = new Set(legacyNl.map((n) => n._thesisId).filter(Boolean));
-        const thesisOnly = legacyThesis.filter((t) => !nlIds.has(t._id)).map((t) => ({ ...t, _type: "thesis" }));
-        const nlEntries = legacyNl.map((n) => ({ ...n, _type: "newsletter" }));
-        const merged = [...thesisOnly, ...nlEntries].sort((a, b) => (b._ts || 0) - (a._ts || 0)).slice(0, 60);
-        if (merged.length) setArchiveHistory(merged);
+        const entries = legacyThesis.map((t) => ({ ...t, _type: "thesis" })).slice(0, 60);
+        if (entries.length) setArchiveHistory(entries);
       }
       setStorageReady(true);
     })();
@@ -4093,7 +3295,6 @@ export default function Overwatch() {
 
   const generateThesis = async () => {
     setViewing(null);
-    setViewingNewsletter(null);
     setThesis((s) => ({ ...s, status: "loading", error: null }));
     try {
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
@@ -4119,56 +3320,10 @@ export default function Overwatch() {
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
       setArchiveHistory((h) => [{ ...entry, _type: "thesis" }, ...h].slice(0, 60));
-      setNl(IDLE);
       notify("Thesis locked + saved to the archive", "ok");
     } catch (e) {
       setThesis((s) => ({ ...s, status: "error", error: e.message }));
       notify("Synthesis failed — retry", "err");
-    }
-  };
-
-  const generateNewsletter = async () => {
-    if (!thesis.data) return;
-    setViewingNewsletter(null);
-    setNl((s) => ({ ...s, status: "loading", error: null }));
-    try {
-      const edition = Math.max(1, archiveHistory.filter((e) => e._type === "newsletter").length + 1);
-      const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
-      const focusInstrument = thesis.data?.instrument || instrument;
-      const prompt = newsletterPrompt({ market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes, instrument: focusInstrument });
-      const data = await callDesk("newsletter", prompt, { market: market.data, news: news.data, points: points.data, thesis: thesis.data, timing, edition, weights, lean, risk, notes, instrument: focusInstrument });
-      const entry = {
-        ...data,
-        instrument: focusInstrument,
-        timestamp: data.timestamp || `${timing.generatedAtShort} · ${timing.session}`,
-        timingNote: data.timingNote || thesis.data.timingNote || timing.timingNote,
-        _id: uid(),
-        _date: dateShort(),
-        _time: timing.generatedAtShort || stampNow(),
-        _ts: Date.now(),
-        _edition: edition,
-        _generatedAt: timing.generatedAt,
-        _quoteAsOf: timing.quoteAsOf,
-        _timing: timing,
-        _instrument: focusInstrument,
-        _thesisId: thesis.data?._id || null,
-        _thesis: thesis.data,
-        _weights: weights,
-        _lean: lean,
-        _risk: risk,
-        _notes: notes,
-      };
-      const nlEntry = { ...entry, _type: "newsletter" };
-      setNl({ status: "ready", data: nlEntry, error: null, at: { ts: Date.now(), label: stampNow() } });
-      setArchiveHistory((h) => {
-        // Replace the standalone thesis entry with this newsletter+thesis pair
-        const withoutThesis = h.filter((x) => !(x._type === "thesis" && x._id === thesis.data?._id));
-        return [nlEntry, ...withoutThesis].slice(0, 60);
-      });
-      notify("Morning note saved to the archive", "ok");
-    } catch (e) {
-      setNl((s) => ({ ...s, status: "error", error: e.message }));
-      notify("The note didn't compile — regenerate", "err");
     }
   };
 
@@ -4179,20 +3334,16 @@ export default function Overwatch() {
   const deleteArchiveEntry = (id) => {
     setArchiveHistory((h) => h.filter((x) => x._id !== id));
     setViewing((v) => (v && v._id === id ? null : v));
-    setViewingNewsletter((v) => (v && v._id === id ? null : v));
     notify("Entry deleted from archive", "ok");
   };
   const clearHistory = () => {
     setArchiveHistory([]);
     setViewing(null);
-    setViewingNewsletter(null);
     notify("Archive cleared", "ok");
   };
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
-  const nlHistory = archiveHistory.filter((e) => e._type === "newsletter");
   const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
-  const newsletterBadge = nlHistory.length || null;
   const archiveBadge = archiveHistory.length || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: market.data?.tickers?.length },
@@ -4200,14 +3351,12 @@ export default function Overwatch() {
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Thesis", icon: FlaskConical, badge: thesisHistory.length || null },
-    { id: "newsletter", label: "Newsletter", short: "Brief", icon: Mail, badge: newsletterBadge },
     { id: "archives", label: "Archives", short: "Archive", icon: History, badge: archiveBadge },
   ];
 
   const steps = [
     { n: 1, label: "Sync live data", done: anyData, now: !anyData, go: () => setTab("pulse") },
     { n: 2, label: "Build the thesis", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
-    { n: 3, label: "Publish the note", done: !!nl.data || !!nlHistory.length, now: !!thesis.data && !nl.data, go: () => setTab("newsletter") },
   ];
 
   return (
@@ -4288,18 +3437,6 @@ export default function Overwatch() {
             thesis={thesis} onGenerate={generateThesis}
             history={thesisHistory} viewing={viewing} setViewing={setViewing}
             onDeleteHist={deleteArchiveEntry} anyData={anyData}
-            onGoNewsletter={() => setTab("newsletter")}
-          />
-        )}
-        {tab === "newsletter" && (
-          <NewsletterTab
-            nl={nl} thesis={thesis} market={market.data} points={points.data}
-            edition={Math.max(1, nlHistory.length + 1)}
-            newsletterHistory={nlHistory}
-            viewingNewsletter={viewingNewsletter}
-            setViewingNewsletter={setViewingNewsletter}
-            onDeleteNewsletter={deleteArchiveEntry}
-            onGenerate={generateNewsletter} onGoThesis={() => setTab("thesis")} notify={notify}
           />
         )}
         {tab === "charts" && <ChartsTab lightMode={lightMode} />}
@@ -4308,11 +3445,8 @@ export default function Overwatch() {
             archiveHistory={archiveHistory}
             viewing={viewing}
             setViewing={setViewing}
-            viewingNewsletter={viewingNewsletter}
-            setViewingNewsletter={setViewingNewsletter}
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => setTab("thesis")}
-            onGoNewsletter={() => setTab("newsletter")}
           />
         )}
       </main>
