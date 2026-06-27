@@ -2780,6 +2780,30 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
   return lines.join("\n");
 };
 
+// Short chip labels for the structures fed into a thesis — rendered back in the output as confirmation.
+const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
+  const live = deskLiveContext(market, points, instrument);
+  const { S, days } = resolveEnv(deskTools.env, live);
+  if (!(S > 0)) return [];
+  const out = [];
+  const o = deskTools.options;
+  out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
+  const h = deskTools.hedge;
+  if (h.beta.on) out.push(`Beta hedge · ${h.beta.mode === "puts" ? `${live.cfg.symbol} puts` : `${live.futSym} futures`}`);
+  if (h.vertical.on) {
+    const kL = numOr(h.vertical.longStrike, roundStrike(S));
+    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
+    out.push(`${h.vertical.type} vertical ${fmtNum(kL, 0)}/${fmtNum(kS, 0)}`);
+  }
+  if (h.calendar.on) {
+    const kN = numOr(h.calendar.strike, roundStrike(S));
+    const kF = numOr(h.calendar.farStrike, kN);
+    out.push(`${h.calendar.type} ${kN === kF ? "calendar" : "diagonal"} ${fmtNum(kN, 0)} · ${numOr(h.calendar.nearDays, 7)}d/${numOr(h.calendar.farDays, 37)}d`);
+  }
+  if (h.pairs.on) out.push(`Pairs ${h.pairs.longSym}/${h.pairs.shortSym}`);
+  return out;
+};
+
 /* ---------- small shared tool UI primitives ---------- */
 
 const NumField = ({ label, hint, value, onChange, step = "any", suffix, placeholder }) => (
@@ -3244,6 +3268,11 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
               </button>
             ))}
           </div>
+          {lean !== "auto" && (
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 7, lineHeight: 1.5 }}>
+              Your lean is a tiebreaker layered on top of the weighted data — it tilts the score, but the desk will push back and flag the conflict if the pillars disagree.
+            </div>
+          )}
           <div className="lab-field">
             <span className="lab-label">Risk appetite</span>
             <div className="seg">
@@ -3298,6 +3327,11 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
                 </div>
               </div>
               <BiasSpectrum score={t.score} />
+              {t.stance && Number.isFinite(t.stance.baseScore) && t.stance.baseScore !== t.score && (
+                <div style={{ marginTop: 6, fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: ".02em" }}>
+                  Pillar base {fmtSigned(t.stance.baseScore, 1)} → {fmtSigned(t.score, 0)} after desk stance
+                </div>
+              )}
               <div className="th-summary">{t.summary}</div>
               {(t.timingNote || t.timestamp || t._generatedAt) && (
                 <div className="timing-note">
@@ -3334,6 +3368,18 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
               {(t.drivers || []).length > 0 && (
                 <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 14 }}>
                   {t.drivers.map((d, i) => <span className="chip b-brass" key={i} style={{ textTransform: "none", letterSpacing: 0, fontSize: 10.5 }}>{d}</span>)}
+                </div>
+              )}
+              {(t._deskStructures || []).length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <div className="lab-label" style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 7 }}>
+                    <Scale size={12} color={C.brass} /> Structures fed into this call
+                  </div>
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                    {t._deskStructures.map((s, i) => (
+                      <span className="chip" key={i} style={{ textTransform: "none", letterSpacing: 0, fontSize: 10.5, borderColor: C.brass + "66", color: C.brass }}>{s}</span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -3403,6 +3449,8 @@ const buildThesisPrintHTML = (t) => {
     <div class="bias">${(t.bias || "—").toUpperCase()}</div>
     <div class="headline">"${t.headline}"</div>
     <p>${t.summary || ""}</p>
+
+    ${(t._deskStructures || []).length ? `<div class="callout"><b>Structures fed into this call:</b> ${t._deskStructures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
 
     ${t.stanceRead || t.pillarRead ? `
     <h2>Desk stance</h2>
@@ -4056,6 +4104,9 @@ export default function Overwatch() {
         _lean: lean,
         _risk: risk,
         _notes: notes,
+        _deskStructures: deskContext
+          ? deskStructureLabels({ deskTools, market: market.data, points: points.data, instrument })
+          : null,
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
       setArchiveHistory((h) => [{ ...entry, _type: "thesis" }, ...h].slice(0, 60));
