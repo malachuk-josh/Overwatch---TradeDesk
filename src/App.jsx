@@ -938,7 +938,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .cal-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
 .cal-row.structural{background:linear-gradient(90deg,rgba(232,180,90,.06),transparent);border-left:2px solid var(--brass);padding-left:10px;margin-left:-2px;border-radius:4px}
 .cal-structural-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);background:var(--brass-dim);padding:2px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
-.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel);margin-bottom:14px}
+.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel)}
 .struct-hero-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
@@ -1646,7 +1646,7 @@ const buildSessionRead = ({ market, points, news, recap }) => {
   ];
   const nextEventItem = pickCalendarCatalyst(calendarPool);
   const nextEvent = nextEventItem
-    ? `${nextEventItem.event}${nextEventItem.time ? ` · ${nextEventItem.time}` : ""}`
+    ? `${nextEventItem.event}${nextEventItem.date ? ` · ${calendarDateLabel(nextEventItem.date, { weekday: true })}` : ""}${nextEventItem.time ? ` · ${nextEventItem.time}` : ""}`
     : "No major U.S. event queued";
   const newsLine = news?.brief || news?.mood || "";
   const positioning = points?.positioning?.summary || "";
@@ -3520,6 +3520,60 @@ const NewsletterTab = ({
    TAB — ARCHIVES
    ================================================================ */
 
+const CloudNewsletterList = () => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [previewId, setPreviewId] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/archive?limit=50")
+      .then((r) => r.json())
+      .then((r) => setItems(r.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ color: C.muted, fontSize: 12.5, padding: "8px 0" }}>Loading cloud newsletters…</div>;
+  if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
+
+  const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
+
+  return (
+    <>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
+        {items.map((item) => (
+          <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
+            <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
+              {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
+              {" "}
+              {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
+            </span>
+            <span className="chip b-brass" style={{ flex: "none", fontSize: 10 }}>{item.type || "wrap"}</span>
+            {item.bias && <span className="chip" style={{ color: biasColor(item.bias), borderColor: biasColor(item.bias) + "66", flex: "none", fontSize: 10 }}>{item.bias}</span>}
+            <span className="chip" style={{ flex: "none", fontSize: 10 }}>{item.instrument || "SPX"}</span>
+            <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+              {item.title || "Untitled"}
+            </span>
+            {item.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{item.score}</span>}
+            <a href={item.url || `/api/archive/${item.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Open full page" onClick={(e) => e.stopPropagation()}>
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        ))}
+      </div>
+      {previewId && (
+        <div style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+          <iframe
+            src={`/api/archive/${previewId}`}
+            title="Newsletter preview"
+            style={{ width: "100%", height: 600, border: "none" }}
+          />
+        </div>
+      )}
+    </>
+  );
+};
+
 const ArchiveTab = ({
   archiveHistory,
   viewing,
@@ -3532,7 +3586,10 @@ const ArchiveTab = ({
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Card icon={History} title="Daily archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · synced across devices` : "No archived entries yet"}>
+      <Card icon={Mail} title="Automated newsletters" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
+        <CloudNewsletterList />
+      </Card>
+      <Card icon={History} title="Session archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis + newsletter together · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis and newsletter lands here automatically. Newsletters include the attached thesis so you always have the full picture.</div>
         )}

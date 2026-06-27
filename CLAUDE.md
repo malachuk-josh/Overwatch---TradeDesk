@@ -6,8 +6,11 @@ React + Vite trading intelligence dashboard. Fetches live market data, synthesiz
 ## Architecture
 
 ```
-/src/App.jsx       React frontend (all UI components)
-/api/desk.js       Vercel serverless API handler
+/src/App.jsx              React frontend (all UI components)
+/api/desk.js              Vercel serverless API handler
+/api/archive/ingest.js    POST — authenticated newsletter ingest
+/api/archive/index.js     GET  — list archived newsletters (metadata)
+/api/archive/[id].js      GET  — serve stored HTML as standalone page
 ```
 
 ### API Operations
@@ -32,6 +35,7 @@ React + Vite trading intelligence dashboard. Fetches live market data, synthesiz
 | `KV_REST_API_TOKEN` | Upstash Redis REST token for archive persistence |
 | `UPSTASH_REDIS_REST_URL` | Alias for KV_REST_API_URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Alias for KV_REST_API_TOKEN |
+| `ARCHIVE_INGEST_SECRET` | Bearer token for POST /api/archive/ingest |
 
 ## Vercel Deployment
 
