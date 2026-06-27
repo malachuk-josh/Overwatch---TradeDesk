@@ -1800,57 +1800,6 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   };
 };
 
-const makeNewsletter = ({ market, news, points, thesis, timing, edition = 1, weights = {}, lean = thesis?.stance?.lean || "auto", risk = thesis?.stance?.risk || "balanced", instrument = thesis?.instrument || "SPX" }) => {
-  const focus = getThesisInstrument(instrument);
-  const spx = market?.tickers?.find((item) => item.symbol === "SPX");
-  const ndx = market?.tickers?.find((item) => item.symbol === "NDX");
-  const dji = market?.tickers?.find((item) => item.symbol === "DJI");
-  const vix = market?.tickers?.find((item) => item.symbol === "VIX");
-  const focusTicker = market?.tickers?.find((item) => item.symbol === focus.symbol);
-  const timingRead = timingContext(timing, market);
-  const timingSentence = timingRead.staleCashRisk
-    ? `Because this was generated during ${timingRead.session}, cash index prints may lag live ${focus.futures} futures.`
-    : `This note was generated during ${timingRead.session}, with quote timing still checked against the live feed.`;
-  const actionLevel = thesis.levels?.action || "the opening range";
-  const actionNumber = String(actionLevel).match(/^[\d,.]+/)?.[0];
-  const actionReference = actionNumber ? `the ${actionNumber} decision level` : actionLevel;
-  const breadthLine = points?.internals?.breadthDetail
-    ? `${points.internals.breadthDetail.advancers}/${points.internals.breadthDetail.total} sectors are positive, with ${points.internals.breadthDetail.tone}.`
-    : "Breadth is not fully resolved in the current data pull.";
-  const volLine = points?.internals?.volDetail?.read || `VIX is near ${vix?.price ?? points?.vix?.spot ?? "its latest range"} with a ${points?.vix?.structure || "mixed"} volatility read.`;
-  const normalizedWeights = thesis?.pillarWeights || normalizeWeights(weights);
-  const pillarRead = thesis?.pillarRead || `Pillar weights used in the call: ${summarizeWeights(normalizedWeights)}.`;
-  const stanceSummary = thesis?.stanceRead || stanceRead({
-    lean,
-    risk,
-    baseScore: Number(thesis?.stance?.baseScore ?? thesis?.score ?? 0),
-    finalScore: Number(thesis?.score ?? 0),
-  });
-  return {
-    instrument: focus.symbol,
-    headline: thesis.headline,
-    dek: `${thesis.bias.toUpperCase()} · score ${thesis.score >= 0 ? "+" : ""}${thesis.score} · conviction ${thesis.conviction}/10 · ${lean}/${risk}`,
-    timestamp: `${timingRead.generatedAtShort} · ${timingRead.session}`,
-    timingNote: timingRead.timingNote,
-    stanceRead: stanceSummary,
-    pillarRead,
-    pillarWeights: normalizedWeights,
-    executiveSummary: `Overwatch enters edition ${edition} with a ${thesis.bias} bias in ${focus.symbol}. The call is anchored to the action level and weighted by the desk configuration: ${pillarRead} ${stanceSummary} ${timingSentence}`,
-    marketRecap: `${focus.symbol} is ${focusTicker ? `${focusTicker.changePct >= 0 ? "up" : "down"} ${Math.abs(focusTicker.changePct).toFixed(2)}% near ${focusTicker.price}` : "awaiting a fresh quote"}, while SPX / NDX / DJI read ${[spx, ndx, dji].filter(Boolean).map((item) => `${item.symbol} ${signed(item.changePct, 2, "%")}`).join(", ") || "mixed"}. ${breadthLine} ${volLine} ${timingSentence}`,
-    marketOutlook: buildMarketOutlook({ news, points, timing }),
-    thesisNarrative: `${thesis.summary} The desk will treat ${actionReference} as the primary trigger, but breadth and volatility must confirm the move. The ${lean}/${risk} stance and pillar weights are already embedded in the score, so the note should not double-count the trader preference. ${thesis.gamePlan} The call is invalidated when ${String(thesis.invalidation || "price breaks the opposite side of the setup").replace(/^./, (char) => char.toLowerCase())}`,
-    watchToday: [
-      `${focus.symbol}: ${thesis.levels?.action || "Opening-range acceptance"}`,
-      `VIX behavior near ${points?.vix?.spot ?? "the latest print"}`,
-      points?.internals?.breadthDetail ? `Breadth confirmation: ${points.internals.breadthDetail.advancers}/${points.internals.breadthDetail.total} sectors positive` : "Sector breadth and Nasdaq leadership",
-      points?.internals?.volDetail ? `Vol regime: ${points.internals.volDetail.zone} / ${points.internals.volDetail.structure}` : null,
-      thesis.standAside,
-    ].filter(Boolean),
-    riskRadar: `${thesis.invalidation} ${timingRead.staleCashRisk ? "Do not over-trust stale cash-index levels until regular-market liquidity confirms futures." : "Headline gaps and fast volatility expansion can make otherwise clean levels unreliable."} Size should fall before discipline does.`,
-    finalWord: "Let price confirm the story before the desk commits capital.",
-    tradePlan: makeTradePlan({ market, news, points, thesis }),
-  };
-};
 
 const makeSessionRecap = ({ market, news, points }) => {
   const tickers = market?.tickers || [];
@@ -1993,24 +1942,6 @@ export default async function handler(req, res) {
           pillarScores: data.pillarScores || fallback.pillarScores,
           weightedPillars: data.weightedPillars || fallback.weightedPillars,
           stance: data.stance || { ...fallback.stance, finalScore: data.score ?? fallback.stance.finalScore },
-        }
-        : fallback;
-    } else if (operation === "newsletter") {
-      const fallback = makeNewsletter(payload);
-      try {
-        data = await callAnthropic(prompt);
-      } catch {
-        data = null;
-      }
-      data = data
-        ? {
-          ...fallback,
-          ...data,
-          marketOutlook: data.marketOutlook || fallback.marketOutlook,
-          stanceRead: data.stanceRead || fallback.stanceRead,
-          pillarRead: data.pillarRead || fallback.pillarRead,
-          pillarWeights: data.pillarWeights || fallback.pillarWeights,
-          tradePlan: fallback.tradePlan,
         }
         : fallback;
     } else if (operation === "getarchive") {
