@@ -950,7 +950,7 @@ const fetchNews = async () => {
     const pool = recent.length >= 5 ? recent : enriched;
     const headlines = pool
       .sort((a, b) => (b.impact - a.impact) || (b.providerPublishTime - a.providerPublishTime))
-      .slice(0, 14)
+      .slice(0, 30)
       .map(({ providerPublishTime, ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
     const bullish = headlines.filter((item) => item.sentiment === "bullish").length;
