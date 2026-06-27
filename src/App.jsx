@@ -690,16 +690,16 @@ const CSS = `
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;padding:9px 2px 8px;
+  gap:4px;padding:11px 2px 10px;
   background:none;border:none;cursor:pointer;
-  color:var(--muted);font-size:9.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
   font-family:'Inter',sans-serif;transition:color .15s;position:relative;
 }
 .bd-bnav-btn.on{color:var(--brass)}
 .bd-bnav-btn svg{flex-shrink:0}
 .bd-bnav-dot{
-  position:absolute;top:6px;right:calc(50% - 12px);
-  width:5px;height:5px;border-radius:50%;
+  position:absolute;top:8px;right:calc(50% - 12px);
+  width:6px;height:6px;border-radius:50%;
   background:var(--brass);
 }
 
@@ -716,7 +716,7 @@ const CSS = `
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:760px){
   .g-3{grid-template-columns:1fr}
-  .bd-main{padding:14px 12px calc(68px + env(safe-area-inset-bottom,0px) + 10px)}
+  .bd-main{padding:14px 12px calc(85px + env(safe-area-inset-bottom,0px) + 10px)}
   .bd-header{padding:12px 14px;flex-wrap:wrap}
   .bd-hright{width:100%;justify-content:space-between;margin-left:0}
   .bd-tabs{display:none}
@@ -4136,7 +4136,7 @@ export default function Overwatch() {
           {TABS.map((t) => (
             <button key={t.id} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
               {t.badge ? <span className="bd-bnav-dot" /> : null}
-              <t.icon size={20} />
+              <t.icon size={25} />
               {t.short}
             </button>
           ))}
