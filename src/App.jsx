@@ -2278,7 +2278,7 @@ const CalendarTab = ({ points, onRefresh }) => {
                   {c.event}
                   {c.structural && <span className="cal-structural-tag">{c.structuralType?.replace("-", " ") || "structure"}</span>}
                 </span>
-                {c.actual != null && <span className="recent-actual">{c.actual}</span>}
+                {c.actual != null && <span className="recent-actual">{Math.round(c.actual)}</span>}
                 <span className="cal-imp" style={{ background: calendarImpactColor(c.importance), boxShadow: c.importance === "high" ? `0 0 7px ${C.bear}99` : "none" }} title={c.importance} />
               </div>
             ))}
