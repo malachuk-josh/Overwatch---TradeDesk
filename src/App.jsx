@@ -29,6 +29,8 @@ import Moon from "lucide-react/dist/esm/icons/moon.mjs";
 import CandlestickChart from "lucide-react/dist/esm/icons/chart-candlestick.mjs";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
+import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
+import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -1158,6 +1160,38 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
 }
 .collapsible-header:hover{background:rgba(255,255,255,.04)}
 .collapsible-header .ic{opacity:.6;flex-shrink:0}
+
+/* ========== CHART FULLSCREEN ========== */
+.chart-fs-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--ink);
+  display:flex;flex-direction:column;
+}
+.chart-fs-header{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 14px;border-bottom:1px solid var(--line);
+  flex-shrink:0;
+}
+.chart-fs-title{
+  font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--text);flex:1;
+}
+.chart-fs-btn{
+  background:none;border:none;cursor:pointer;
+  color:var(--muted);padding:5px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.chart-fs-btn:hover{background:rgba(255,255,255,.08);color:var(--text)}
+.chart-fs-body{flex:1;overflow:hidden;position:relative;}
+.chart-expand-btn{
+  position:absolute;top:8px;right:8px;z-index:10;
+  background:var(--panel2);border:1px solid var(--line);
+  color:var(--muted);padding:5px;border-radius:6px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;backdrop-filter:blur(4px);opacity:.85;
+}
+.chart-expand-btn:hover{opacity:1;color:var(--text);border-color:var(--brass)}
 
 /* ========== LIGHT MODE ========== */
 .bd-root.light{
@@ -3565,7 +3599,7 @@ const loadTvScript = () => {
   return tvScriptPromise;
 };
 
-const TradingViewChart = ({ symbol, lightMode, interval = "D" }) => {
+const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-chart" }) => {
   const containerRef = useRef(null);
   const widgetRef = useRef(null);
 
@@ -3597,7 +3631,7 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D" }) => {
     };
   }, [symbol, lightMode, interval]);
 
-  const id = `tv-chart-${symbol.replace(/[^a-zA-Z0-9]/g, "-")}`;
+  const id = `${prefix}-${symbol.replace(/[^a-zA-Z0-9]/g, "-")}`;
   return <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />;
 };
 
@@ -3611,17 +3645,23 @@ const ChartsTab = ({ lightMode }) => {
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
-  // Mobile: single active symbol; desktop: multi-chart grid
   const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
+  const [fsSymbol, setFsSymbol] = useState(null);
 
   useEffect(() => {
     try { localStorage.setItem("overwatch:charts", JSON.stringify(selected)); } catch {}
   }, [selected]);
 
-  // Keep activeSymbol valid when selected changes
   useEffect(() => {
     if (!selected.includes(activeSymbol)) setActiveSymbol(selected[0]);
   }, [selected, activeSymbol]);
+
+  useEffect(() => {
+    if (!fsSymbol) return;
+    const onKey = (e) => { if (e.key === "Escape") setFsSymbol(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fsSymbol]);
 
   const toggle = (sym) => {
     setSelected((prev) => {
@@ -3630,69 +3670,100 @@ const ChartsTab = ({ lightMode }) => {
     });
   };
 
+  const symbolLabel = (sym) => CHART_PRESETS.find((p) => p.symbol === sym)?.label || sym.split(":").pop();
+
   const cols = selected.length <= 2 ? 1 : 2;
   const chartH = selected.length <= 2 ? 520 : 420;
 
+  const fsOverlay = fsSymbol ? (
+    <div className="chart-fs-overlay">
+      <div className="chart-fs-header">
+        <CandlestickChart size={15} style={{ opacity: 0.6 }} />
+        <span className="chart-fs-title">{symbolLabel(fsSymbol)}</span>
+        <div className="seg">
+          {TV_INTERVALS.map((iv) => (
+            <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
+          ))}
+        </div>
+        <button className="chart-fs-btn" onClick={() => setFsSymbol(null)} title="Exit fullscreen (Esc)">
+          <Minimize2 size={17} />
+        </button>
+      </div>
+      <div className="chart-fs-body">
+        <TradingViewChart key={`fs-${fsSymbol}-${interval}`} prefix="tv-fs" symbol={fsSymbol} lightMode={lightMode} interval={interval} />
+      </div>
+    </div>
+  ) : null;
+
   if (isMobileView) {
     return (
+      <>
+        {fsOverlay}
+        <div className="tab-charts">
+          <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+              <div className="seg">
+                {TV_INTERVALS.map((iv) => (
+                  <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
+                ))}
+              </div>
+            </div>
+            <div key={`${activeSymbol}-${interval}`} style={{ height: 420, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
+              <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
+              <button className="chart-expand-btn" onClick={() => setFsSymbol(activeSymbol)} title="Fullscreen">
+                <Maximize2 size={14} />
+              </button>
+            </div>
+            <div className="chart-symbol-strip">
+              {CHART_PRESETS.map((p) => (
+                <button
+                  key={p.symbol}
+                  className={`chart-symbol-pill${activeSymbol === p.symbol ? " on" : ""}${selected.includes(p.symbol) ? " pinned" : ""}`}
+                  onClick={() => {
+                    setActiveSymbol(p.symbol);
+                    if (!selected.includes(p.symbol)) setSelected((prev) => [...prev, p.symbol]);
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {fsOverlay}
       <div className="tab-charts">
         <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
-          {/* Timeframe row */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
             <div className="seg">
+              {CHART_PRESETS.map((p) => (
+                <button key={p.symbol} className={selected.includes(p.symbol) ? "on" : ""} onClick={() => toggle(p.symbol)}>{p.label}</button>
+              ))}
+            </div>
+            <div className="seg" style={{ marginLeft: "auto" }}>
               {TV_INTERVALS.map((iv) => (
                 <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
               ))}
             </div>
           </div>
-          {/* Full-width single chart */}
-          <div key={`${activeSymbol}-${interval}`} style={{ height: 420, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12 }}>
-            <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
-          </div>
-          {/* Horizontal symbol strip */}
-          <div className="chart-symbol-strip">
-            {CHART_PRESETS.map((p) => (
-              <button
-                key={p.symbol}
-                className={`chart-symbol-pill${activeSymbol === p.symbol ? " on" : ""}${selected.includes(p.symbol) ? " pinned" : ""}`}
-                onClick={() => {
-                  setActiveSymbol(p.symbol);
-                  if (!selected.includes(p.symbol)) setSelected((prev) => [...prev, p.symbol]);
-                }}
-              >
-                {p.label}
-              </button>
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
+            {selected.map((sym) => (
+              <div key={`${sym}-${interval}`} style={{ height: chartH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", position: "relative" }}>
+                <TradingViewChart symbol={sym} lightMode={lightMode} interval={interval} />
+                <button className="chart-expand-btn" onClick={() => setFsSymbol(sym)} title="Fullscreen">
+                  <Maximize2 size={14} />
+                </button>
+              </div>
             ))}
           </div>
         </Card>
       </div>
-    );
-  }
-
-  return (
-    <div className="tab-charts">
-      <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
-          <div className="seg">
-            {CHART_PRESETS.map((p) => (
-              <button key={p.symbol} className={selected.includes(p.symbol) ? "on" : ""} onClick={() => toggle(p.symbol)}>{p.label}</button>
-            ))}
-          </div>
-          <div className="seg" style={{ marginLeft: "auto" }}>
-            {TV_INTERVALS.map((iv) => (
-              <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
-          {selected.map((sym) => (
-            <div key={`${sym}-${interval}`} style={{ height: chartH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}>
-              <TradingViewChart symbol={sym} lightMode={lightMode} interval={interval} />
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
+    </>
   );
 };
 
