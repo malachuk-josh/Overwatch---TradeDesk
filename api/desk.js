@@ -1320,6 +1320,7 @@ const fetchPoints = async () => {
       calendarGroups: calendarData.groups,
       calendarSource: calendarData.source,
       calendarAsOf: calendarData.asOf,
+      calendarRange: calendarData.range || null,
       nextStructural: calendarData.nextStructural || null,
       positioning,
     };

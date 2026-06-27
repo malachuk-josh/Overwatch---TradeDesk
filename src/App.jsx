@@ -2257,10 +2257,10 @@ const CalendarTab = ({ points, onRefresh }) => {
         </div>
       </div>
       <div className="calendar-grid">
-        <Card icon={CalendarDays} title="Today" sub={`${groups.today?.length || 0} event${groups.today?.length === 1 ? "" : "s"} on deck`}>
+        <Card icon={CalendarDays} title={`Today · ${calendarDateLabel(data?.calendarRange?.today) || "—"}`} sub={`${groups.today?.length || 0} event${groups.today?.length === 1 ? "" : "s"} on deck`}>
           <CalendarGroup label="Today" items={groups.today || []} empty="No U.S. releases found for today." />
         </Card>
-        <Card icon={CalendarDays} title="Tomorrow" sub={`${groups.tomorrow?.length || 0} event${groups.tomorrow?.length === 1 ? "" : "s"} queued`}>
+        <Card icon={CalendarDays} title={`Tomorrow · ${calendarDateLabel(data?.calendarRange?.tomorrow) || "—"}`} sub={`${groups.tomorrow?.length || 0} event${groups.tomorrow?.length === 1 ? "" : "s"} queued`}>
           <CalendarGroup label="Tomorrow" items={groups.tomorrow || []} empty="No U.S. releases found for tomorrow." />
         </Card>
         <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
