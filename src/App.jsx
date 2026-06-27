@@ -27,6 +27,8 @@ import NotebookPen from "lucide-react/dist/esm/icons/notebook-pen.mjs";
 import Sun from "lucide-react/dist/esm/icons/sun.mjs";
 import Moon from "lucide-react/dist/esm/icons/moon.mjs";
 import CandlestickChart from "lucide-react/dist/esm/icons/chart-candlestick.mjs";
+import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -1126,6 +1128,18 @@ input.bd-in.mono-in{font-family:'JetBrains Mono',monospace;text-transform:upperc
   .bd-root *,.bd-root *::before,.bd-root *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
 
+/* ========== COLLAPSIBLE HEADER ========== */
+.collapsible-header{
+  display:flex;align-items:center;gap:7px;
+  width:100%;padding:11px 14px;
+  background:none;border:none;border-bottom:1px solid var(--line);
+  color:var(--text);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  cursor:pointer;text-align:left;
+  transition:background .15s;
+}
+.collapsible-header:hover{background:rgba(255,255,255,.04)}
+.collapsible-header .ic{opacity:.6;flex-shrink:0}
+
 /* ========== LIGHT MODE ========== */
 .bd-root.light{
   --ink:#F5F7FA; --panel:#FFFFFF; --panel2:#EFF2F7; --panel3:#E4E9F2;
@@ -1770,6 +1784,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const [tickersOpen, setTickersOpen] = useState(() => !isMobile);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
@@ -1815,29 +1831,45 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         </div>
         {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
       </Card>
-      <div className="grid g-pulse">
-        {orderedTickers.map((t) => (
-          <div className="card tk" key={t.symbol} style={t._stale ? { opacity: 0.5 } : undefined}>
-            <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
-            <div className="tk-top">
-              <span className="tk-sym">{t.symbol}</span>
-              {t._stale
-                ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
-                : t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
-            </div>
-            <div className="tk-body">
-              <div className="tk-left">
-                <div className="tk-name">{t.name}</div>
-                <div className="tk-price">{t._stale ? "—" : fmtNum(t.price, t.symbol === "US10Y" ? 3 : 2)}</div>
-                <div className="tk-chg">
-                  <span style={{ color: chgColor(t.change) }}>{t._stale ? "—" : fmtSigned(t.change)}</span>
-                  <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <button
+          className="collapsible-header"
+          onClick={() => setTickersOpen((o) => !o)}
+          aria-expanded={tickersOpen}
+        >
+          <Activity size={14} className="ic" />
+          <span>Market snapshot</span>
+          <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>{orderedTickers.length} instruments</small>
+          <span style={{ marginLeft: "auto" }}>
+            {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </span>
+        </button>
+        {tickersOpen && (
+          <div className="grid g-pulse" style={{ padding: "0 12px 12px" }}>
+            {orderedTickers.map((t) => (
+              <div className="card tk" key={t.symbol} style={t._stale ? { opacity: 0.5 } : undefined}>
+                <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
+                <div className="tk-top">
+                  <span className="tk-sym">{t.symbol}</span>
+                  {t._stale
+                    ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
+                    : t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
+                </div>
+                <div className="tk-body">
+                  <div className="tk-left">
+                    <div className="tk-name">{t.name}</div>
+                    <div className="tk-price">{t._stale ? "—" : fmtNum(t.price, t.symbol === "US10Y" ? 3 : 2)}</div>
+                    <div className="tk-chg">
+                      <span style={{ color: chgColor(t.change) }}>{t._stale ? "—" : fmtSigned(t.change)}</span>
+                      <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
+                    </div>
+                  </div>
+                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} />}
                 </div>
               </div>
-              {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} />}
-            </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
       <div className="grid g-data" style={{ alignItems: "start" }}>
         {LEVEL_MAP_GROUPS.map((g) => (
