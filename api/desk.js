@@ -926,26 +926,32 @@ const fetchNews = async () => {
         seen.add(key);
         return true;
       });
-    const headlines = sourceItems.map((item) => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const maxAgeHours = 48;
+    const enriched = sourceItems.map((item) => {
       const read = classifyHeadline(item.title || "");
       const tickers = headlineTickers(item.title || "");
-      const ageHours = item.providerPublishTime ? Math.max(0, (Date.now() / 1000 - item.providerPublishTime) / 3600) : 12;
+      const ageHours = item.providerPublishTime ? Math.max(0, (nowSec - item.providerPublishTime) / 3600) : 999;
       const urgency = read.impact >= 5 || ageHours < 2 ? "high" : read.impact >= 4 || ageHours < 8 ? "medium" : "low";
       return {
         title: item.title,
         source: item.publisher || "Market wire",
-        timeAgo: timeAgo(item.providerPublishTime || Math.floor(Date.now() / 1000)),
+        timeAgo: timeAgo(item.providerPublishTime || nowSec),
         url: item.link || null,
         providerPublishTime: item.providerPublishTime || 0,
+        ageHours,
         urgency,
         tickers,
         ...read,
         note: headlineNote({ ...read, tickers }),
       };
-    })
+    });
+    const recent = enriched.filter((item) => item.ageHours <= maxAgeHours);
+    const pool = recent.length >= 5 ? recent : enriched;
+    const headlines = pool
       .sort((a, b) => (b.impact - a.impact) || (b.providerPublishTime - a.providerPublishTime))
       .slice(0, 14)
-      .map(({ providerPublishTime, ...item }, index) => ({ ...item, rank: index + 1 }));
+      .map(({ providerPublishTime, ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
     const bullish = headlines.filter((item) => item.sentiment === "bullish").length;
     const bearish = headlines.filter((item) => item.sentiment === "bearish").length;
