@@ -184,17 +184,17 @@ const dateLine = () =>
 const dateShort = () =>
   new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" });
 
-const calendarDateLabel = (dateIso) => {
+const calendarDateLabel = (dateIso, { weekday = false } = {}) => {
   if (!dateIso) return "";
   const parts = String(dateIso).split("-");
   if (parts.length !== 3) return String(dateIso);
   const [year, month, day] = parts.map(Number);
   if (!year || !month || !day) return String(dateIso);
-  return new Date(Date.UTC(year, month - 1, day, 12)).toLocaleDateString("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-  });
+  const d = new Date(Date.UTC(year, month - 1, day, 12));
+  const base = d.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+  if (!weekday) return base;
+  const dow = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" });
+  return `${dow} · ${base}`;
 };
 
 const stampNow = () =>
@@ -2169,7 +2169,7 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
     </div>
     {items.length ? items.map((c, i) => (
       <div className={`cal-row${c.structural ? " structural" : ""}`} key={`${label}-${i}`}>
-        <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date) || c.time || "Date pending") : c.time}</span>
+        <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date, { weekday: true }) || c.time || "Date pending") : c.time}</span>
         <span className="cal-ev">
           <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}>
             {c.event}
