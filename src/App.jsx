@@ -44,6 +44,9 @@ const DEFAULT_WATCHLIST = [
   { symbol: "DJI", name: "Dow Jones Industrial Average" },
   { symbol: "DIA", name: "SPDR Dow Jones ETF" },
   { symbol: "YM", name: "E-mini Dow Futures (front month)" },
+  { symbol: "RUT", name: "Russell 2000 Index" },
+  { symbol: "IWM", name: "iShares Russell 2000 ETF" },
+  { symbol: "RTY", name: "E-mini Russell 2000 Futures (front month)" },
   { symbol: "VIX", name: "CBOE Volatility Index" },
   { symbol: "DXY", name: "US Dollar Index" },
   { symbol: "US10Y", name: "US 10-Year Treasury Yield" },
@@ -52,7 +55,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "BTC", name: "Bitcoin" },
 ];
 const LEGACY_DEFAULT_SYMBOLS = ["SPX", "ES", "NDX", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"];
-const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM", "SPY", "QQQ", "DIA"]);
+const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM", "SPY", "QQQ", "DIA", "RUT", "IWM", "RTY"]);
 
 const reconcileWatchlist = (items) => {
   if (!Array.isArray(items) || !items.length) return DEFAULT_WATCHLIST;
