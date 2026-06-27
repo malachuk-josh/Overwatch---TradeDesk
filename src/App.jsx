@@ -938,7 +938,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .cal-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
 .cal-row.structural{background:linear-gradient(90deg,rgba(232,180,90,.06),transparent);border-left:2px solid var(--brass);padding-left:10px;margin-left:-2px;border-radius:4px}
 .cal-structural-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);background:var(--brass-dim);padding:2px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
-.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel);margin-bottom:14px}
+.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel)}
 .struct-hero-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
