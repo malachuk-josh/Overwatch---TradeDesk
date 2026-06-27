@@ -662,7 +662,7 @@ const CSS = `
 .flow-step.done .flow-label,.flow-step.now .flow-label{color:var(--text)}
 .flow-arrow{color:var(--faint);margin:0 4px;flex:none}
 
-/* ---------- tabs ---------- */
+/* ---------- tabs (desktop) ---------- */
 .bd-tabs{display:flex;gap:4px;padding:12px 22px 0;border-bottom:1px solid var(--line);overflow-x:auto}
 .bd-tab{
   display:flex;align-items:center;gap:8px;padding:10px 16px 12px;cursor:pointer;
@@ -678,6 +678,31 @@ const CSS = `
 }
 .bd-tab.on .tab-badge{color:var(--brass);border-color:rgba(232,180,90,.4)}
 
+/* ---------- bottom nav (mobile) ---------- */
+.bd-bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:var(--panel);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.bd-bottom-nav-inner{
+  display:flex;
+}
+.bd-bnav-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;padding:9px 2px 8px;
+  background:none;border:none;cursor:pointer;
+  color:var(--muted);font-size:9.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
+  font-family:'Inter',sans-serif;transition:color .15s;position:relative;
+}
+.bd-bnav-btn.on{color:var(--brass)}
+.bd-bnav-btn svg{flex-shrink:0}
+.bd-bnav-dot{
+  position:absolute;top:6px;right:calc(50% - 12px);
+  width:5px;height:5px;border-radius:50%;
+  background:var(--brass);
+}
+
 /* ---------- layout ---------- */
 .bd-main{padding:20px 22px 30px;max-width:1480px;margin:0 auto}
 .grid{display:grid;gap:14px}
@@ -689,7 +714,14 @@ const CSS = `
 .g-thesis{grid-template-columns:340px 1fr}
 .archives-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
-@media(max-width:760px){.g-3{grid-template-columns:1fr}.bd-main{padding:14px 12px 24px}.bd-header{padding:12px 14px;flex-wrap:wrap}.bd-hright{width:100%;justify-content:space-between;margin-left:0}}
+@media(max-width:760px){
+  .g-3{grid-template-columns:1fr}
+  .bd-main{padding:14px 12px calc(68px + env(safe-area-inset-bottom,0px) + 10px)}
+  .bd-header{padding:12px 14px;flex-wrap:wrap}
+  .bd-hright{width:100%;justify-content:space-between;margin-left:0}
+  .bd-tabs{display:none}
+  .bd-bottom-nav{display:block}
+}
 
 /* ---------- cards ---------- */
 .card{
@@ -4034,13 +4066,13 @@ export default function Overwatch() {
   const newsletterBadge = nlHistory.length || null;
   const archiveBadge = archiveHistory.length || null;
   const TABS = [
-    { id: "pulse", label: "Market Pulse", icon: Activity, badge: market.data?.tickers?.length },
-    { id: "charts", label: "Charts", icon: CandlestickChart },
-    { id: "news", label: "News Intel", icon: Newspaper, badge: news.data?.headlines?.length },
-    { id: "calendar", label: "Calendar", icon: CalendarDays, badge: calendarBadge },
-    { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: thesisHistory.length || null },
-    { id: "newsletter", label: "Newsletter", icon: Mail, badge: newsletterBadge },
-    { id: "archives", label: "Archives", icon: History, badge: archiveBadge },
+    { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: market.data?.tickers?.length },
+    { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
+    { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
+    { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
+    { id: "thesis", label: "Thesis Lab", short: "Thesis", icon: FlaskConical, badge: thesisHistory.length || null },
+    { id: "newsletter", label: "Newsletter", short: "Brief", icon: Mail, badge: newsletterBadge },
+    { id: "archives", label: "Archives", short: "Archive", icon: History, badge: archiveBadge },
   ];
 
   const steps = [
@@ -4098,6 +4130,18 @@ export default function Overwatch() {
           </button>
         ))}
       </nav>
+
+      <div className="bd-bottom-nav">
+        <div className="bd-bottom-nav-inner">
+          {TABS.map((t) => (
+            <button key={t.id} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
+              {t.badge ? <span className="bd-bnav-dot" /> : null}
+              <t.icon size={20} />
+              {t.short}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <main className="bd-main">
         {tab === "pulse" && (
