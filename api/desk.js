@@ -660,8 +660,16 @@ const fetchEconomicCalendar = async () => {
     const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
     const recentEvents = [...pastTodayEvents, ...allEvents.filter((event) => event.date < today && event.date >= weekStart)]
       .filter((event) => event.importance === "high" || event.structural)
-      .sort((a, b) => String(b.date).localeCompare(String(a.date)) || calendarMinutes(b.time) - calendarMinutes(a.time))
-      .slice(0, 10);
+      .sort((a, b) => {
+        const sigA = (a.structural ? 0 : 1);
+        const sigB = (b.structural ? 0 : 1);
+        if (sigA !== sigB) return sigA - sigB;
+        const impA = a.importance === "high" ? 0 : a.importance === "medium" ? 1 : 2;
+        const impB = b.importance === "high" ? 0 : b.importance === "medium" ? 1 : 2;
+        if (impA !== impB) return impA - impB;
+        return String(b.date).localeCompare(String(a.date)) || calendarMinutes(b.time) - calendarMinutes(a.time);
+      })
+      .slice(0, 5);
     const nextStructuralFromCalendar = allEvents
       .filter((event) => event.structural && event.date >= today && !eventIsPast(event))
       .sort(calendarSort)[0] || null;
