@@ -91,7 +91,62 @@ const FACTORS = [
   { key: "eventRisk", label: "Event Risk", hint: "Calendar landmines" },
 ];
 
-const DEFAULT_WEIGHTS = { technicals: 70, macro: 60, sentiment: 45, positioning: 50, eventRisk: 55 };
+const PILLAR_KEYS = FACTORS.map((f) => f.key);
+const WEIGHT_TOTAL = 100;
+// Fixed budget: the five pillars always sum to WEIGHT_TOTAL, starting evenly split.
+const DEFAULT_WEIGHTS = PILLAR_KEYS.reduce((acc, k) => ({ ...acc, [k]: WEIGHT_TOTAL / PILLAR_KEYS.length }), {});
+
+// Largest-remainder integer rounding of float shares to hit an exact integer total.
+const roundShares = (entries, total) => {
+  const floors = entries.map((e) => ({ ...e, f: Math.floor(e.v), r: e.v - Math.floor(e.v) }));
+  let leftover = total - floors.reduce((s, o) => s + o.f, 0);
+  floors.sort((a, b) => b.r - a.r);
+  for (let i = 0; i < floors.length && leftover > 0; i++) { floors[i].f++; leftover--; }
+  for (let i = floors.length - 1; i >= 0 && leftover < 0; i--) { if (floors[i].f > 0) { floors[i].f--; leftover++; } }
+  return floors;
+};
+
+// Setting one pillar pulls the difference equally from the others (water-filling, clamped to [0,100]),
+// keeping the budget fixed at WEIGHT_TOTAL. The dragged pillar lands exactly on its value.
+const redistributeWeights = (weights, key, rawVal) => {
+  const newVal = clamp(Math.round(Number(rawVal) || 0), 0, WEIGHT_TOTAL);
+  const others = PILLAR_KEYS.filter((k) => k !== key);
+  const vals = {};
+  others.forEach((k) => { vals[k] = Math.max(0, Number(weights[k]) || 0); });
+  let diff = WEIGHT_TOTAL - newVal - others.reduce((s, k) => s + vals[k], 0);
+  let pool = others.slice();
+  let guard = 0;
+  while (Math.abs(diff) > 1e-9 && pool.length && guard++ < 60) {
+    const share = diff / pool.length;
+    const next = [];
+    let leftover = 0;
+    for (const k of pool) {
+      let nv = vals[k] + share;
+      if (nv < 0) { leftover += nv; nv = 0; }
+      else if (nv > WEIGHT_TOTAL) { leftover += nv - WEIGHT_TOTAL; nv = WEIGHT_TOTAL; }
+      else next.push(k);
+      vals[k] = nv;
+    }
+    diff = leftover;
+    pool = next;
+  }
+  const rounded = roundShares(others.map((k) => ({ k, v: vals[k] })), WEIGHT_TOTAL - newVal);
+  const out = { [key]: newVal };
+  rounded.forEach((o) => { out[o.k] = o.f; });
+  return out;
+};
+
+// Scale arbitrary saved weights onto the fixed budget (migrates older 0–100-each weights).
+const normalizeWeightsToBudget = (weights) => {
+  const raw = PILLAR_KEYS.map((k) => ({ k, v: Math.max(0, Number(weights?.[k]) || 0) }));
+  const sum = raw.reduce((s, o) => s + o.v, 0);
+  if (sum <= 0) return { ...DEFAULT_WEIGHTS };
+  const rounded = roundShares(raw.map((o) => ({ k: o.k, v: (o.v / sum) * WEIGHT_TOTAL })), WEIGHT_TOTAL);
+  const out = {};
+  rounded.forEach((o) => { out[o.k] = o.f; });
+  return out;
+};
+
 const DEFAULT_THESIS_INSTRUMENT = "SPY";
 // Retail-tradable instruments — index ETFs, index futures, and mega-cap stocks
 // (traded directly or via options). No cash indexes.
@@ -3199,6 +3254,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
   const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
   const feedSummary = `options scenario${activeHedges ? ` + ${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : ""}`;
+  const weightSum = FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0);
 
   if (toolView !== "synthesis") {
     return (
@@ -3233,20 +3289,29 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
     <div className="grid g-thesis" style={{ alignItems: "start" }}>
       {/* controls */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <Card icon={FlaskConical} title="Pillar weights" sub="How much each input drives the call">
+        <Card
+          icon={FlaskConical}
+          title="Pillar weights"
+          sub="Fixed 100-point budget — raising one pillar pulls equally from the rest"
+          tools={<button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>}
+        >
           {FACTORS.map((f) => (
             <div className="slider-row" key={f.key}>
               <div className="slider-head">
                 <span className="slider-name">{f.label}<span className="slider-hint">{f.hint}</span></span>
-                <span className="slider-val">{weights[f.key]}</span>
+                <span className="slider-val">{weights[f.key]}%</span>
               </div>
               <input
                 type="range" min="0" max="100" value={weights[f.key]} className="bd-range"
                 style={{ "--pct": `${weights[f.key]}%` }}
-                onChange={(e) => setWeights({ ...weights, [f.key]: Number(e.target.value) })}
+                onChange={(e) => setWeights(redistributeWeights(weights, f.key, Number(e.target.value)))}
               />
             </div>
           ))}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 2 }}>
+            <span className="lab-label" style={{ margin: 0 }}>Allocated</span>
+            <span className="mono" style={{ fontSize: 12, color: weightSum === WEIGHT_TOTAL ? C.brass : C.bear }}>{weightSum} / {WEIGHT_TOTAL}</span>
+          </div>
           <FactorRadarChart weights={weights} />
         </Card>
         <Card icon={NotebookPen} title="Instrument focus" sub="Choose which instrument the thesis is built for">
@@ -3949,7 +4014,7 @@ export default function Overwatch() {
       if (s) {
         if (Array.isArray(s.watchlist) && s.watchlist.length) setWatchlist(reconcileWatchlist(s.watchlist));
         if (s.instrument) setInstrument(thesisInstrumentConfig(s.instrument).symbol);
-        if (s.weights) setWeights((w) => ({ ...w, ...s.weights }));
+        if (s.weights) setWeights(normalizeWeightsToBudget(s.weights));
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
         if (s.deskTools) setDeskTools((d) => {
