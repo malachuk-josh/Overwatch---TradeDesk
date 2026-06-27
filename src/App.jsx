@@ -3552,7 +3552,7 @@ const ChartsTab = ({ lightMode }) => {
       const saved = JSON.parse(localStorage.getItem("overwatch:charts") || "null");
       if (Array.isArray(saved) && saved.length) return saved;
     } catch {}
-    return ["AMEX:SPY", "NASDAQ:QQQ", "CBOE:VIX", "TVC:DXY"];
+    return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
 
@@ -3865,11 +3865,11 @@ export default function Overwatch() {
   const archiveBadge = archiveHistory.length || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", icon: Activity, badge: market.data?.tickers?.length },
+    { id: "charts", label: "Charts", icon: CandlestickChart },
     { id: "news", label: "News Intel", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "newsletter", label: "Newsletter", icon: Mail, badge: newsletterBadge },
-    { id: "charts", label: "Charts", icon: CandlestickChart },
     { id: "archives", label: "Archives", icon: History, badge: archiveBadge },
   ];
 
