@@ -692,7 +692,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:14px 2px 13px;
+  gap:4px;padding:17px 2px 16px;
   background:none;border:none;cursor:pointer;
   color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
   font-family:'Inter',sans-serif;transition:color .15s;position:relative;
@@ -718,7 +718,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:760px){
   .g-3{grid-template-columns:1fr}
-  .bd-main{padding:14px 12px calc(91px + env(safe-area-inset-bottom,0px) + 10px)}
+  .bd-main{padding:14px 12px calc(97px + env(safe-area-inset-bottom,0px) + 10px)}
   .bd-header{padding:12px 14px;flex-wrap:wrap}
   .bd-hright{width:100%;justify-content:space-between;margin-left:0}
   .bd-tabs{display:none}
