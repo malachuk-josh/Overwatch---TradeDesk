@@ -101,6 +101,8 @@ const THESIS_INSTRUMENTS = [
   { symbol: "NQ",  label: "NQ",  name: "E-mini Nasdaq-100 Futures", futures: "NQ", pointsKey: "nq", focusLabel: "NQ" },
   { symbol: "DIA", label: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia", focusLabel: "DIA / YM" },
   { symbol: "YM",  label: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym", focusLabel: "YM" },
+  { symbol: "IWM", label: "IWM", name: "iShares Russell 2000 ETF", futures: "RTY", pointsKey: "iwm", focusLabel: "IWM / RTY" },
+  { symbol: "RTY", label: "RTY", name: "E-mini Russell 2000 Futures", futures: "RTY", pointsKey: "rty", focusLabel: "RTY" },
 ];
 const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
   THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
@@ -2566,7 +2568,7 @@ const impliedVol = ({ S, K, T, r = 0, q = 0, type = "call", marketPrice }) => {
   return mid;
 };
 
-const FUTURES_MULT = { ES: 50, NQ: 20, YM: 5 };
+const FUTURES_MULT = { ES: 50, NQ: 20, YM: 5, RTY: 50 };
 
 // Generic two-leg vertical spread (same type, long one strike, short another).
 // Handles debit/credit and bull/bear from the strike ordering; values in $ (×100×contracts).
