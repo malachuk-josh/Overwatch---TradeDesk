@@ -31,6 +31,7 @@ import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
+import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -184,17 +185,17 @@ const dateLine = () =>
 const dateShort = () =>
   new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" });
 
-const calendarDateLabel = (dateIso) => {
+const calendarDateLabel = (dateIso, { weekday = false } = {}) => {
   if (!dateIso) return "";
   const parts = String(dateIso).split("-");
   if (parts.length !== 3) return String(dateIso);
   const [year, month, day] = parts.map(Number);
   if (!year || !month || !day) return String(dateIso);
-  return new Date(Date.UTC(year, month - 1, day, 12)).toLocaleDateString("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-  });
+  const d = new Date(Date.UTC(year, month - 1, day, 12));
+  const base = d.toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+  if (!weekday) return base;
+  const dow = d.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short" });
+  return `${dow} · ${base}`;
 };
 
 const stampNow = () =>
@@ -2169,7 +2170,7 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
     </div>
     {items.length ? items.map((c, i) => (
       <div className={`cal-row${c.structural ? " structural" : ""}`} key={`${label}-${i}`}>
-        <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date) || c.time || "Date pending") : c.time}</span>
+        <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date, { weekday: true }) || c.time || "Date pending") : c.time}</span>
         <span className="cal-ev">
           <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}>
             {c.event}
@@ -2217,6 +2218,9 @@ const CalendarTab = ({ points, onRefresh }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
+        <a href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--brass)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}>
+          TradingView Calendar <ExternalLink size={11} />
+        </a>
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
@@ -2257,10 +2261,10 @@ const CalendarTab = ({ points, onRefresh }) => {
         </div>
       </div>
       <div className="calendar-grid">
-        <Card icon={CalendarDays} title="Today" sub={`${groups.today?.length || 0} event${groups.today?.length === 1 ? "" : "s"} on deck`}>
+        <Card icon={CalendarDays} title={`Today · ${calendarDateLabel(data?.calendarRange?.today) || "—"}`} sub={`${groups.today?.length || 0} event${groups.today?.length === 1 ? "" : "s"} on deck`}>
           <CalendarGroup label="Today" items={groups.today || []} empty="No U.S. releases found for today." />
         </Card>
-        <Card icon={CalendarDays} title="Tomorrow" sub={`${groups.tomorrow?.length || 0} event${groups.tomorrow?.length === 1 ? "" : "s"} queued`}>
+        <Card icon={CalendarDays} title={`Tomorrow · ${calendarDateLabel(data?.calendarRange?.tomorrow) || "—"}`} sub={`${groups.tomorrow?.length || 0} event${groups.tomorrow?.length === 1 ? "" : "s"} queued`}>
           <CalendarGroup label="Tomorrow" items={groups.tomorrow || []} empty="No U.S. releases found for tomorrow." />
         </Card>
         <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
@@ -2278,7 +2282,7 @@ const CalendarTab = ({ points, onRefresh }) => {
                   {c.event}
                   {c.structural && <span className="cal-structural-tag">{c.structuralType?.replace("-", " ") || "structure"}</span>}
                 </span>
-                {c.actual != null && <span className="recent-actual">{c.actual}</span>}
+                {c.actual != null && <span className="recent-actual">{Math.round(c.actual)}</span>}
                 <span className="cal-imp" style={{ background: calendarImpactColor(c.importance), boxShadow: c.importance === "high" ? `0 0 7px ${C.bear}99` : "none" }} title={c.importance} />
               </div>
             ))}
