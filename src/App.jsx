@@ -579,8 +579,10 @@ const CSS = `
   --r:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+html,body{max-width:100vw;overflow-x:hidden}
 .bd-root{
-  min-height:100vh;background:var(--ink);color:var(--text);
+  min-height:100vh;width:100%;max-width:100vw;overflow-x:hidden;
+  background:var(--ink);color:var(--text);
   font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;
   background-image:radial-gradient(rgba(126,140,160,.05) 1px, transparent 1px);
   background-size:26px 26px;
