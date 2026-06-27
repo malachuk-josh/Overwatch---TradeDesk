@@ -1646,7 +1646,7 @@ const buildSessionRead = ({ market, points, news, recap }) => {
   ];
   const nextEventItem = pickCalendarCatalyst(calendarPool);
   const nextEvent = nextEventItem
-    ? `${nextEventItem.event}${nextEventItem.time ? ` · ${nextEventItem.time}` : ""}`
+    ? `${nextEventItem.event}${nextEventItem.date ? ` · ${calendarDateLabel(nextEventItem.date, { weekday: true })}` : ""}${nextEventItem.time ? ` · ${nextEventItem.time}` : ""}`
     : "No major U.S. event queued";
   const newsLine = news?.brief || news?.mood || "";
   const positioning = points?.positioning?.summary || "";
