@@ -447,6 +447,8 @@ const liquidityEventsForDate = (dateIso) => {
     previous: null,
     source: "Market Structure Calendar",
     note: entry.note,
+    structural: true,
+    structuralType: entry.type,
   }];
 };
 
@@ -625,8 +627,9 @@ const fetchEconomicCalendar = async () => {
   if (calendarCache?.expires > Date.now()) return calendarCache.data;
   const today = isoDate();
   const tomorrow = addIsoDays(today, 1);
+  const weekStart = addIsoDays(today, -7);
   const weekEnd = addIsoDays(today, 7);
-  const url = `https://economic-calendar.tradingview.com/events?from=${today}T00:00:00.000Z&to=${weekEnd}T23:59:59.999Z&countries=US`;
+  const url = `https://economic-calendar.tradingview.com/events?from=${weekStart}T00:00:00.000Z&to=${weekEnd}T23:59:59.999Z&countries=US`;
 
   const promise = fetch(url, {
     headers: {
@@ -641,26 +644,35 @@ const fetchEconomicCalendar = async () => {
     const payload = await response.json();
     const tradingViewEvents = (payload.result || [])
       .map(normalizeCalendarEvent)
-      .filter((event) => event.date >= today && event.date <= weekEnd)
+      .filter((event) => event.date >= weekStart && event.date <= weekEnd)
       .sort(calendarSort);
     const fedEvents = [];
     const structureEvents = [];
-    for (let day = today; day <= weekEnd; day = addIsoDays(day, 1)) {
+    for (let day = weekStart; day <= weekEnd; day = addIsoDays(day, 1)) {
       fedEvents.push(...fedFomcEventsForDate(day));
       structureEvents.push(...liquidityEventsForDate(day));
     }
-    const events = mergeCalendarEvents([...fedEvents, ...structureEvents, ...tradingViewEvents]).sort(calendarSort);
-    const todayEvents = selectCalendarGroup(events.filter((event) => event.date === today && !eventIsPast(event)), 5);
-    const tomorrowEvents = selectCalendarGroup(events.filter((event) => event.date === tomorrow), 5);
-    const upcoming = selectMajorUpcomingEvents(events.filter((event) => event.date > tomorrow), 5);
+    const allEvents = mergeCalendarEvents([...fedEvents, ...structureEvents, ...tradingViewEvents]).sort(calendarSort);
+    const futureEvents = allEvents.filter((event) => event.date >= today);
+    const todayEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === today && !eventIsPast(event)), 5);
+    const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow), 5);
+    const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
+    const recentEvents = allEvents
+      .filter((event) => event.date < today && event.date >= weekStart && (event.importance === "high" || event.structural))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)) || calendarMinutes(b.time) - calendarMinutes(a.time))
+      .slice(0, 10);
+    const nextStructural = allEvents
+      .filter((event) => event.structural && event.date >= today)
+      .sort(calendarSort)[0] || null;
     const sources = ["TradingView Economic Calendar"];
     if (fedEvents.length) sources.push("Federal Reserve FOMC calendar");
     if (structureEvents.length) sources.push("Market Structure Calendar");
     return {
       source: sources.join(" + "),
       asOf: new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
-      range: { today, tomorrow, weekEnd },
-      groups: { today: todayEvents, tomorrow: tomorrowEvents, upcoming },
+      range: { today, tomorrow, weekStart, weekEnd },
+      groups: { today: todayEvents, tomorrow: tomorrowEvents, upcoming, recent: recentEvents },
+      nextStructural,
       flat: [...todayEvents, ...tomorrowEvents, ...upcoming],
     };
   });
@@ -1265,6 +1277,7 @@ const fetchPoints = async () => {
       calendarGroups: calendarData.groups,
       calendarSource: calendarData.source,
       calendarAsOf: calendarData.asOf,
+      nextStructural: calendarData.nextStructural || null,
       positioning,
     };
   } catch {

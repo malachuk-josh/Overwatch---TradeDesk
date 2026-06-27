@@ -935,6 +935,18 @@ html,body{max-width:100vw;overflow-x:hidden}
 .cal-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--faint);margin-top:2px}
 .cal-values{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);margin-top:3px}
 .cal-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
+.cal-row.structural{background:linear-gradient(90deg,rgba(232,180,90,.06),transparent);border-left:2px solid var(--brass);padding-left:10px;margin-left:-2px;border-radius:4px}
+.cal-structural-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);background:var(--brass-dim);padding:2px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
+.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel);margin-bottom:14px}
+.struct-hero-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
+.struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
+.struct-hero .struct-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass);margin-top:6px}
+.recent-row{display:flex;align-items:center;gap:11px;padding:8px 4px;border-bottom:1px dashed var(--line);opacity:.85}
+.recent-row:last-child{border-bottom:none}
+.recent-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);width:78px;flex:none}
+.recent-ev{font-size:12px;flex:1;color:var(--text)}
+.recent-actual{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bull);white-space:nowrap}
 .calendar-hero{border:1px solid var(--line2);border-radius:12px;padding:18px 20px;background:linear-gradient(135deg,rgba(232,180,90,.08),rgba(90,167,232,.035)),var(--panel)}
 .calendar-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .calendar-next{min-width:240px;flex:1}
@@ -2127,11 +2139,12 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
    ================================================================ */
 
 const calendarEventGroups = (data) => {
-  const groups = data?.calendarGroups || { today: data?.calendar || [], tomorrow: [], upcoming: [] };
+  const groups = data?.calendarGroups || { today: data?.calendar || [], tomorrow: [], upcoming: [], recent: [] };
   return {
     today: topCalendarEvents(groups.today || [], 5),
     tomorrow: topCalendarEvents(groups.tomorrow || [], 5),
     upcoming: topCalendarEvents(groups.upcoming || [], 5),
+    recent: groups.recent || [],
   };
 };
 
@@ -2155,10 +2168,14 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
       <span>{items.length} event{items.length === 1 ? "" : "s"}</span>
     </div>
     {items.length ? items.map((c, i) => (
-      <div className="cal-row" key={`${label}-${i}`}>
+      <div className={`cal-row${c.structural ? " structural" : ""}`} key={`${label}-${i}`}>
         <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date) || c.time || "Date pending") : c.time}</span>
         <span className="cal-ev">
-          {c.event}
+          <span style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}>
+            {c.event}
+            {c.structural && <span className="cal-structural-tag">{c.structuralType?.replace("-", " ") || "structure"}</span>}
+          </span>
+          {c.note && c.structural && <div className="cal-note">{c.note}</div>}
           {(c.period || c.source) && <div className="cal-meta">{[c.period, c.source].filter(Boolean).join(" · ")}</div>}
         </span>
         <span className="cal-imp" style={{ background: calendarImpactColor(c.importance), boxShadow: c.importance === "high" ? `0 0 7px ${C.bear}99` : "none" }} title={c.importance} />
@@ -2195,6 +2212,7 @@ const CalendarTab = ({ points, onRefresh }) => {
     (sum, key) => sum + (groups[key] || []).filter((item) => item.importance === "high").length,
     0,
   );
+  const nextStruct = data?.nextStructural || null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2202,6 +2220,19 @@ const CalendarTab = ({ points, onRefresh }) => {
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
+
+      {nextStruct && (
+        <div className="struct-hero">
+          <div className="struct-hero-label">
+            <Zap size={13} />
+            Next liquidity event
+          </div>
+          <h3>{nextStruct.event}</h3>
+          <p>{nextStruct.note}</p>
+          <div className="struct-date">{calendarDateLabel(nextStruct.date) || nextStruct.date} · {nextStruct.time}</div>
+        </div>
+      )}
+
       <div className="calendar-hero">
         <div className="calendar-hero-top">
           <div className="calendar-next">
@@ -2236,7 +2267,26 @@ const CalendarTab = ({ points, onRefresh }) => {
           <CalendarGroup label="Major Upcoming" items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
         </Card>
       </div>
-      {!total && (
+
+      {!!(groups.recent || []).length && (
+        <Card icon={History} title="Recent catalysts" sub="High-impact events from the past 7 days — context for recent price action">
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {groups.recent.map((c, i) => (
+              <div className={`recent-row${c.structural ? " structural" : ""}`} key={`recent-${i}`} style={c.structural ? { background: "linear-gradient(90deg,rgba(232,180,90,.06),transparent)", borderLeft: "2px solid var(--brass)", paddingLeft: 10, borderRadius: 4 } : {}}>
+                <span className="recent-date">{calendarDateLabel(c.date) || c.date}</span>
+                <span className="recent-ev">
+                  {c.event}
+                  {c.structural && <span className="cal-structural-tag">{c.structuralType?.replace("-", " ") || "structure"}</span>}
+                </span>
+                {c.actual != null && <span className="recent-actual">{c.actual}</span>}
+                <span className="cal-imp" style={{ background: calendarImpactColor(c.importance), boxShadow: c.importance === "high" ? `0 0 7px ${C.bear}99` : "none" }} title={c.importance} />
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {!total && !(groups.recent || []).length && (
         <div style={{ color: C.muted, fontSize: 12.5, textAlign: "center" }}>
           No calendar events came back in the latest sync. The data service may be quiet or temporarily unavailable.
         </div>
