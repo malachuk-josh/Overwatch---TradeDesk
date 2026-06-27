@@ -54,22 +54,20 @@ const DEFAULT_WATCHLIST = [
   { symbol: "CL", name: "WTI Crude Oil" },
   { symbol: "BTC", name: "Bitcoin" },
 ];
-const LEGACY_DEFAULT_SYMBOLS = [
-  ["SPX", "ES", "NDX", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"].join("|"),
-  ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM", "VIX", "DXY", "US10Y", "GC", "CL", "BTC"].join("|"),
-];
-const REQUIRED_NEW_SYMBOLS = new Set(["DJI", "NQ", "YM", "SPY", "QQQ", "DIA", "RUT", "IWM", "RTY"]);
+const DEFAULT_SYMBOLS_SET = new Set(DEFAULT_WATCHLIST.map((item) => item.symbol));
 
 const reconcileWatchlist = (items) => {
   if (!Array.isArray(items) || !items.length) return DEFAULT_WATCHLIST;
   const cleaned = items
     .filter((item) => item && item.symbol)
     .map((item) => ({ symbol: String(item.symbol).toUpperCase(), name: item.name || item.symbol }));
-  const symbols = cleaned.map((item) => item.symbol).join("|");
-  if (LEGACY_DEFAULT_SYMBOLS.includes(symbols)) return DEFAULT_WATCHLIST;
+  // If saved list contains only default symbols (no custom additions), restore canonical order.
+  const hasCustom = cleaned.some((item) => !DEFAULT_SYMBOLS_SET.has(item.symbol));
+  if (!hasCustom) return DEFAULT_WATCHLIST;
+  // Custom watchlist: append any missing required symbols at the end.
   const merged = [...cleaned];
   for (const item of DEFAULT_WATCHLIST) {
-    if (REQUIRED_NEW_SYMBOLS.has(item.symbol) && !merged.some((existing) => existing.symbol === item.symbol) && merged.length < 21) {
+    if (!merged.some((existing) => existing.symbol === item.symbol) && merged.length < 21) {
       merged.push(item);
     }
   }
