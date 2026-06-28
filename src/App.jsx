@@ -3790,10 +3790,10 @@ const ArchiveTab = ({
 }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Card icon={Mail} title="Automated newsletters" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
+      <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
         <CloudNewsletterList />
       </Card>
-      <Card icon={History} title="Session archive" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
+      <Card icon={History} title="Thesis Library" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
@@ -4375,7 +4375,7 @@ export default function Overwatch() {
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Thesis", icon: FlaskConical, badge: thesisHistory.length || null },
-    { id: "archives", label: "Archives", short: "Archive", icon: History, badge: archiveBadge },
+    { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
   ];
 
   const steps = [
