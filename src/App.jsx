@@ -1819,8 +1819,8 @@ const FactorRadarChart = ({ weights, onChange }) => {
   const max = MAX_PILLAR; // full scale tracks the per-pillar cap
   const n = data.length;
   const cx = 150;
-  const cy = 104;
-  const outer = 64;
+  const cy = 120;
+  const outer = 80;
   const svgRef = useRef(null);
   const baseRef = useRef(null); // weights snapshot captured at drag-start
   const [drag, setDrag] = useState(null);
@@ -1865,10 +1865,10 @@ const FactorRadarChart = ({ weights, onChange }) => {
   const endDrag = () => { baseRef.current = null; setDrag(null); };
 
   return (
-    <div style={{ width: "100%", height: 212, userSelect: "none", touchAction: "none" }}>
+    <div style={{ width: "100%", height: 248, userSelect: "none", touchAction: "none" }}>
       <svg
         ref={svgRef}
-        viewBox="0 0 300 212"
+        viewBox="0 0 300 248"
         style={{ width: "100%", height: "100%", display: "block" }}
         onPointerMove={onMove}
         onPointerUp={endDrag}
@@ -1884,8 +1884,8 @@ const FactorRadarChart = ({ weights, onChange }) => {
           return (
             <g key={d.key}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
-              <text x={lx} y={ly - 4} textAnchor="middle" dominantBaseline="middle" fill="#7E8CA0" fontSize="9.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
-              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle" fill="#E8B45A" fontSize="9.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
+              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fill="#7E8CA0" fontSize="10.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
+              <text x={lx} y={ly + 8} textAnchor="middle" dominantBaseline="middle" fill="#E8B45A" fontSize="10.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
             </g>
           );
         })}
@@ -1895,9 +1895,9 @@ const FactorRadarChart = ({ weights, onChange }) => {
           return (
             <g key={d.key}>
               {interactive && (
-                <circle cx={x} cy={y} r="14" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
+                <circle cx={x} cy={y} r="18" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
               )}
-              <circle cx={x} cy={y} r={drag === i ? 6 : 4.5} fill="#E8B45A" stroke="#1A1408" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+              <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#E8B45A" stroke="#1A1408" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
             </g>
           );
         })}
