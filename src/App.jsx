@@ -4590,7 +4590,7 @@ export default function Overwatch() {
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol)).length || null },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
-    { id: "thesis", label: "Thesis Lab", short: "Thesis", icon: FlaskConical, badge: thesisHistory.length || null },
+    { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
