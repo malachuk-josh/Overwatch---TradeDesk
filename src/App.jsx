@@ -2038,7 +2038,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         tools={<><Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" /></>}
       >
         <div className="session-summary">{session.summary}</div>
-        <div className="session-meta">{data?.asOf ? `quotes ${data.asOf}` : "quotes pending"} · auto-refresh every 2m while Pulse is open</div>
+        <div className="session-meta">{data?.asOf ? `quotes ${data.asOf}` : "quotes pending"} · {marketSession().tone === "live" ? "auto-refresh every 2m while Pulse is open" : `market ${marketSession().label.toLowerCase()} — values frozen at the last quote until the next session`}</div>
         {(session.recapText || recap?.status === "loading") && (
           <div className="session-recap">
             <div className="session-recap-head">
@@ -3609,12 +3609,17 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
                   )}
                   {(t.weightedPillars || []).length > 0 && (
                     <div className="pillar-strip">
-                      {(t.weightedPillars || []).map((pillar) => (
-                        <div className="pillar-chip" key={pillar.key || pillar.label}>
-                          <b>{pillar.label || pillar.key}</b>
-                          <span>Score {fmtSigned(pillar.score, 0)} · Weight {pillar.weight}% · Impact {fmtSigned(pillar.contribution, 1)}</span>
-                        </div>
-                      ))}
+                      {(t.weightedPillars || []).map((pillar) => {
+                        const tip = pillar.key === "positioning"
+                          ? `Why ${fmtSigned(pillar.score, 0)}? Positioning posture is ${points?.positioning?.posture || "—"} (flow score ${points?.positioning?.score ?? "—"}), derived from ETF risk flows, credit-vs-duration spread, and the Fear & Greed components (put/call, junk-bond demand, safe-haven demand).`
+                          : `${pillar.label}: raw pillar score ${fmtSigned(pillar.score, 0)}, weighted at ${pillar.weight}% → ${fmtSigned(pillar.contribution, 1)} impact on the base score.`;
+                        return (
+                          <div className="pillar-chip" key={pillar.key || pillar.label} title={tip}>
+                            <b>{pillar.label || pillar.key}</b>
+                            <span>Score {fmtSigned(pillar.score, 0)} · Weight {pillar.weight}% · Impact {fmtSigned(pillar.contribution, 1)}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

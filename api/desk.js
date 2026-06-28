@@ -938,12 +938,20 @@ const catalystStack = (headlines) => {
     grouped.set(item.category, group);
   }
   return Array.from(grouped.values())
-    .map((group) => ({
-      category: group.category,
-      count: group.count,
-      maxImpact: group.maxImpact,
-      sentiment: group.bear > group.bull ? "bearish" : group.bull > group.bear ? "bullish" : "neutral",
-    }))
+    .map((group) => {
+      // Derive tone from the actual item tags, accounting for neutral dominance: a single bullish
+      // headline among a dozen neutrals should NOT paint the whole category bullish. Require the net
+      // directional lean to be a meaningful share of the bucket before calling it directional.
+      const net = group.bull - group.bear;
+      const threshold = Math.max(2, group.count * 0.25);
+      const sentiment = Math.abs(net) < threshold ? "neutral" : net > 0 ? "bullish" : "bearish";
+      return {
+        category: group.category,
+        count: group.count,
+        maxImpact: group.maxImpact,
+        sentiment,
+      };
+    })
     .sort((a, b) => b.maxImpact - a.maxImpact || b.count - a.count);
 };
 
@@ -1462,7 +1470,13 @@ const calendarRiskScore = (points = {}) => {
 const positioningScore = (points = {}) => {
   const pos = points?.positioning;
   if (pos && typeof pos === "object" && Number.isFinite(Number(pos.score))) {
-    return round(clamp(Number(pos.score) * 24, -100, 100), 0);
+    // pos.score is a raw weighted sum of ETF % moves (~±5 on a decisive day). The old ×24
+    // saturated a low-weight pillar to ±50 from a merely "mixed" print, letting it hijack the
+    // base score. Apply a soft deadzone over the "mixed" band (|r|≤0.75) and a gentler slope so
+    // positioning only carries real magnitude when the flow signal is genuinely decisive.
+    const r = Number(pos.score);
+    const eff = Math.sign(r) * Math.max(0, Math.abs(r) - 0.5);
+    return round(clamp(eff * 18, -100, 100), 0);
   }
   if (pos?.posture === "risk-on") return 35;
   if (pos?.posture === "defensive") return -35;
@@ -1665,7 +1679,13 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   const alignedPillars = weighted.rows.filter((row) => Math.sign(row.score || 0) === Math.sign(score || 0)).length;
   const alignmentBoost = alignedPillars >= 4 ? 1 : alignedPillars <= 2 ? -1 : 0;
   const riskConviction = stance.risk === "aggressive" ? 1 : stance.risk === "defensive" ? -1 : 0;
-  const conviction = clamp(Math.round(Math.abs(score) / 12) + 3 + alignmentBoost + riskConviction - (eventPenalty >= 25 ? 1 : 0), 3, stance.risk === "defensive" ? 8 : 10);
+  // Conviction ceiling: a range-bound trend or a pillar set that mostly disagrees with the final
+  // sign means the signal isn't clean — cap conviction so the desk can't hand back a high-conviction
+  // call on an explicitly unclean read.
+  const trendState = points?.internals?.trendDetail?.state || points?.internals?.trend || "range";
+  const pillarsDisagree = alignedPillars <= 2;
+  const convictionCeiling = (trendState === "range" || pillarsDisagree) ? 5 : (stance.risk === "defensive" ? 8 : 10);
+  const conviction = clamp(Math.round(Math.abs(score) / 12) + 3 + alignmentBoost + riskConviction - (eventPenalty >= 25 ? 1 : 0), 3, convictionCeiling);
   // Prefer the index complex's own levels; for single stocks / Russell, fall back to the
   // web-fetched stock levels so the fallback thesis also gets concrete numbers.
   const focusPoints = points?.[focus.pointsKey] || focusLevels || {};
