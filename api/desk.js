@@ -1570,6 +1570,17 @@ const THESIS_INSTRUMENTS = {
   DJI: { symbol: "DJI", name: "Dow Jones Industrial Average", futures: "YM", pointsKey: "dji" },
   DIA: { symbol: "DIA", name: "SPDR Dow Jones ETF", futures: "YM", pointsKey: "dia" },
   YM:  { symbol: "YM",  name: "E-mini Dow Futures", futures: "YM", pointsKey: "ym" },
+  IWM: { symbol: "IWM", name: "iShares Russell 2000 ETF", futures: "RTY", pointsKey: "iwm", proxyKey: "spx" },
+  RTY: { symbol: "RTY", name: "E-mini Russell 2000 Futures", futures: "RTY", pointsKey: "rty", proxyKey: "spx" },
+  // Mega-cap single stocks — no index-style S/R in the feed; anchor levels to the live stock price,
+  // and use the Nasdaq (NDX) complex only as macro proxy context.
+  AAPL:  { symbol: "AAPL",  name: "Apple", futures: "NQ", pointsKey: "aapl", proxyKey: "ndx", kind: "stock" },
+  MSFT:  { symbol: "MSFT",  name: "Microsoft", futures: "NQ", pointsKey: "msft", proxyKey: "ndx", kind: "stock" },
+  NVDA:  { symbol: "NVDA",  name: "Nvidia", futures: "NQ", pointsKey: "nvda", proxyKey: "ndx", kind: "stock" },
+  AMZN:  { symbol: "AMZN",  name: "Amazon", futures: "NQ", pointsKey: "amzn", proxyKey: "ndx", kind: "stock" },
+  META:  { symbol: "META",  name: "Meta Platforms", futures: "NQ", pointsKey: "meta", proxyKey: "ndx", kind: "stock" },
+  GOOGL: { symbol: "GOOGL", name: "Alphabet", futures: "NQ", pointsKey: "googl", proxyKey: "ndx", kind: "stock" },
+  TSLA:  { symbol: "TSLA",  name: "Tesla", futures: "NQ", pointsKey: "tsla", proxyKey: "ndx", kind: "stock" },
 };
 
 const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
@@ -1618,7 +1629,9 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   const riskConviction = stance.risk === "aggressive" ? 1 : stance.risk === "defensive" ? -1 : 0;
   const conviction = clamp(Math.round(Math.abs(score) / 12) + 3 + alignmentBoost + riskConviction - (eventPenalty >= 25 ? 1 : 0), 3, stance.risk === "defensive" ? 8 : 10);
   const focusPoints = points?.[focus.pointsKey] || {};
-  const pivot = focusPoints.pivot || focusPoints.spot;
+  const focusSpot = tickers.find((item) => item.symbol === focus.symbol)?.price;
+  // Single stocks (and Russell) have no index-style S/R in the feed — anchor the pivot to the live quote.
+  const pivot = focusPoints.pivot || focusPoints.spot || focusSpot;
   const topContributors = [...weighted.rows].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 3);
   const pillarRead = `Top weighted pillars: ${topContributors.map((row) => `${row.label} ${row.score >= 0 ? "+" : ""}${row.score} at ${row.weight}% weight`).join("; ")}.`;
   const stanceSummary = stanceRead({ ...stance, baseScore: weighted.baseScore, finalScore: score });
