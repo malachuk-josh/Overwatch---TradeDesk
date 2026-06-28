@@ -10,6 +10,8 @@ import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import X from "lucide-react/dist/esm/icons/x.mjs";
 import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 import PlayCircle from "lucide-react/dist/esm/icons/play-circle.mjs";
+import Lock from "lucide-react/dist/esm/icons/lock.mjs";
+import WifiOff from "lucide-react/dist/esm/icons/wifi-off.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Copy from "lucide-react/dist/esm/icons/copy.mjs";
@@ -725,6 +727,8 @@ html,body{max-width:100vw;overflow-x:hidden}
   font-size:10.5px;letter-spacing:.14em;padding:6px 11px;border-radius:999px;
   border:1px solid var(--line2);background:var(--panel2);
 }
+/* brighter, greener pill when the market is live for clearer live-data presence */
+.bd-session-live{border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.12);color:var(--bull)}
 .bd-dot{width:7px;height:7px;border-radius:50%}
 .dot-live{background:var(--bull);box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite}
 .dot-warn{background:var(--brass)}
@@ -781,6 +785,12 @@ html,body{max-width:100vw;overflow-x:hidden}
   background:var(--panel3);border:1px solid var(--line2);color:var(--muted);
 }
 .bd-tab.on .tab-badge{color:var(--brass);border-color:rgba(59,130,246,.4)}
+/* tablet / narrow-desktop: tighten tabs so all six fit without clipping or a scrollbar */
+@media(min-width:761px) and (max-width:1180px){
+  .bd-tabs{padding-left:14px;padding-right:14px;gap:2px}
+  .bd-tab{padding:10px 9px 12px;font-size:12px;gap:5px}
+  .tab-badge{padding:1px 5px;font-size:9px}
+}
 
 /* ---------- bottom nav (mobile) ---------- */
 .bd-bottom-nav{
@@ -841,7 +851,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 .academy-play{color:#fff;opacity:.92;filter:drop-shadow(0 2px 8px rgba(0,0,0,.55));transition:transform .15s,opacity .15s}
 .academy-card:hover .academy-play{transform:scale(1.1);opacity:1}
 .academy-card.coming .academy-thumb{opacity:.55}
-.academy-soon{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.academy-soon{display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.academy-ep{position:absolute;top:6px;left:8px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:var(--muted);background:rgba(2,6,23,.55);border:1px solid var(--glass-border);border-radius:5px;padding:1px 5px}
 .academy-dur{position:absolute;bottom:6px;right:6px;background:rgba(2,6,23,.82);color:#fff;font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 5px;border-radius:5px}
 .academy-title{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.3}
 .academy-sub{font-size:11px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -894,7 +905,9 @@ html,body{max-width:100vw;overflow-x:hidden}
 .card-head .ic{color:var(--brass)}
 .card-tools{margin-left:auto;display:flex;align-items:center;gap:7px}
 .freshness{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);letter-spacing:.05em}
-.freshness.stale{color:var(--brass)}
+.freshness.aging{color:var(--brass)}
+.freshness.stale{color:var(--bear)}
+.offline-banner{display:flex;align-items:center;justify-content:center;gap:8px;padding:7px 14px;background:var(--bear-dim);border-bottom:1px solid rgba(239,68,68,.4);color:var(--bear);font-size:12px;font-weight:600;letter-spacing:.02em}
 
 /* ---------- ticker cards ---------- */
 .tk{position:relative;overflow:hidden}
@@ -1105,7 +1118,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 .recent-row:last-child{border-bottom:none}
 .recent-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);width:78px;flex:none}
 .recent-ev{font-size:12px;flex:1;color:var(--text)}
-.recent-actual{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bull);white-space:nowrap}
+.recent-actual{color:var(--bull)}
+.recent-figs{display:flex;gap:9px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);flex:none;white-space:nowrap}
 .calendar-hero{border:1px solid var(--line2);border-radius:12px;padding:18px 20px;background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(56,189,248,.035)),var(--panel)}
 .calendar-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .calendar-next{min-width:240px;flex:1}
@@ -1412,8 +1426,13 @@ const Card = ({ icon: Ic, title, sub, tools, children, className = "", style }) 
 
 const Freshness = ({ at }) => {
   if (!at) return null;
-  const stale = Date.now() - at.ts > 30 * 60 * 1000;
-  return <span className={`freshness ${stale ? "stale" : ""}`}>{stale ? "STALE · " : ""}{at.label}</span>;
+  const ageMin = Math.floor((Date.now() - at.ts) / 60000);
+  const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+  return (
+    <span className={`freshness ${tier}`} title={`Last synced ${ageMin}m ago`}>
+      {tier === "stale" ? "STALE · " : ""}{at.label}{ageMin >= 2 ? ` · ${ageMin}m ago` : ""}
+    </span>
+  );
 };
 
 const RefreshBtn = ({ onClick, loading, label = "Refresh" }) => (
@@ -1580,12 +1599,13 @@ const FearGreedGauge = ({ data }) => {
           style={{
             position: "absolute",
             left: `${pct}%`,
-            top: 4,
-            width: 3,
-            height: 24,
-            borderRadius: 3,
-            background: "#E2E8F0",
-            boxShadow: `0 0 14px ${color}99`,
+            top: 6,
+            width: 18,
+            height: 18,
+            borderRadius: "50%",
+            background: color,
+            border: "3px solid #E2E8F0",
+            boxShadow: `0 0 16px ${color}cc, 0 2px 5px rgba(0,0,0,.45)`,
             transform: "translateX(-50%)",
             transition: "left 1s cubic-bezier(.22,1,.36,1)",
           }}
@@ -1640,10 +1660,22 @@ const ConvictionPips = ({ n, bias }) => {
 };
 
 const SectorHeatmap = ({ sectors }) => {
-  const sorted = [...(sectors || [])].filter((s) => s && s.changePct != null).sort((a, b) => b.changePct - a.changePct);
-  if (!sorted.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector data in last sync.</div>;
+  const [sortMode, setSortMode] = useState("perf");
+  const base = [...(sectors || [])].filter((s) => s && s.changePct != null);
+  if (!base.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector data in last sync.</div>;
+  const sorted = base.sort((a, b) =>
+    sortMode === "name" ? String(a.name).localeCompare(String(b.name))
+      : sortMode === "abs" ? Math.abs(b.changePct) - Math.abs(a.changePct)
+        : b.changePct - a.changePct
+  );
   const maxAbs = Math.max(0.4, ...sorted.map((s) => Math.abs(s.changePct)));
   return (
+    <>
+    <div className="seg" style={{ maxWidth: 300, marginBottom: 11, fontSize: 11 }}>
+      {[["perf", "% change"], ["abs", "magnitude"], ["name", "name"]].map(([m, lbl]) => (
+        <button key={m} className={sortMode === m ? "on" : ""} onClick={() => setSortMode(m)}>{lbl}</button>
+      ))}
+    </div>
     <div className="hm">
       {sorted.map((s) => {
         const a = clamp(Math.abs(s.changePct) / maxAbs, 0.12, 1);
@@ -1657,6 +1689,7 @@ const SectorHeatmap = ({ sectors }) => {
         );
       })}
     </div>
+    </>
   );
 };
 
@@ -2303,7 +2336,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
             </div>
           )}
         </Card>
-        <Card icon={Crosshair} title="Catalyst stack" sub="Category weight + tone">
+        <Card icon={Crosshair} title="Catalyst stack" sub="Bar = peak impact · number = headline count · color = net tone">
           {catalysts.length ? catalysts.map((c) => (
             <div className="cat-row" key={c.category}>
               <span className={`chip ${CAT_TONE[c.category] || ""}`} style={{ width: 92, textAlign: "center" }}>{c.category}</span>
@@ -2359,6 +2392,8 @@ const nextCalendarEvent = (groups) => {
 };
 
 const calendarImpactColor = (importance) => (importance === "high" ? C.bear : importance === "medium" ? C.brass : C.muted);
+// Compact figure formatter for calendar prev/est/actual readings.
+const calFig = (v) => (v == null ? "—" : fmtNum(Number(v), Math.abs(Number(v)) < 100 ? 1 : 0));
 
 const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   <div className="cal-group">
@@ -2482,7 +2517,13 @@ const CalendarTab = ({ points, onRefresh }) => {
                   {c.event}
                   {c.structural && <span className="cal-structural-tag">{c.structuralType?.replace("-", " ") || "structure"}</span>}
                 </span>
-                {c.actual != null && <span className="recent-actual">{Math.round(c.actual)}</span>}
+                {(c.previous != null || c.forecast != null || c.actual != null) && (
+                  <span className="recent-figs">
+                    {c.previous != null && <span title="Previous reading">prev {calFig(c.previous)}</span>}
+                    {c.forecast != null && <span title="Consensus estimate">est {calFig(c.forecast)}</span>}
+                    {c.actual != null && <span className="recent-actual" title="Actual">act {calFig(c.actual)}</span>}
+                  </span>
+                )}
                 <span className="cal-imp" style={{ background: calendarImpactColor(c.importance), boxShadow: c.importance === "high" ? `0 0 7px ${C.bear}99` : "none" }} title={c.importance} />
               </div>
             ))}
@@ -3945,7 +3986,7 @@ const AcademyCard = () => {
               {mod.summary && <span style={{ fontSize: 11.5, color: C.muted }}>{mod.summary}</span>}
             </div>
             <div className="academy-grid">
-              {(mod.videos || []).map((v) => {
+              {(mod.videos || []).map((v, vi) => {
                 const ready = !!v.embedId;
                 const thumb = ready ? `https://img.youtube.com/vi/${v.embedId}/hqdefault.jpg` : null;
                 const dur = fmtVideoDuration(v.durationSec);
@@ -3958,7 +3999,8 @@ const AcademyCard = () => {
                     title={ready ? v.title : "Coming soon"}
                   >
                     <span className="academy-thumb" style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}>
-                      {ready ? <PlayCircle size={34} className="academy-play" /> : <span className="academy-soon">Coming soon</span>}
+                      <span className="academy-ep">{String(vi + 1).padStart(2, "0")}</span>
+                      {ready ? <PlayCircle size={34} className="academy-play" /> : <span className="academy-soon"><Lock size={11} /> Coming soon</span>}
                       {dur && <span className="academy-dur">{dur}</span>}
                     </span>
                     <span className="academy-title">{v.title}</span>
@@ -4055,6 +4097,13 @@ const ArchiveTab = ({
   onDeleteEntry,
   onGoThesis,
 }) => {
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+  const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
+    const t = entry._type === "newsletter" ? entry._thesis : entry;
+    return [entry.instrument, t?.instrument, t?.bias, entry.headline, t?.headline, entry._date, archiveStamp(entry)]
+      .filter(Boolean).join(" ").toLowerCase().includes(query);
+  });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
@@ -4065,8 +4114,14 @@ const ArchiveTab = ({
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
+        {archiveHistory.length > 0 && (
+          <input className="bd-in" style={{ marginBottom: 8 }} placeholder="Search saved theses — ticker, bias, headline or date…" value={q} onChange={(e) => setQ(e.target.value)} />
+        )}
+        {archiveHistory.length > 0 && !filteredHistory.length && (
+          <div style={{ color: C.muted, fontSize: 12.5 }}>No saved theses match “{q}”.</div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
-          {archiveHistory.map((entry) => {
+          {filteredHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
             const isViewingThis = viewing?._id === entry._id;
@@ -4276,6 +4331,7 @@ const ChartsTab = ({ lightMode }) => {
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
+  const [layout, setLayout] = useState("auto"); // auto | 1 | 2 columns
   const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
   const [fsSymbol, setFsSymbol] = useState(null);
 
@@ -4303,8 +4359,8 @@ const ChartsTab = ({ lightMode }) => {
 
   const symbolLabel = (sym) => CHART_PRESETS.find((p) => p.symbol === sym)?.label || sym.split(":").pop();
 
-  const cols = selected.length <= 2 ? 1 : 2;
-  const chartH = selected.length <= 2 ? 520 : 420;
+  const cols = layout === "1" ? 1 : layout === "2" ? 2 : (selected.length <= 2 ? 1 : 2);
+  const chartH = cols === 1 ? 520 : 420;
 
   const fsOverlay = fsSymbol ? (
     <div className="chart-fs-overlay">
@@ -4381,6 +4437,11 @@ const ChartsTab = ({ lightMode }) => {
                 <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
               ))}
             </div>
+            <div className="seg" title="Chart columns">
+              {[["auto", "Auto"], ["1", "1"], ["2", "2"]].map(([m, lbl]) => (
+                <button key={m} className={layout === m ? "on" : ""} onClick={() => setLayout(m)}>{lbl}</button>
+              ))}
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
             {selected.map((sym) => (
@@ -4428,8 +4489,17 @@ export default function Overwatch() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [lightMode, setLightMode] = useState(() => { try { return localStorage.getItem("overwatch:light") === "1"; } catch { return false; } });
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
 
   useEffect(() => { try { localStorage.setItem("overwatch:light", lightMode ? "1" : "0"); } catch {} }, [lightMode]);
+
+  useEffect(() => {
+    const up = () => setOnline(true);
+    const down = () => setOnline(false);
+    window.addEventListener("online", up);
+    window.addEventListener("offline", down);
+    return () => { window.removeEventListener("online", up); window.removeEventListener("offline", down); };
+  }, []);
   const autoSyncStarted = useRef(false);
   const archiveSaveTimer = useRef(null);
   const storageOk = storageAvailable();
@@ -4653,13 +4723,17 @@ export default function Overwatch() {
   ];
 
   const steps = [
-    { n: 1, label: "Sync live data", done: anyData, now: !anyData, go: () => setTab("pulse") },
-    { n: 2, label: "Build the thesis", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
+    { n: 1, label: "Sync live data", desc: "Pull live prices, internals, news and the calendar so the desk has fresh data to read.", done: anyData, now: !anyData, go: () => setTab("pulse") },
+    { n: 2, label: "Build the thesis", desc: "Weight the pillars and set your stance, then generate today's directional call and game plan.", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
   ];
 
   return (
     <div className={`bd-root${lightMode ? " light" : ""}`}>
       <style>{CSS}</style>
+
+      {!online && (
+        <div className="offline-banner"><WifiOff size={13} /> You're offline — data shown is the last successful sync.</div>
+      )}
 
       <header className="bd-header">
         <div className="bd-logo">
@@ -4679,7 +4753,7 @@ export default function Overwatch() {
         </div>
         <div className="bd-hright">
           <span className="bd-clock">{clock}<span>ET</span></span>
-          <span className="bd-session">
+          <span className={`bd-session bd-session-${session.tone}`}>
             <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
             {session.label}
           </span>
@@ -4696,7 +4770,7 @@ export default function Overwatch() {
       <div className="bd-flow">
         {steps.map((s, i) => (
           <React.Fragment key={s.n}>
-            <div className={`flow-step ${s.done ? "done" : ""} ${s.now ? "now" : ""}`} onClick={s.go}>
+            <div className={`flow-step ${s.done ? "done" : ""} ${s.now ? "now" : ""}`} onClick={s.go} title={s.desc}>
               <span className="flow-num">{s.done ? "✓" : s.n}</span>
               <span className="flow-label">{s.label}</span>
             </div>
