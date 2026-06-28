@@ -8,6 +8,8 @@ import Mail from "lucide-react/dist/esm/icons/mail.mjs";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
 import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import X from "lucide-react/dist/esm/icons/x.mjs";
+import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
+import PlayCircle from "lucide-react/dist/esm/icons/play-circle.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Copy from "lucide-react/dist/esm/icons/copy.mjs";
@@ -830,6 +832,25 @@ html,body{max-width:100vw;overflow-x:hidden}
 .g-thesis{grid-template-columns:340px 1fr}
 .g-thesis-top{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
 .archives-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+/* Academy video library */
+.academy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.academy-card{display:flex;flex-direction:column;gap:7px;padding:0;background:none;border:none;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.academy-card:disabled{cursor:default}
+.academy-thumb{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:linear-gradient(135deg,var(--panel3),var(--panel2));background-size:cover;background-position:center;border:1px solid var(--glass-border);box-shadow:inset 0 1px 0 rgba(255,255,255,.05);transition:border-color .15s}
+.academy-card:hover .academy-thumb{border-color:var(--brass)}
+.academy-play{color:#fff;opacity:.92;filter:drop-shadow(0 2px 8px rgba(0,0,0,.55));transition:transform .15s,opacity .15s}
+.academy-card:hover .academy-play{transform:scale(1.1);opacity:1}
+.academy-card.coming .academy-thumb{opacity:.55}
+.academy-soon{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.academy-dur{position:absolute;bottom:6px;right:6px;background:rgba(2,6,23,.82);color:#fff;font-family:'JetBrains Mono',monospace;font-size:10px;padding:2px 5px;border-radius:5px}
+.academy-title{font-size:12.5px;font-weight:600;color:var(--text);line-height:1.3}
+.academy-sub{font-size:11px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.academy-modal{position:fixed;inset:0;z-index:300;background:rgba(2,6,23,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px}
+.academy-modal-inner{width:min(900px,100%);max-height:90vh;overflow:auto;background:var(--glass-strong);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%);border:1px solid var(--glass-border);border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.6)}
+.academy-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid var(--glass-border)}
+.academy-player{aspect-ratio:16/9;background:#000}
+.academy-player iframe{width:100%;height:100%;border:none;display:block}
+@media(max-width:760px){.academy-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.g-thesis-top{grid-template-columns:1fr}}
 @media(max-width:760px){
@@ -3781,6 +3802,123 @@ const downloadPDF = (html, filename) => {
    TAB — ARCHIVES
    ================================================================ */
 
+/* ----------------------------------------------------------------
+   ACADEMY — curated educational videos (YouTube unlisted embeds)
+
+   To add a lesson: upload the HeyGen export to YouTube as *Unlisted*,
+   copy the video ID from the share URL (the part after `?v=` or after
+   `youtu.be/`), and paste it into `embedId` below. Leave `embedId` empty
+   to show the lesson as a "Coming soon" placeholder tile.
+   ---------------------------------------------------------------- */
+const ACADEMY_MODULES = [
+  {
+    id: "foundations",
+    title: "Foundations",
+    level: "Beginner",
+    summary: "Start here — how the desk thinks about bias, levels and risk.",
+    videos: [
+      { id: "f1", title: "How the Daily Bias Desk works", summary: "A tour of the workflow: sync data, weigh the pillars, build a thesis.", durationSec: 0, embedId: "", tags: ["orientation"] },
+      { id: "f2", title: "Reading the pillar weights", summary: "What each pillar measures and how the weighted score is built.", durationSec: 0, embedId: "", tags: ["thesis"] },
+      { id: "f3", title: "Support, resistance & the action level", summary: "Turning the level map into an actionable plan.", durationSec: 0, embedId: "", tags: ["levels"] },
+    ],
+  },
+  {
+    id: "playbooks",
+    title: "Playbooks",
+    level: "Intermediate",
+    summary: "Repeatable setups and how to size them.",
+    videos: [
+      { id: "p1", title: "Trading the morning thesis", summary: "Using invalidation and stand-aside conditions in real time.", durationSec: 0, embedId: "", tags: ["execution"] },
+      { id: "p2", title: "Hedging with the options tools", summary: "Beta-weighted hedges, verticals and calendars from the lab.", durationSec: 0, embedId: "", tags: ["options"] },
+    ],
+  },
+];
+
+const fmtVideoDuration = (seconds) => {
+  const n = Number(seconds) || 0;
+  if (n <= 0) return null;
+  const m = Math.floor(n / 60);
+  const s = n % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+const AcademyCard = () => {
+  const [active, setActive] = useState(null);
+  const modules = ACADEMY_MODULES;
+  const hasAny = modules.some((mod) => (mod.videos || []).some((v) => v.embedId));
+
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => { if (e.key === "Escape") setActive(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active]);
+
+  return (
+    <Card icon={GraduationCap} title="Academy" sub="Educational trading videos — produced in-house">
+      {!hasAny && (
+        <div style={{ color: C.muted, fontSize: 12.5, marginBottom: 12 }}>
+          Lessons are in production — the structure below fills in as videos are published.
+        </div>
+      )}
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+        {modules.map((mod) => (
+          <div key={mod.id}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10, flexWrap: "wrap" }}>
+              <span className="disp" style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{mod.title}</span>
+              {mod.level && <span className="chip b-brass" style={{ fontSize: 10 }}>{mod.level}</span>}
+              {mod.summary && <span style={{ fontSize: 11.5, color: C.muted }}>{mod.summary}</span>}
+            </div>
+            <div className="academy-grid">
+              {(mod.videos || []).map((v) => {
+                const ready = !!v.embedId;
+                const thumb = ready ? `https://img.youtube.com/vi/${v.embedId}/hqdefault.jpg` : null;
+                const dur = fmtVideoDuration(v.durationSec);
+                return (
+                  <button
+                    key={v.id}
+                    className={`academy-card${ready ? "" : " coming"}`}
+                    onClick={() => ready && setActive(v)}
+                    disabled={!ready}
+                    title={ready ? v.title : "Coming soon"}
+                  >
+                    <span className="academy-thumb" style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}>
+                      {ready ? <PlayCircle size={34} className="academy-play" /> : <span className="academy-soon">Coming soon</span>}
+                      {dur && <span className="academy-dur">{dur}</span>}
+                    </span>
+                    <span className="academy-title">{v.title}</span>
+                    {v.summary && <span className="academy-sub">{v.summary}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {active && (
+        <div className="academy-modal" onClick={() => setActive(null)}>
+          <div className="academy-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <div className="academy-modal-head">
+              <span className="disp" style={{ fontWeight: 600, fontSize: 15 }}>{active.title}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setActive(null)} title="Close"><X size={16} /></button>
+            </div>
+            <div className="academy-player">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${active.embedId}?autoplay=1&rel=0`}
+                title={active.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+            {active.summary && <div style={{ padding: "12px 16px", fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{active.summary}</div>}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+};
+
 const CloudNewsletterList = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3847,6 +3985,7 @@ const ArchiveTab = ({
       <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
         <CloudNewsletterList />
       </Card>
+      <AcademyCard />
       <Card icon={History} title="Thesis Library" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
