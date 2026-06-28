@@ -851,6 +851,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 .academy-player{aspect-ratio:16/9;background:#000}
 .academy-player iframe{width:100%;height:100%;border:none;display:block}
 @media(max-width:760px){.academy-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
+/* Session read collapse toggle is mobile-only */
+.read-toggle{display:none}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.g-thesis-top{grid-template-columns:1fr}}
 @media(max-width:760px){
@@ -867,6 +869,9 @@ html,body{max-width:100vw;overflow-x:hidden}
   /* icon-only Sync on mobile so the cluster (clock · session · sync · theme · settings) fits one row */
   .sync-label{display:none}
   .bd-hright .btn-brass{padding:8px 11px}
+  /* Session read defaults collapsed on mobile — headline stays, the rest folds away */
+  .read-toggle{display:inline-flex}
+  .session-read-body.read-collapsed{display:none}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
   /* workflow ticker is redundant on mobile (bottom nav + Sync button cover it) */
@@ -2063,15 +2068,23 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
   // Market snapshot defaults collapsed on every viewport — open it from the header toggle.
   const [tickersOpen, setTickersOpen] = useState(false);
+  // Session read collapses on mobile (headline stays visible); always expanded on desktop.
+  const [readOpen, setReadOpen] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
         icon={Activity}
         title="Session read"
         sub="Plain-English market brief"
-        tools={<><Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" /></>}
+        tools={<>
+          <button className="read-toggle btn btn-ghost btn-sm" onClick={() => setReadOpen((o) => !o)} title={readOpen ? "Collapse" : "Expand"} aria-expanded={readOpen}>
+            {readOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+          <Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" />
+        </>}
       >
         <div className="session-summary">{session.summary}</div>
+        <div className={`session-read-body${readOpen ? "" : " read-collapsed"}`}>
         <div className="session-meta">{data?.asOf ? `quotes ${data.asOf}` : "quotes pending"} · {marketSession().tone === "live" ? "auto-refresh every 2m while Pulse is open" : `market ${marketSession().label.toLowerCase()} — values frozen at the last quote until the next session`}</div>
         {(session.recapText || recap?.status === "loading") && (
           <div className="session-recap">
@@ -2107,6 +2120,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           ))}
         </div>
         {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
+        </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <button
