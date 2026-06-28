@@ -2069,7 +2069,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
                       <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
                     </div>
                   </div>
-                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={t.symbol === "US10Y" ? 3 : Math.abs(Number(t.price)) < 100 ? 2 : 0} />}
+                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || Math.abs(Number(t.price)) < 100) ? 2 : 0} />}
                 </div>
               </div>
             ))}
