@@ -1809,6 +1809,9 @@ const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
   const spotCenterX = 80 + spotRectW / 2;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      {/* zone shading: resistance (red) above the live price, support (green) below — readable at a glance */}
+      <rect x="74" y="8" width={W - 12 - 74} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
+      <rect x="74" y={y(spx.spot)} width={W - 12 - 74} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
       <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E293B" strokeWidth="1" />
       {rows.map((r, i) => (
         <g key={i}>
@@ -2115,7 +2118,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
             <div className="session-stat" key={item.key}>
               <div className="session-stat-key">{item.key}</div>
               <div className="session-stat-val">{item.value}</div>
-              <div className="session-stat-note">{item.note}</div>
+              <div className="session-stat-note" title={item.note}>{item.note}</div>
             </div>
           ))}
         </div>
@@ -3490,6 +3493,19 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   const activeInstrument = thesisInstrumentConfig(instrument);
   const [toolView, setToolView] = useState("synthesis");
+  const [copied, setCopied] = useState(false);
+  const copyThesis = (thesisObj) => {
+    const text = buildThesisText(thesisObj);
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1800); };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => {});
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch {}
+      document.body.removeChild(ta);
+    }
+  };
 
   const live = deskLiveContext(market, points, instrument);
   // Spot and IV are instrument-specific — clear any prior overrides when the focus changes so the
@@ -3713,6 +3729,9 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
               <div className="guard g-amber"><b><Shield size={12} /> Stand-aside conditions</b>{t.standAside}</div>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" onClick={() => copyThesis(t)} title="Copy thesis as text">
+                {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+              </button>
               <button className="btn" onClick={() => downloadPDF(buildThesisPrintHTML(t), `overwatch-thesis-${t._date || t.instrument || "today"}.pdf`)} title="Download thesis as PDF">
                 <FileText size={14} /> Download PDF
               </button>
@@ -3735,6 +3754,27 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   );
 };
 
+
+const buildThesisText = (t) => {
+  if (!t) return "";
+  const lines = [
+    `OVERWATCH THESIS — ${t.instrument || "SPX"}${t._date ? ` — ${t._date}` : ""}`,
+    `Bias: ${(t.bias || "—").toUpperCase()} · Score ${fmtSigned(t.score, 0)} · Conviction ${t.conviction ?? "—"}/10`,
+    t.headline ? `\n"${t.headline}"` : "",
+    t.summary ? `\n${t.summary}` : "",
+  ];
+  if ((t.bullCase || []).length) lines.push(`\nBULL CASE\n${t.bullCase.map((b) => `• ${b}`).join("\n")}`);
+  if ((t.bearCase || []).length) lines.push(`\nBEAR CASE\n${t.bearCase.map((b) => `• ${b}`).join("\n")}`);
+  const lv = t.levels || {};
+  if (lv.action || lv.upside || lv.downside) {
+    lines.push(`\nLEVELS\nAction: ${lv.action || "—"}\nUpside: ${lv.upside || "—"}\nDownside: ${lv.downside || "—"}`);
+  }
+  if (t.gamePlan) lines.push(`\nGAME PLAN\n${t.gamePlan}`);
+  if (t.invalidation) lines.push(`\nInvalidation: ${t.invalidation}`);
+  if (t.standAside) lines.push(`Stand-aside: ${t.standAside}`);
+  lines.push(`\n— Overwatch Daily Bias Desk · verify levels independently · not financial advice`);
+  return lines.filter((l) => l !== "").join("\n");
+};
 
 const buildThesisPrintHTML = (t) => {
   if (!t) return "";
@@ -4076,7 +4116,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
     const s = sym.trim().toUpperCase();
     if (!s) return;
     if (watchlist.some((w) => w.symbol === s)) { notify(`${s} is already on the board`, "err"); return; }
-    if (watchlist.length >= 12) { notify("Watchlist is capped at 12 — drop one first", "err"); return; }
+    if (watchlist.length >= 21) { notify("Watchlist is capped at 21 — drop one first", "err"); return; }
     setWatchlist([...watchlist, { symbol: s, name: name.trim() || s }]);
     setSym(""); setName("");
     notify(`${s} added — resync prices to pull it in`, "ok");
@@ -4092,7 +4132,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
         </div>
 
-        <span className="lab-label">Watchlist · {watchlist.length}/12</span>
+        <span className="lab-label">Watchlist · {watchlist.length}/21</span>
         <div style={{ marginBottom: 10 }}>
           {watchlist.map((w) => (
             <span className="wl-chip" key={w.symbol}>
