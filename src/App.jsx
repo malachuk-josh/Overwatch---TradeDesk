@@ -107,8 +107,9 @@ const roundShares = (entries, total) => {
   return floors;
 };
 
-// Setting one pillar pulls the difference equally from the others (water-filling, clamped to
-// [0, MAX_PILLAR]), keeping the budget fixed at WEIGHT_TOTAL. The dragged pillar lands exactly on its value.
+// Setting one pillar pulls the difference EQUALLY from the others (water-filling, clamped to
+// [0, MAX_PILLAR]), keeping the budget fixed at WEIGHT_TOTAL. Works in exact fractions — no integer
+// rounding — so every unclamped pillar gives up the same amount with no positional bias or drift.
 const redistributeWeights = (weights, key, rawVal) => {
   const newVal = clamp(Math.round(Number(rawVal) || 0), 0, MAX_PILLAR);
   const others = PILLAR_KEYS.filter((k) => k !== key);
@@ -131,9 +132,8 @@ const redistributeWeights = (weights, key, rawVal) => {
     diff = leftover;
     pool = next;
   }
-  const rounded = roundShares(others.map((k) => ({ k, v: vals[k] })), WEIGHT_TOTAL - newVal);
   const out = { [key]: newVal };
-  rounded.forEach((o) => { out[o.k] = o.f; });
+  others.forEach((k) => { out[k] = vals[k]; });
   return out;
 };
 
@@ -238,6 +238,12 @@ const fmtSigned = (v, d = 2, suffix = "") => {
 };
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+// Compact percent: whole numbers show plain, fractions to one decimal (e.g. 20, 12.5).
+const fmtPct = (v) => {
+  const r = Math.round((Number(v) || 0) * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+};
 
 const chgColor = (v) => (v === null || v === undefined || isNaN(v) ? C.muted : v >= 0 ? C.bull : C.bear);
 
@@ -1805,42 +1811,95 @@ const SentimentDonut = ({ headlines }) => {
   );
 };
 
-const FactorRadarChart = ({ weights }) => {
-  const data = FACTORS.map((f) => ({ k: f.label.split(" ")[0], v: weights[f.key] }));
+// Interactive pillar-weight radar. When onChange(newWeights) is supplied, the vertices become drag
+// handles — dragging a point sets that pillar's weight and the rest rebalance equally. Each gesture
+// redistributes from a snapshot taken at drag-start, so the move is stable and fully reversible.
+const FactorRadarChart = ({ weights, onChange }) => {
+  const data = FACTORS.map((f) => ({ key: f.key, k: f.label.split(" ")[0], v: Number(weights[f.key]) || 0 }));
   const max = MAX_PILLAR; // full scale tracks the per-pillar cap
+  const n = data.length;
   const cx = 150;
-  const cy = 88;
-  const outer = 56;
-  const point = (index, value = max) => {
-    const angle = (-90 + index * (360 / data.length)) * Math.PI / 180;
+  const cy = 120;
+  const outer = 80;
+  const svgRef = useRef(null);
+  const baseRef = useRef(null); // weights snapshot captured at drag-start
+  const [drag, setDrag] = useState(null);
+  const interactive = typeof onChange === "function";
+
+  const axis = (i) => {
+    const a = (-90 + i * (360 / n)) * Math.PI / 180;
+    return [Math.cos(a), Math.sin(a)];
+  };
+  const point = (i, value) => {
+    const [ux, uy] = axis(i);
     const r = outer * (value / max);
-    return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
+    return [cx + ux * r, cy + uy * r];
   };
   const polygon = (value) => data.map((_, i) => point(i, value).join(",")).join(" ");
   const valuePolygon = data.map((d, i) => point(i, d.v).join(",")).join(" ");
+
+  const valueFromEvent = (i, e) => {
+    const svg = svgRef.current;
+    const ctm = svg && svg.getScreenCTM();
+    if (!ctm) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const loc = pt.matrixTransform(ctm.inverse());
+    const [ux, uy] = axis(i);
+    const proj = (loc.x - cx) * ux + (loc.y - cy) * uy; // distance along this pillar's spoke
+    return clamp(Math.round((proj / outer) * max), 0, max);
+  };
+  const onMove = (e) => {
+    if (drag == null || !interactive || !baseRef.current) return;
+    const v = valueFromEvent(drag, e);
+    if (v != null) onChange(redistributeWeights(baseRef.current, data[drag].key, v));
+  };
+  const startDrag = (i) => (e) => {
+    if (!interactive) return;
+    e.preventDefault();
+    baseRef.current = { ...weights };
+    svgRef.current?.setPointerCapture?.(e.pointerId);
+    setDrag(i);
+  };
+  const endDrag = () => { baseRef.current = null; setDrag(null); };
+
   return (
-    <div style={{ width: "100%", height: 176 }}>
-      <svg viewBox="0 0 300 176" style={{ width: "100%", height: "100%", display: "block" }}>
+    <div style={{ width: "100%", height: 248, userSelect: "none", touchAction: "none" }}>
+      <svg
+        ref={svgRef}
+        viewBox="0 0 300 248"
+        style={{ width: "100%", height: "100%", display: "block" }}
+        onPointerMove={onMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+      >
         {[0.25, 0.5, 0.75, 1].map((f) => (
           <polygon key={f} points={polygon(max * f)} fill="none" stroke="#243140" strokeWidth="1" />
         ))}
         {data.map((d, i) => {
           const [x1, y1] = point(i, 0);
           const [x2, y2] = point(i, max);
-          const [lx, ly] = point(i, max * 1.32);
+          const [lx, ly] = point(i, max * 1.36);
           return (
-            <g key={d.k}>
+            <g key={d.key}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
-              <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill="#7E8CA0" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                {d.k}
-              </text>
+              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fill="#7E8CA0" fontSize="10.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
+              <text x={lx} y={ly + 8} textAnchor="middle" dominantBaseline="middle" fill="#E8B45A" fontSize="10.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
             </g>
           );
         })}
         <polygon points={valuePolygon} fill="rgba(232,180,90,.24)" stroke="#E8B45A" strokeWidth="2" />
         {data.map((d, i) => {
           const [x, y] = point(i, d.v);
-          return <circle key={d.k} cx={x} cy={y} r="3" fill="#E8B45A" />;
+          return (
+            <g key={d.key}>
+              {interactive && (
+                <circle cx={x} cy={y} r="18" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
+              )}
+              <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#E8B45A" stroke="#1A1408" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+            </g>
+          );
         })}
       </svg>
     </div>
@@ -3281,7 +3340,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
   const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
   const feedSummary = `options scenario${activeHedges ? ` + ${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : ""}`;
-  const weightSum = FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0);
+  const weightSum = Math.round(FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0));
 
   if (toolView !== "synthesis") {
     return (
@@ -3319,27 +3378,14 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         <Card
           icon={FlaskConical}
           title="Pillar weights"
-          sub={`Fixed 100-point budget — raising one pillar pulls equally from the rest (max ${MAX_PILLAR}% each)`}
+          sub={`Drag the points — fixed 100-point budget, raising one pillar pulls equally from the rest (max ${MAX_PILLAR}% each)`}
           tools={<button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>}
         >
-          {FACTORS.map((f) => (
-            <div className="slider-row" key={f.key}>
-              <div className="slider-head">
-                <span className="slider-name">{f.label}<span className="slider-hint">{f.hint}</span></span>
-                <span className="slider-val">{weights[f.key]}%</span>
-              </div>
-              <input
-                type="range" min="0" max={MAX_PILLAR} value={weights[f.key]} className="bd-range"
-                style={{ "--pct": `${Math.round((weights[f.key] / MAX_PILLAR) * 100)}%` }}
-                onChange={(e) => setWeights(redistributeWeights(weights, f.key, Number(e.target.value)))}
-              />
-            </div>
-          ))}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 2 }}>
+          <FactorRadarChart weights={weights} onChange={setWeights} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
             <span className="lab-label" style={{ margin: 0 }}>Allocated</span>
             <span className="mono" style={{ fontSize: 12, color: weightSum === WEIGHT_TOTAL ? C.brass : C.bear }}>{weightSum} / {WEIGHT_TOTAL}</span>
           </div>
-          <FactorRadarChart weights={weights} />
         </Card>
         <Card icon={NotebookPen} title="Instrument focus" sub="Choose which instrument the thesis is built for">
           <InstrumentSelect value={instrument} onChange={setInstrument} />
