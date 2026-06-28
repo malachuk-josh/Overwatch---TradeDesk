@@ -795,11 +795,14 @@ html,body{max-width:100vw;overflow-x:hidden}
 .g-market-read{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
 .g-3{grid-template-columns:repeat(3,1fr)}
 .g-data{grid-template-columns:1fr 1fr 1fr}
+.pulse-levels-mobile{display:none}
 .g-thesis{grid-template-columns:340px 1fr}
 .archives-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:760px){
   .g-3{grid-template-columns:1fr}
+  .pulse-levels-desktop{display:none}
+  .pulse-levels-mobile{display:block}
   .bd-main{padding:14px 12px calc(103px + env(safe-area-inset-bottom,0px) + 10px)}
   .bd-header{padding:12px 14px;flex-wrap:wrap}
   .bd-hright{width:100%;justify-content:space-between;margin-left:0}
@@ -1580,7 +1583,7 @@ const SectorHeatmap = ({ sectors }) => {
   );
 };
 
-const DayCandle = ({ low, high, price, dayOpen, previousClose }) => {
+const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
   if (low == null || high == null || price == null || high <= low) return null;
   const open = Number.isFinite(Number(dayOpen))
     ? Number(dayOpen)
@@ -1607,11 +1610,11 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose }) => {
       <div className="candle-axis" aria-hidden="true">
         <span className="candle-axis-line candle-axis-hi">
           <span className="candle-axis-tag">H</span>
-          <span className="candle-axis-num">{fmtNum(high, 0)}</span>
+          <span className="candle-axis-num">{fmtNum(high, decimals)}</span>
         </span>
         <span className="candle-axis-line candle-axis-lo">
           <span className="candle-axis-tag">L</span>
-          <span className="candle-axis-num">{fmtNum(low, 0)}</span>
+          <span className="candle-axis-num">{fmtNum(low, decimals)}</span>
         </span>
       </div>
       <div className="candle-rail" style={{ height: `${trackHeight}px` }}>
@@ -1910,9 +1913,9 @@ const FactorRadarChart = ({ weights, onChange }) => {
 };
 
 const LEVEL_MAP_GROUPS = [
-  { keys: ["SPY", "SPX", "ES"], subs: { SPY: "S&P 500 ETF", SPX: "S&P 500 Index", ES: "E-mini S&P Futures" } },
-  { keys: ["QQQ", "NDX", "NQ"], subs: { QQQ: "Nasdaq 100 ETF", NDX: "Nasdaq 100 Index", NQ: "E-mini Nasdaq Futures" } },
-  { keys: ["DIA", "DJI", "YM"], subs: { DIA: "Dow Jones ETF", DJI: "Dow Jones Index", YM: "E-mini Dow Futures" } },
+  { name: "S&P 500", keys: ["SPY", "SPX", "ES"], subs: { SPY: "S&P 500 ETF", SPX: "S&P 500 Index", ES: "E-mini S&P Futures" } },
+  { name: "Nasdaq 100", keys: ["QQQ", "NDX", "NQ"], subs: { QQQ: "Nasdaq 100 ETF", NDX: "Nasdaq 100 Index", NQ: "E-mini Nasdaq Futures" } },
+  { name: "Dow", keys: ["DIA", "DJI", "YM"], subs: { DIA: "Dow Jones ETF", DJI: "Dow Jones Index", YM: "E-mini Dow Futures" } },
 ];
 
 const LevelMapCard = ({ group, points }) => {
@@ -1921,6 +1924,30 @@ const LevelMapCard = ({ group, points }) => {
   const data = points?.[dataKey];
   return (
     <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]}>
+      <div className="seg" style={{ marginBottom: 10 }}>
+        {group.keys.map((k) => (
+          <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
+        ))}
+      </div>
+      <LevelsLadder spx={data} label={active} />
+    </Card>
+  );
+};
+
+// Mobile-only: collapses the three stacked level maps into one card with a complex selector,
+// so phones don't scroll through three screen-heights of pivot ladders.
+const LevelMapPanel = ({ points }) => {
+  const [groupIdx, setGroupIdx] = useState(0);
+  const group = LEVEL_MAP_GROUPS[groupIdx];
+  const [active, setActive] = useState(group.keys[0]);
+  const data = points?.[active.toLowerCase()];
+  return (
+    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]}>
+      <div className="seg" style={{ marginBottom: 8 }}>
+        {LEVEL_MAP_GROUPS.map((g, i) => (
+          <button key={g.name} className={groupIdx === i ? "on" : ""} onClick={() => { setGroupIdx(i); setActive(g.keys[0]); }}>{g.name}</button>
+        ))}
+      </div>
       <div className="seg" style={{ marginBottom: 10 }}>
         {group.keys.map((k) => (
           <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
@@ -2035,24 +2062,27 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
                 </div>
                 <div className="tk-body">
                   <div className="tk-left">
-                    <div className="tk-name">{t.name}</div>
+                    <div className="tk-name" title={t.name}>{t.name}</div>
                     <div className="tk-price">{t._stale ? "—" : fmtNum(t.price, t.symbol === "US10Y" ? 3 : 2)}</div>
                     <div className="tk-chg">
                       <span style={{ color: chgColor(t.change) }}>{t._stale ? "—" : fmtSigned(t.change)}</span>
                       <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
                     </div>
                   </div>
-                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} />}
+                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={t.symbol === "US10Y" ? 3 : Math.abs(Number(t.price)) < 100 ? 2 : 0} />}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
-      <div className="grid g-data" style={{ alignItems: "start" }}>
+      <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
         {LEVEL_MAP_GROUPS.map((g) => (
           <LevelMapCard key={g.keys[0]} group={g} points={points} />
         ))}
+      </div>
+      <div className="pulse-levels-mobile">
+        <LevelMapPanel points={points} />
       </div>
       <div className="grid g-market-read">
         <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
