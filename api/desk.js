@@ -1150,12 +1150,25 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed }) => {
         ? "Options demand is complacent; low put demand can leave the tape vulnerable to a vol reset."
         : "Options demand is balanced; not a dominant signal by itself.";
 
+  // Reconcile the price/breadth trend against the sentiment gauge (Fear & Greed) so the screen
+  // does not narrate a "constructive" tape directly above extreme-fear positioning gauges. When the
+  // two disagree at the extremes, surface it as an explicit divergence rather than letting both stand.
+  const fngScore = Number(fearGreed?.score);
+  const fngExtreme = !Number.isFinite(fngScore) ? null : fngScore <= 25 ? "fear" : fngScore >= 75 ? "greed" : null;
+  let divergence = null;
+  if (fngExtreme === "fear" && trendScore > 8) {
+    divergence = `Price and breadth read constructive (trend ${trendScore}), but the Fear & Greed gauge is in extreme fear (${round(fngScore)}). The move is unconfirmed by positioning — treat strength as fade-prone until sentiment repairs.`;
+  } else if (fngExtreme === "greed" && trendScore < -8) {
+    divergence = `Price and breadth read defensive (trend ${trendScore}), but the Fear & Greed gauge is in extreme greed (${round(fngScore)}). Positioning is complacent into weakness — bounces may be sold and downside can extend.`;
+  }
+
   return {
     putCall,
     putCallRead,
     breadth: sectorRows.length ? `${advancers}/${total} sector ETFs positive (${pctPositive}%); ${breadthTone}.` : "Sector ETF performance is used as the live breadth proxy.",
     trend,
-    summary: `${trendRead} Breadth score ${breadthScore}; volatility score ${volScore}.`,
+    divergence,
+    summary: `${trendRead} Breadth score ${breadthScore}; volatility score ${volScore}.${divergence ? ` Divergence: ${divergence}` : ""}`,
     breadthDetail: {
       advancers,
       decliners,
