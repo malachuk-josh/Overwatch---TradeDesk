@@ -93,6 +93,7 @@ const FACTORS = [
 
 const PILLAR_KEYS = FACTORS.map((f) => f.key);
 const WEIGHT_TOTAL = 100;
+const MAX_PILLAR = 70; // no single pillar may exceed this share of the budget
 // Fixed budget: the five pillars always sum to WEIGHT_TOTAL, starting evenly split.
 const DEFAULT_WEIGHTS = PILLAR_KEYS.reduce((acc, k) => ({ ...acc, [k]: WEIGHT_TOTAL / PILLAR_KEYS.length }), {});
 
@@ -106,10 +107,10 @@ const roundShares = (entries, total) => {
   return floors;
 };
 
-// Setting one pillar pulls the difference equally from the others (water-filling, clamped to [0,100]),
-// keeping the budget fixed at WEIGHT_TOTAL. The dragged pillar lands exactly on its value.
+// Setting one pillar pulls the difference equally from the others (water-filling, clamped to
+// [0, MAX_PILLAR]), keeping the budget fixed at WEIGHT_TOTAL. The dragged pillar lands exactly on its value.
 const redistributeWeights = (weights, key, rawVal) => {
-  const newVal = clamp(Math.round(Number(rawVal) || 0), 0, WEIGHT_TOTAL);
+  const newVal = clamp(Math.round(Number(rawVal) || 0), 0, MAX_PILLAR);
   const others = PILLAR_KEYS.filter((k) => k !== key);
   const vals = {};
   others.forEach((k) => { vals[k] = Math.max(0, Number(weights[k]) || 0); });
@@ -123,7 +124,7 @@ const redistributeWeights = (weights, key, rawVal) => {
     for (const k of pool) {
       let nv = vals[k] + share;
       if (nv < 0) { leftover += nv; nv = 0; }
-      else if (nv > WEIGHT_TOTAL) { leftover += nv - WEIGHT_TOTAL; nv = WEIGHT_TOTAL; }
+      else if (nv > MAX_PILLAR) { leftover += nv - MAX_PILLAR; nv = MAX_PILLAR; }
       else next.push(k);
       vals[k] = nv;
     }
@@ -136,12 +137,27 @@ const redistributeWeights = (weights, key, rawVal) => {
   return out;
 };
 
-// Scale arbitrary saved weights onto the fixed budget (migrates older 0–100-each weights).
+// Scale arbitrary saved weights onto the fixed budget and enforce the per-pillar cap
+// (migrates older weights, including any pillar that was previously dialed up to 100).
 const normalizeWeightsToBudget = (weights) => {
-  const raw = PILLAR_KEYS.map((k) => ({ k, v: Math.max(0, Number(weights?.[k]) || 0) }));
-  const sum = raw.reduce((s, o) => s + o.v, 0);
+  const vals = {};
+  PILLAR_KEYS.forEach((k) => { vals[k] = Math.max(0, Number(weights?.[k]) || 0); });
+  const sum = PILLAR_KEYS.reduce((s, k) => s + vals[k], 0);
   if (sum <= 0) return { ...DEFAULT_WEIGHTS };
-  const rounded = roundShares(raw.map((o) => ({ k: o.k, v: (o.v / sum) * WEIGHT_TOTAL })), WEIGHT_TOTAL);
+  PILLAR_KEYS.forEach((k) => { vals[k] = (vals[k] / sum) * WEIGHT_TOTAL; });
+  // push any over-cap excess equally onto the pillars that still have room
+  let guard = 0;
+  while (guard++ < 60) {
+    const over = PILLAR_KEYS.filter((k) => vals[k] > MAX_PILLAR + 1e-9);
+    if (!over.length) break;
+    let excess = 0;
+    over.forEach((k) => { excess += vals[k] - MAX_PILLAR; vals[k] = MAX_PILLAR; });
+    const room = PILLAR_KEYS.filter((k) => vals[k] < MAX_PILLAR - 1e-9);
+    if (!room.length) break;
+    const share = excess / room.length;
+    room.forEach((k) => { vals[k] = Math.min(MAX_PILLAR, vals[k] + share); });
+  }
+  const rounded = roundShares(PILLAR_KEYS.map((k) => ({ k, v: vals[k] })), WEIGHT_TOTAL);
   const out = {};
   rounded.forEach((o) => { out[o.k] = o.f; });
   return out;
@@ -1791,26 +1807,27 @@ const SentimentDonut = ({ headlines }) => {
 
 const FactorRadarChart = ({ weights }) => {
   const data = FACTORS.map((f) => ({ k: f.label.split(" ")[0], v: weights[f.key] }));
+  const max = MAX_PILLAR; // full scale tracks the per-pillar cap
   const cx = 150;
-  const cy = 100;
-  const outer = 66;
-  const point = (index, value = 100) => {
+  const cy = 88;
+  const outer = 56;
+  const point = (index, value = max) => {
     const angle = (-90 + index * (360 / data.length)) * Math.PI / 180;
-    const r = outer * (value / 100);
+    const r = outer * (value / max);
     return [cx + Math.cos(angle) * r, cy + Math.sin(angle) * r];
   };
   const polygon = (value) => data.map((_, i) => point(i, value).join(",")).join(" ");
   const valuePolygon = data.map((d, i) => point(i, d.v).join(",")).join(" ");
   return (
-    <div style={{ width: "100%", height: 205 }}>
-      <svg viewBox="0 0 300 205" style={{ width: "100%", height: "100%", display: "block" }}>
-        {[25, 50, 75, 100].map((v) => (
-          <polygon key={v} points={polygon(v)} fill="none" stroke="#243140" strokeWidth="1" />
+    <div style={{ width: "100%", height: 176 }}>
+      <svg viewBox="0 0 300 176" style={{ width: "100%", height: "100%", display: "block" }}>
+        {[0.25, 0.5, 0.75, 1].map((f) => (
+          <polygon key={f} points={polygon(max * f)} fill="none" stroke="#243140" strokeWidth="1" />
         ))}
         {data.map((d, i) => {
           const [x1, y1] = point(i, 0);
-          const [x2, y2] = point(i, 100);
-          const [lx, ly] = point(i, 128);
+          const [x2, y2] = point(i, max);
+          const [lx, ly] = point(i, max * 1.32);
           return (
             <g key={d.k}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
@@ -3302,7 +3319,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         <Card
           icon={FlaskConical}
           title="Pillar weights"
-          sub="Fixed 100-point budget — raising one pillar pulls equally from the rest"
+          sub={`Fixed 100-point budget — raising one pillar pulls equally from the rest (max ${MAX_PILLAR}% each)`}
           tools={<button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>}
         >
           {FACTORS.map((f) => (
@@ -3312,8 +3329,8 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
                 <span className="slider-val">{weights[f.key]}%</span>
               </div>
               <input
-                type="range" min="0" max="100" value={weights[f.key]} className="bd-range"
-                style={{ "--pct": `${weights[f.key]}%` }}
+                type="range" min="0" max={MAX_PILLAR} value={weights[f.key]} className="bd-range"
+                style={{ "--pct": `${Math.round((weights[f.key] / MAX_PILLAR) * 100)}%` }}
                 onChange={(e) => setWeights(redistributeWeights(weights, f.key, Number(e.target.value)))}
               />
             </div>
