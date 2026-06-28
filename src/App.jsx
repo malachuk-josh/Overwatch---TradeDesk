@@ -4439,7 +4439,15 @@ export default function Overwatch() {
 
       <header className="bd-header">
         <div className="bd-logo">
-          <div className="bd-mark">OW</div>
+          <div className="bd-mark" title="Overwatch">
+            <svg viewBox="-70 -70 140 140" width="26" height="26" fill="none" stroke="var(--brass)" strokeLinecap="round" strokeLinejoin="round" aria-label="Overwatch">
+              <line x1="0" y1="-62" x2="0" y2="62" strokeWidth="2.5" opacity="0.4" />
+              <line x1="-62" y1="0" x2="62" y2="0" strokeWidth="2.5" opacity="0.4" />
+              <circle cx="0" cy="0" r="37" strokeWidth="5" />
+              <circle cx="0" cy="0" r="30" strokeWidth="2.5" opacity="0.5" />
+              <path d="M-22 14 L-13 6 L-6 -8 L2 5 L8 -1 L15 4 L22 14" strokeWidth="5" />
+            </svg>
+          </div>
           <div>
             <div className="bd-title">OVERWATCH <em>//</em> DAILY BIAS DESK</div>
             <div className="bd-sub">{dateShort()} · Overwatch Intelligence</div>
