@@ -2152,7 +2152,8 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
   const [expanded, setExpanded] = useState(false);
-  const PAGE = 5;
+  // Mobile shows a tighter top-3 before the "show more" dropdown; desktop stays at 5.
+  const PAGE = (typeof window !== "undefined" && window.innerWidth < 768) ? 3 : 5;
 
   if (status === "idle")
     return (
