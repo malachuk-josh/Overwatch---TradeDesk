@@ -657,6 +657,7 @@ const CSS = `
   --bull:#22C55E; --bull-dim:rgba(34,197,94,.12);
   --bear:#EF4444; --bear-dim:rgba(239,68,68,.12);
   --info:#38BDF8; --info-dim:rgba(56,189,248,.12);
+  --glass:rgba(15,23,42,.55); --glass-strong:rgba(2,6,23,.6); --glass-border:rgba(255,255,255,.08);
   --paper:#F3EEE3; --paper2:#EAE3D3; --paper-ink:#1A1916; --paper-muted:#6A6357; --paper-line:#D8CFBC;
   --r:10px;
 }
@@ -664,10 +665,25 @@ const CSS = `
 html,body{max-width:100vw;overflow-x:hidden}
 .bd-root{
   min-height:100vh;width:100%;
-  background:var(--ink);color:var(--text);
+  background-color:var(--ink);color:var(--text);
   font-family:'Inter',system-ui,sans-serif;font-size:14px;line-height:1.5;
-  background-image:radial-gradient(rgba(126,140,160,.05) 1px, transparent 1px);
-  background-size:26px 26px;
+  /* atmospheric blue glows give the frosted-glass surfaces something to pick up, plus a faint dot grid */
+  background-image:
+    radial-gradient(1200px 640px at 6% -8%, rgba(59,130,246,.14), transparent 60%),
+    radial-gradient(1000px 720px at 100% -6%, rgba(56,189,248,.08), transparent 55%),
+    radial-gradient(960px 820px at 50% 118%, rgba(37,99,235,.10), transparent 62%),
+    radial-gradient(rgba(126,140,160,.05) 1px, transparent 1px);
+  background-size:100% 100%, 100% 100%, 100% 100%, 26px 26px;
+  background-position:0 0, 0 0, 0 0, 0 0;
+  background-repeat:no-repeat, no-repeat, no-repeat, repeat;
+  background-attachment:fixed, fixed, fixed, scroll;
+}
+.bd-root.light{
+  background-image:
+    radial-gradient(1100px 600px at 6% -8%, rgba(59,130,246,.10), transparent 60%),
+    radial-gradient(900px 700px at 100% -6%, rgba(14,165,233,.07), transparent 55%),
+    radial-gradient(900px 760px at 50% 118%, rgba(37,99,235,.06), transparent 62%),
+    radial-gradient(rgba(0,30,60,.05) 1px, transparent 1px);
 }
 .bd-root ::selection{background:rgba(59,130,246,.3)}
 .mono{font-family:'JetBrains Mono',monospace}
@@ -682,8 +698,10 @@ html,body{max-width:100vw;overflow-x:hidden}
 /* ---------- header ---------- */
 .bd-header{
   display:flex;align-items:center;gap:18px;padding:14px 22px;
-  border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,#10161F 0%,#020617 100%);
+  border-bottom:1px solid var(--glass-border);
+  background:var(--glass-strong);
+  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  backdrop-filter:blur(20px) saturate(125%);
   position:sticky;top:0;z-index:50;
 }
 .bd-logo{display:flex;align-items:center;gap:12px;min-width:0}
@@ -766,7 +784,10 @@ html,body{max-width:100vw;overflow-x:hidden}
 .bd-bottom-nav{
   display:none;
   position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:var(--panel);border-top:1px solid var(--line);
+  background:var(--glass-strong);
+  -webkit-backdrop-filter:blur(20px) saturate(125%);
+  backdrop-filter:blur(20px) saturate(125%);
+  border-top:1px solid var(--glass-border);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 .bd-bottom-nav-inner{
@@ -812,8 +833,11 @@ html,body{max-width:100vw;overflow-x:hidden}
 
 /* ---------- cards ---------- */
 .card{
-  background:linear-gradient(180deg,rgba(255,255,255,.018),transparent 38%),var(--panel);
-  border:1px solid var(--line);border-radius:var(--r);padding:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012) 42%),var(--glass);
+  -webkit-backdrop-filter:blur(16px) saturate(125%);
+  backdrop-filter:blur(16px) saturate(125%);
+  border:1px solid var(--glass-border);border-radius:var(--r);padding:16px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 12px 34px rgba(2,6,23,.38);
 }
 .card-head{display:flex;align-items:center;gap:9px;margin-bottom:13px}
 .card-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text)}
@@ -1143,8 +1167,11 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 /* ---------- drawer / overlay ---------- */
 .overlay{position:fixed;inset:0;background:rgba(5,8,12,.66);backdrop-filter:blur(2px);z-index:90}
 .drawer{
-  position:fixed;top:0;right:0;bottom:0;width:min(420px,94vw);background:var(--panel);z-index:100;
-  border-left:1px solid var(--line2);padding:22px;overflow-y:auto;
+  position:fixed;top:0;right:0;bottom:0;width:min(420px,94vw);z-index:100;
+  background:var(--glass-strong);
+  -webkit-backdrop-filter:blur(22px) saturate(125%);
+  backdrop-filter:blur(22px) saturate(125%);
+  border-left:1px solid var(--glass-border);padding:22px;overflow-y:auto;
   animation:slideIn .25s cubic-bezier(.22,1,.36,1);
 }
 @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -1275,17 +1302,17 @@ select.bd-in option{background:var(--panel);color:var(--text)}
   --bull-dim:rgba(20,160,90,.12);
   --bear-dim:rgba(200,50,55,.12);
   --info-dim:rgba(50,130,210,.12);
-  background-image:radial-gradient(rgba(0,30,60,.06) 1px, transparent 1px);
+  --glass:rgba(255,255,255,.6); --glass-strong:rgba(255,255,255,.7); --glass-border:rgba(15,23,42,.08);
 }
 .bd-root.light .bd-header{
-  background:linear-gradient(180deg,#FFFFFF 0%,#F5F7FA 100%);
+  background:rgba(255,255,255,.7);
 }
 .bd-root.light .bd-mark{
   background:linear-gradient(135deg,#DDE4EF,#C8D2E4);
 }
 .bd-root.light .bd-flow{background:var(--panel)}
 .bd-root.light .card{
-  background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.6) 38%),var(--panel);
+  background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,.35) 42%),var(--glass);
 }
 .bd-root.light .internals-hero{
   background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.08),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
