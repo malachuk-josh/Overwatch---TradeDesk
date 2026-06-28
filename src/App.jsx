@@ -566,7 +566,7 @@ const condensePoints = (p) => {
 NDX LEVELS: spot ${fmtNum(p.ndx?.spot)}, pivot ${fmtNum(p.ndx?.pivot)}, supports ${(p.ndx?.supports || []).map((v) => fmtNum(v)).join("/")}, resistances ${(p.ndx?.resistances || []).map((v) => fmtNum(v)).join("/")}
 DJI LEVELS: spot ${fmtNum(p.dji?.spot)}, pivot ${fmtNum(p.dji?.pivot)}, supports ${(p.dji?.supports || []).map((v) => fmtNum(v)).join("/")}, resistances ${(p.dji?.resistances || []).map((v) => fmtNum(v)).join("/")}
 VIX: ${fmtNum(p.vix?.spot)} (${p.vix?.structure || "?"}) — ${p.vix?.note || ""}
-INTERNALS: put/call ${fmtNum(p.internals?.putCall)} (${p.internals?.putCallRead || ""}); breadth: ${p.internals?.breadth || ""}; trend: ${p.internals?.trend || ""}
+INTERNALS: put/call ${fmtNum(p.internals?.putCall)} (${p.internals?.putCallRead || ""}); breadth: ${p.internals?.breadth || ""}; trend: ${p.internals?.trend || ""}${p.internals?.divergence ? `\nDIVERGENCE (reconcile this — do not narrate one side without the other): ${p.internals.divergence}` : ""}
 BREADTH DETAIL: ${breadth ? `${breadth.advancers}/${breadth.total} sectors positive (${breadth.pctPositive}%), avg sector change ${fmtSigned(breadth.avgChange, 2, "%")}, score ${breadth.score}, ${breadth.tone}. ${breadth.read || ""} Distribution: ${dist}. Leaders: ${(breadth.strongest || []).map((s) => `${s.name} ${fmtSigned(s.changePct, 2, "%")}`).join(", ")}. Laggards: ${(breadth.weakest || []).map((s) => `${s.name} ${fmtSigned(s.changePct, 2, "%")}`).join(", ")}. Sector tape: ${sectorLine}` : "Breadth detail unavailable."}
 TREND DETAIL: ${trend ? `${trend.state} with trend score ${trend.score}; index tone ${fmtSigned(trend.indexTone, 2, "%")}. ${trend.read || ""} Components: ${(trend.components || []).join("; ")}` : "Trend detail unavailable."}
 VOL DETAIL: ${vol ? `VIX ${fmtNum(vol.vix, 1)}; zone ${vol.zone}; structure ${vol.structure}; vol pressure score ${vol.score}. ${vol.read || ""}` : "Vol detail unavailable."}
@@ -2556,6 +2556,13 @@ const InternalsRegime = ({ data }) => {
         </div>
       </div>
 
+      {internals.divergence && (
+        <div className="guard g-amber" style={{ marginTop: 12 }}>
+          <b><AlertTriangle size={12} /> Trend vs sentiment divergence</b>
+          {internals.divergence}
+        </div>
+      )}
+
       <div className="internals-grid">
         <div className="internals-tile">
           <span>Breadth participation</span>
@@ -2889,10 +2896,14 @@ const deskLiveContext = (market, points, instrument) => {
   };
   const vix = find("VIX")?.price ?? points?.vix?.spot;
   const us10 = find("US10Y")?.price;
+  const isStock = cfg.group === "stock";
   return {
     cfg,
+    isStock,
     spot: priceOf(cfg.symbol),
-    sigmaPct: Number.isFinite(Number(vix)) ? Number(vix) : null, // VIX ≈ annualized IV in %
+    // VIX ≈ annualized IV for the broad index, a fair auto-fill for index/ETF instruments.
+    // It is NOT a single stock's implied vol, so leave it blank for stocks and let the user enter it.
+    sigmaPct: isStock ? null : (Number.isFinite(Number(vix)) ? Number(vix) : null),
     ratePct: Number.isFinite(Number(us10)) ? Number(us10) : null,
     futSym: cfg.futures,
     futMult: FUTURES_MULT[cfg.futures] || 50,
@@ -3147,7 +3158,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
 
   return (
     <div className="grid g-2" style={{ alignItems: "start" }}>
-      <Card icon={Calculator} title="Inputs" sub="Auto-filled from the live feed — override any field">
+      <Card icon={Calculator} title="Inputs" sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}>
         <div className="seg" style={{ marginBottom: 14 }}>
           {["call", "put"].map((ty) => (
             <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
@@ -3161,6 +3172,11 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
           <NumField label="Rate" suffix="%" value={env.ratePct} placeholder={fmtNum(live.ratePct ?? 4.3, 2)} onChange={(v) => setEnv("ratePct", v)} />
           <NumField label="Div yld" suffix="%" value={env.divPct} placeholder="1.3" onChange={(v) => setEnv("divPct", v)} />
         </div>
+        {live.isStock && !env.sigmaPct && (
+          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+            VIX is index implied vol, not {live.cfg?.label}'s — enter {live.cfg?.label}'s own IV for accurate Greeks.
+          </div>
+        )}
         <div className="lab-field">
           <span className="lab-label">Implied vol solver</span>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -3257,6 +3273,12 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px" }}>
+        <Crosshair size={13} color={C.brass} />
+        <span style={{ fontSize: 12, color: C.muted }}>
+          Structures priced against <b style={{ color: "var(--text)" }}>{live.cfg?.label}</b> @ {fmtNum(live.spot ?? 0, 2)} · {live.futSym} futures proxy
+        </span>
+      </div>
       {/* Beta-weighted hedge */}
       <StructToggle on={b.on} onToggle={(on) => setHedge("beta", "on", on)} icon={Shield} label="Beta-weighted portfolio hedge" sub="Neutralize directional exposure with futures or protective puts" />
       {b.on && (
@@ -3422,6 +3444,11 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   const [toolView, setToolView] = useState("synthesis");
 
   const live = deskLiveContext(market, points, instrument);
+  // Spot and IV are instrument-specific — clear any prior overrides when the focus changes so the
+  // Options/Hedge tools re-derive from the new instrument's live feed instead of carrying a stale value.
+  useEffect(() => {
+    setDeskTools((d) => (d.env.spot === "" && d.env.sigmaPct === "") ? d : ({ ...d, env: { ...d.env, spot: "", sigmaPct: "" } }));
+  }, [instrument, setDeskTools]);
   const setEnv = (k, val) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: val } }));
   const setOpt = (k, val) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: val } }));
   const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
