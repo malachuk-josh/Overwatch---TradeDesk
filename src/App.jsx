@@ -4440,7 +4440,7 @@ export default function Overwatch() {
       <header className="bd-header">
         <div className="bd-logo">
           <div className="bd-mark" title="Overwatch">
-            <svg viewBox="-70 -70 140 140" width="26" height="26" fill="none" stroke="var(--brass)" strokeLinecap="round" strokeLinejoin="round" aria-label="Overwatch">
+            <svg viewBox="-50 -50 100 100" width="31" height="31" fill="none" stroke="var(--brass)" strokeLinecap="round" strokeLinejoin="round" aria-label="Overwatch">
               <line x1="0" y1="-62" x2="0" y2="62" strokeWidth="2.5" opacity="0.4" />
               <line x1="-62" y1="0" x2="62" y2="0" strokeWidth="2.5" opacity="0.4" />
               <circle cx="0" cy="0" r="37" strokeWidth="5" />
