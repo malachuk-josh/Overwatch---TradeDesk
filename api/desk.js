@@ -1256,11 +1256,20 @@ const buildPositioning = ({ flowScan, fearGreed, sectors = [] }) => {
   const creditVsDuration = round((Number(hyg?.changePct || 0) - Number(tlt?.changePct || 0)), 2);
   const positiveSectors = sectors.filter((item) => item.changePct > 0).length;
   const components = fearGreed?.components || {};
+  // Classify each component independently from its OWN 0–100 score, so three different-scale
+  // indicators don't all inherit the headline Fear & Greed rating.
+  const fngBand = (score) => {
+    if (!Number.isFinite(Number(score))) return null;
+    const s = Number(score);
+    return s < 25 ? "extreme fear" : s < 45 ? "fear" : s <= 55 ? "neutral" : s <= 75 ? "greed" : "extreme greed";
+  };
   const signal = (label, item, note) => ({
     label,
-    value: item?.value == null ? (item?.score == null ? "—" : String(item.score)) : String(item.value),
+    // Headline the normalized 0–100 score (what the fear/greed label reflects) rather than the
+    // raw indicator value, which lives on its own scale and reads as contradictory next to a label.
+    value: item?.score != null ? `${round(item.score, 0)}/100` : (item?.value == null ? "—" : String(item.value)),
     score: item?.score ?? null,
-    tone: item?.rating || "neutral",
+    tone: fngBand(item?.score) || item?.rating || "neutral",
     note,
   });
   const signals = [
