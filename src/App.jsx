@@ -212,11 +212,11 @@ const InstrumentSelect = ({ value, onChange, className = "bd-in", style }) => (
 );
 
 const C = {
-  bull: "#3DD68C",
-  bear: "#F2555A",
-  brass: "#E8B45A",
-  info: "#5AA7E8",
-  muted: "#7E8CA0",
+  bull: "#22C55E",
+  bear: "#EF4444",
+  brass: "#3B82F6",
+  info: "#38BDF8",
+  muted: "#94A3B8",
 };
 
 const SETTINGS_KEY = "overwatch:settings";
@@ -650,13 +650,13 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Lora:ital,wght@0,500;0,600;0,700;1,400;1,500&display=swap');
 
 :root{
-  --ink:#0B0F14; --panel:#121821; --panel2:#0E141C; --panel3:#161E2A;
-  --line:#1E2935; --line2:#27374A;
-  --text:#E8EDF2; --muted:#7E8CA0; --faint:#55637A;
-  --brass:#E8B45A; --brass-dim:rgba(232,180,90,.14);
-  --bull:#3DD68C; --bull-dim:rgba(61,214,140,.12);
-  --bear:#F2555A; --bear-dim:rgba(242,85,90,.12);
-  --info:#5AA7E8; --info-dim:rgba(90,167,232,.12);
+  --ink:#020617; --panel:#0F172A; --panel2:#0B1322; --panel3:#1E293B;
+  --line:#1E293B; --line2:#334155;
+  --text:#E2E8F0; --muted:#94A3B8; --faint:#64748B;
+  --brass:#3B82F6; --brass-dim:rgba(59,130,246,.14);
+  --bull:#22C55E; --bull-dim:rgba(34,197,94,.12);
+  --bear:#EF4444; --bear-dim:rgba(239,68,68,.12);
+  --info:#38BDF8; --info-dim:rgba(56,189,248,.12);
   --paper:#F3EEE3; --paper2:#EAE3D3; --paper-ink:#1A1916; --paper-muted:#6A6357; --paper-line:#D8CFBC;
   --r:10px;
 }
@@ -669,7 +669,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   background-image:radial-gradient(rgba(126,140,160,.05) 1px, transparent 1px);
   background-size:26px 26px;
 }
-.bd-root ::selection{background:rgba(232,180,90,.3)}
+.bd-root ::selection{background:rgba(59,130,246,.3)}
 .mono{font-family:'JetBrains Mono',monospace}
 .disp{font-family:'Space Grotesk',sans-serif}
 
@@ -683,7 +683,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .bd-header{
   display:flex;align-items:center;gap:18px;padding:14px 22px;
   border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg,#10161F 0%,#0B0F14 100%);
+  background:linear-gradient(180deg,#10161F 0%,#020617 100%);
   position:sticky;top:0;z-index:50;
 }
 .bd-logo{display:flex;align-items:center;gap:12px;min-width:0}
@@ -706,10 +706,10 @@ html,body{max-width:100vw;overflow-x:hidden}
   border:1px solid var(--line2);background:var(--panel2);
 }
 .bd-dot{width:7px;height:7px;border-radius:50%}
-.dot-live{background:var(--bull);box-shadow:0 0 0 0 rgba(61,214,140,.5);animation:pulse 2s infinite}
+.dot-live{background:var(--bull);box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:pulse 2s infinite}
 .dot-warn{background:var(--brass)}
 .dot-off{background:var(--faint)}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,214,140,.45)}70%{box-shadow:0 0 0 7px rgba(61,214,140,0)}100%{box-shadow:0 0 0 0 rgba(61,214,140,0)}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
 
 /* ---------- buttons ---------- */
 .btn{
@@ -721,12 +721,12 @@ html,body{max-width:100vw;overflow-x:hidden}
 .btn:hover{border-color:#3a4d66;background:#1B2533;transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.btn-brass{background:linear-gradient(135deg,#E8B45A,#D49A3E);color:#1A1408;border-color:#B9852F}
-.btn-brass:hover{background:linear-gradient(135deg,#F0BE66,#DCA449);border-color:#D49A3E}
+.btn-brass{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
+.btn-brass:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
 .btn-ghost{background:transparent;border-color:transparent;color:var(--muted);padding:7px 10px}
 .btn-ghost:hover{color:var(--text);background:var(--panel3);border-color:transparent;transform:none}
 .btn-sm{padding:6px 11px;font-size:12px;border-radius:7px}
-.btn-danger{color:var(--bear);border-color:rgba(242,85,90,.35)}
+.btn-danger{color:var(--bear);border-color:rgba(239,68,68,.35)}
 .btn-danger:hover{background:var(--bear-dim);border-color:var(--bear)}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -760,7 +760,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   font-family:'JetBrains Mono',monospace;font-size:10px;padding:1.5px 6px;border-radius:999px;
   background:var(--panel3);border:1px solid var(--line2);color:var(--muted);
 }
-.bd-tab.on .tab-badge{color:var(--brass);border-color:rgba(232,180,90,.4)}
+.bd-tab.on .tab-badge{color:var(--brass);border-color:rgba(59,130,246,.4)}
 
 /* ---------- bottom nav (mobile) ---------- */
 .bd-bottom-nav{
@@ -841,9 +841,9 @@ html,body{max-width:100vw;overflow-x:hidden}
 .candle-rail{position:relative;width:14px;justify-self:end}
 .candle-wick{position:absolute;left:50%;width:1.5px;border-radius:999px;background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.08));transform:translateX(-50%)}
 .candle-body{position:absolute;left:50%;width:8px;border-radius:2px;transform:translateX(-50%)}
-.candle-body.bull{background:linear-gradient(180deg,rgba(61,214,140,.96),rgba(61,214,140,.28));box-shadow:0 0 0 1px rgba(61,214,140,.14) inset, 0 0 10px rgba(61,214,140,.14)}
-.candle-body.bear{background:linear-gradient(180deg,rgba(242,85,90,.96),rgba(242,85,90,.28));box-shadow:0 0 0 1px rgba(242,85,90,.14) inset, 0 0 10px rgba(242,85,90,.14)}
-.candle-body.flat{background:linear-gradient(180deg,rgba(232,180,90,.96),rgba(232,180,90,.28));box-shadow:0 0 0 1px rgba(232,180,90,.14) inset, 0 0 10px rgba(232,180,90,.12)}
+.candle-body.bull{background:linear-gradient(180deg,rgba(34,197,94,.96),rgba(34,197,94,.28));box-shadow:0 0 0 1px rgba(34,197,94,.14) inset, 0 0 10px rgba(34,197,94,.14)}
+.candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.96),rgba(239,68,68,.28));box-shadow:0 0 0 1px rgba(239,68,68,.14) inset, 0 0 10px rgba(239,68,68,.14)}
+.candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.14) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
 
 /* ---------- session read ---------- */
@@ -851,7 +851,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .session-meta{margin-top:7px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);letter-spacing:.04em}
 .session-recap{
   margin-top:12px;padding:12px 13px;border-radius:9px;border:1px solid var(--line);
-  background:linear-gradient(135deg,rgba(232,180,90,.06),rgba(90,167,232,.03)),var(--panel2);
+  background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(56,189,248,.03)),var(--panel2);
 }
 .session-recap-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--brass)}
 .session-recap-kicker{text-transform:uppercase}
@@ -866,7 +866,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 }
 .session-recap-risk{margin-top:8px;font-size:10.5px;line-height:1.5;color:var(--faint)}
 .session-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:14px}
-.session-stat{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:linear-gradient(135deg,rgba(232,180,90,.05),rgba(90,167,232,.025)),var(--panel2)}
+.session-stat{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:linear-gradient(135deg,rgba(59,130,246,.05),rgba(56,189,248,.025)),var(--panel2)}
 .session-stat-key{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .session-stat-val{margin-top:6px;font-family:'JetBrains Mono',monospace;font-size:11.5px;line-height:1.45;color:var(--text);font-weight:600}
 .session-stat-note{margin-top:4px;font-size:11px;line-height:1.4;color:var(--muted)}
@@ -895,10 +895,10 @@ html,body{max-width:100vw;overflow-x:hidden}
   font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
   padding:2.5px 8px;border-radius:999px;border:1px solid var(--line2);color:var(--muted);background:var(--panel2);
 }
-.chip.b-bull{color:var(--bull);border-color:rgba(61,214,140,.4);background:var(--bull-dim)}
-.chip.b-bear{color:var(--bear);border-color:rgba(242,85,90,.4);background:var(--bear-dim)}
-.chip.b-brass{color:var(--brass);border-color:rgba(232,180,90,.4);background:var(--brass-dim)}
-.chip.b-info{color:var(--info);border-color:rgba(90,167,232,.4);background:var(--info-dim)}
+.chip.b-bull{color:var(--bull);border-color:rgba(34,197,94,.4);background:var(--bull-dim)}
+.chip.b-bear{color:var(--bear);border-color:rgba(239,68,68,.4);background:var(--bear-dim)}
+.chip.b-brass{color:var(--brass);border-color:rgba(59,130,246,.4);background:var(--brass-dim)}
+.chip.b-info{color:var(--info);border-color:rgba(56,189,248,.4);background:var(--info-dim)}
 .impact{display:flex;gap:2.5px;align-items:flex-end;height:13px}
 .impact i{width:3.5px;border-radius:1px;background:var(--line2)}
 .news-title{font-weight:600;font-size:13.5px;margin-top:8px;line-height:1.4}
@@ -909,8 +909,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 .news-add{position:absolute;right:10px;bottom:10px;opacity:0;transition:opacity .15s}
 .news-card:hover .news-add{opacity:1}
 .ticker-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px;padding-right:72px}
-.ticker-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--brass);border:1px solid rgba(232,180,90,.28);border-radius:999px;padding:2px 6px;background:rgba(232,180,90,.06)}
-.intel-brief{border:1px solid var(--line);border-radius:10px;background:linear-gradient(135deg,rgba(232,180,90,.07),rgba(90,167,232,.035)),var(--panel);padding:14px 16px;margin-bottom:13px}
+.ticker-tag{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--brass);border:1px solid rgba(59,130,246,.28);border-radius:999px;padding:2px 6px;background:rgba(59,130,246,.06)}
+.intel-brief{border:1px solid var(--line);border-radius:10px;background:linear-gradient(135deg,rgba(59,130,246,.07),rgba(56,189,248,.035)),var(--panel);padding:14px 16px;margin-bottom:13px}
 .intel-brief p{font-size:13px;color:var(--muted);line-height:1.6;margin-top:6px}
 .cat-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed var(--line)}
 .cat-row:last-child{border-bottom:none}
@@ -938,7 +938,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .internals-hero{
   display:flex;justify-content:space-between;gap:14px;align-items:flex-start;
   border:1px solid var(--line2);border-radius:11px;padding:14px 15px;
-  background:radial-gradient(120% 130% at 0% 0%,rgba(232,180,90,.11),transparent 55%),linear-gradient(135deg,rgba(90,167,232,.04),transparent),var(--panel2);
+  background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.11),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
 }
 .internals-kicker{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass)}
 .internals-hero h3{font-family:'Space Grotesk',sans-serif;font-size:20px;line-height:1.15;margin-top:5px;text-transform:capitalize}
@@ -959,8 +959,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 .internals-section-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:9px}
 .internals-section-head b{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);white-space:nowrap}
 .internals-section-head span{font-size:11.5px;color:var(--muted);line-height:1.45;text-align:right}
-.breadth-meter{position:relative;height:10px;border-radius:999px;background:linear-gradient(90deg,rgba(242,85,90,.22),rgba(232,180,90,.2),rgba(61,214,140,.22));border:1px solid var(--line2);overflow:hidden}
-.breadth-fill{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:linear-gradient(90deg,rgba(232,180,90,.75),rgba(61,214,140,.88));box-shadow:0 0 14px rgba(61,214,140,.16)}
+.breadth-meter{position:relative;height:10px;border-radius:999px;background:linear-gradient(90deg,rgba(239,68,68,.22),rgba(59,130,246,.2),rgba(34,197,94,.22));border:1px solid var(--line2);overflow:hidden}
+.breadth-fill{position:absolute;left:0;top:0;bottom:0;border-radius:inherit;background:linear-gradient(90deg,rgba(59,130,246,.75),rgba(34,197,94,.88));box-shadow:0 0 14px rgba(34,197,94,.16)}
 .breadth-mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:rgba(255,255,255,.32)}
 .breadth-labels,.breadth-dist-labels{display:flex;justify-content:space-between;gap:8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--faint);margin-top:6px}
 .breadth-labels span:nth-child(2){color:var(--brass)}
@@ -985,17 +985,17 @@ html,body{max-width:100vw;overflow-x:hidden}
 .vol-band{min-height:48px;border:1px solid var(--line);border-radius:7px;background:var(--panel3);padding:8px 7px;text-align:center}
 .vol-band b{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text)}
 .vol-band small{display:block;font-family:'JetBrains Mono',monospace;font-size:8.5px;color:var(--faint);margin-top:4px}
-.vol-calm{background:rgba(61,214,140,.09)}
-.vol-normal{background:rgba(90,167,232,.08)}
-.vol-elevated{background:rgba(232,180,90,.09)}
-.vol-stress{background:rgba(242,85,90,.09)}
+.vol-calm{background:rgba(34,197,94,.09)}
+.vol-normal{background:rgba(56,189,248,.08)}
+.vol-elevated{background:rgba(59,130,246,.09)}
+.vol-stress{background:rgba(239,68,68,.09)}
 .vol-marker{position:absolute;top:2px;width:7px;height:58px;border-radius:999px;background:var(--text);box-shadow:0 0 12px rgba(255,255,255,.55);transform:translateX(-50%)}
 .vol-map-read{font-size:11.5px;line-height:1.5;color:var(--muted);margin-top:8px}
 .leader-list{display:flex;flex-direction:column;gap:6px}
 .leader-list span{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--text)}
 .leader-list b{font-family:'JetBrains Mono',monospace;font-size:10.5px}
 .internals-footer{display:grid;grid-template-columns:.85fr 1.15fr;gap:10px}
-.internals-footer div{border:1px solid var(--line);border-radius:9px;background:linear-gradient(135deg,rgba(232,180,90,.045),rgba(90,167,232,.025)),var(--panel2);padding:10px 11px}
+.internals-footer div{border:1px solid var(--line);border-radius:9px;background:linear-gradient(135deg,rgba(59,130,246,.045),rgba(56,189,248,.025)),var(--panel2);padding:10px 11px}
 .internals-footer b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--brass);margin-bottom:5px}
 .internals-footer span{font-size:11.5px;line-height:1.5;color:var(--muted)}
 @media(max-width:760px){
@@ -1020,9 +1020,9 @@ html,body{max-width:100vw;overflow-x:hidden}
 .cal-meta{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--faint);margin-top:2px}
 .cal-values{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);margin-top:3px}
 .cal-note{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px}
-.cal-row.structural{background:linear-gradient(90deg,rgba(232,180,90,.06),transparent);border-left:2px solid var(--brass);padding-left:10px;margin-left:-2px;border-radius:4px}
+.cal-row.structural{background:linear-gradient(90deg,rgba(59,130,246,.06),transparent);border-left:2px solid var(--brass);padding-left:10px;margin-left:-2px;border-radius:4px}
 .cal-structural-tag{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);background:var(--brass-dim);padding:2px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
-.struct-hero{border:1px solid rgba(232,180,90,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(232,180,90,.1),rgba(232,180,90,.03)),var(--panel)}
+.struct-hero{border:1px solid rgba(59,130,246,.35);border-radius:12px;padding:16px 18px;background:linear-gradient(135deg,rgba(59,130,246,.1),rgba(59,130,246,.03)),var(--panel)}
 .struct-hero-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
@@ -1032,7 +1032,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .recent-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);width:78px;flex:none}
 .recent-ev{font-size:12px;flex:1;color:var(--text)}
 .recent-actual{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--bull);white-space:nowrap}
-.calendar-hero{border:1px solid var(--line2);border-radius:12px;padding:18px 20px;background:linear-gradient(135deg,rgba(232,180,90,.08),rgba(90,167,232,.035)),var(--panel)}
+.calendar-hero{border:1px solid var(--line2);border-radius:12px;padding:18px 20px;background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(56,189,248,.035)),var(--panel)}
 .calendar-hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .calendar-next{min-width:240px;flex:1}
 .calendar-next h2{font-family:'Space Grotesk',sans-serif;font-size:20px;line-height:1.25;margin-top:8px}
@@ -1043,7 +1043,7 @@ html,body{max-width:100vw;overflow-x:hidden}
 .calendar-summary-tile span{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .calendar-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}
 @media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.calendar-summary{min-width:0;width:100%}}
-.flow-summary{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:linear-gradient(135deg,rgba(232,180,90,.06),rgba(90,167,232,.035)),var(--panel2);font-size:12.5px;line-height:1.6;color:var(--text)}
+.flow-summary{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(56,189,248,.035)),var(--panel2);font-size:12.5px;line-height:1.6;color:var(--text)}
 .flow-row{display:grid;grid-template-columns:54px 1fr auto;gap:9px;align-items:start;padding:9px 0;border-bottom:1px dashed var(--line)}
 .flow-row:last-child{border-bottom:none}
 .flow-sym{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px;color:var(--brass)}
@@ -1068,9 +1068,9 @@ input[type=range].bd-range{
 }
 input[type=range].bd-range::-webkit-slider-thumb{
   -webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#F0C879;
-  border:2px solid #0B0F14;box-shadow:0 0 0 1.5px var(--brass),0 2px 7px rgba(0,0,0,.5);cursor:grab;
+  border:2px solid #020617;box-shadow:0 0 0 1.5px var(--brass),0 2px 7px rgba(0,0,0,.5);cursor:grab;
 }
-input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#F0C879;border:2px solid #0B0F14;box-shadow:0 0 0 1.5px var(--brass);cursor:grab}
+input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#F0C879;border:2px solid #020617;box-shadow:0 0 0 1.5px var(--brass);cursor:grab}
 .seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--panel2)}
 .seg button{
   flex:1;padding:8px 6px;border:none;background:none;color:var(--muted);font-weight:600;font-size:12px;
@@ -1092,12 +1092,12 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 /* ---------- thesis output ---------- */
 .th-hero{
   border:1px solid var(--line2);border-radius:12px;padding:22px;position:relative;overflow:hidden;
-  background:radial-gradient(120% 150% at 50% -20%,rgba(232,180,90,.07),transparent 55%),var(--panel);
+  background:radial-gradient(120% 150% at 50% -20%,rgba(59,130,246,.07),transparent 55%),var(--panel);
 }
 .th-bias{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:38px;letter-spacing:.02em;line-height:1}
 .th-head{font-family:'Lora',serif;font-size:17px;font-style:italic;color:var(--text);margin-top:10px;opacity:.92}
 .th-summary{font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:11px}
-.timing-note{border:1px solid rgba(232,180,90,.28);background:rgba(232,180,90,.07);border-radius:8px;padding:10px 12px;margin-top:13px;font-size:12px;line-height:1.55;color:#F0D5A0}
+.timing-note{border:1px solid rgba(59,130,246,.28);background:rgba(59,130,246,.07);border-radius:8px;padding:10px 12px;margin-top:13px;font-size:12px;line-height:1.55;color:#F0D5A0}
 .timing-note b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-bottom:4px}
 .th-scorecard{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:12px 13px;margin-top:13px;display:flex;flex-direction:column;gap:10px}
 .th-scorecard-row{display:grid;grid-template-columns:115px 1fr;gap:10px;align-items:start}
@@ -1110,7 +1110,7 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .spectrum{position:relative;height:30px;margin-top:20px}
 .spectrum-track{
   position:absolute;top:12px;left:0;right:0;height:6px;border-radius:3px;
-  background:linear-gradient(90deg,#F2555A 0%,#8a4a52 22%,#3A4456 50%,#3f7a64 78%,#3DD68C 100%);
+  background:linear-gradient(90deg,#EF4444 0%,#8a4a52 22%,#3A4456 50%,#3f7a64 78%,#22C55E 100%);
   opacity:.85;
 }
 .spectrum-mid{position:absolute;top:7px;left:50%;width:1.5px;height:16px;background:var(--faint)}
@@ -1129,9 +1129,9 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .case-neutral li::before{background:var(--brass)}
 .guard{border:1px solid;border-radius:9px;padding:12px 14px;font-size:12.5px;line-height:1.55}
 .guard b{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;margin-bottom:6px}
-.guard.g-red{border-color:rgba(242,85,90,.4);background:rgba(242,85,90,.06);color:#fbd2d3}
+.guard.g-red{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06);color:#fbd2d3}
 .guard.g-red b{color:var(--bear)}
-.guard.g-amber{border-color:rgba(232,180,90,.4);background:rgba(232,180,90,.06);color:#f3e2c2}
+.guard.g-amber{border-color:rgba(59,130,246,.4);background:rgba(59,130,246,.06);color:#f3e2c2}
 .guard.g-amber b{color:var(--brass)}
 .hist-row{
   display:flex;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--line);border-radius:8px;
@@ -1170,7 +1170,7 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 
 /* ---------- states ---------- */
 .skel{position:relative;overflow:hidden;background:var(--panel3);border-radius:7px}
-.skel::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(232,180,90,.08),transparent);animation:shimmer 1.5s infinite}
+.skel::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(59,130,246,.08),transparent);animation:shimmer 1.5s infinite}
 @keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .empty{
   border:1px dashed var(--line2);border-radius:12px;padding:46px 22px;text-align:center;
@@ -1178,7 +1178,7 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 }
 .empty h3{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600}
 .empty p{color:var(--muted);font-size:13px;max-width:430px;line-height:1.6}
-.err{border:1px solid rgba(242,85,90,.4);background:var(--bear-dim);border-radius:10px;padding:15px 17px;display:flex;align-items:center;gap:12px;font-size:13px}
+.err{border:1px solid rgba(239,68,68,.4);background:var(--bear-dim);border-radius:10px;padding:15px 17px;display:flex;align-items:center;gap:12px;font-size:13px}
 .loading-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px;font-family:'JetBrains Mono',monospace}
 
 /* ---------- toasts ---------- */
@@ -1189,8 +1189,8 @@ select.bd-in option{background:var(--panel);color:var(--text)}
   animation:toastIn .25s cubic-bezier(.22,1,.36,1);max-width:340px;
 }
 @keyframes toastIn{from{transform:translateY(13px);opacity:0}to{transform:translateY(0);opacity:1}}
-.toast.t-ok{border-color:rgba(61,214,140,.45)}
-.toast.t-err{border-color:rgba(242,85,90,.45)}
+.toast.t-ok{border-color:rgba(34,197,94,.45)}
+.toast.t-err{border-color:rgba(239,68,68,.45)}
 
 .bd-foot{padding:15px 22px 22px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);letter-spacing:.06em;line-height:1.8}
 
@@ -1271,7 +1271,7 @@ select.bd-in option{background:var(--panel);color:var(--text)}
   --ink:#F5F7FA; --panel:#FFFFFF; --panel2:#EFF2F7; --panel3:#E4E9F2;
   --line:#D2D9E6; --line2:#B8C4D4;
   --text:#0F1721; --muted:#506070; --faint:#8A96A8;
-  --brass-dim:rgba(180,120,20,.14);
+  --brass-dim:rgba(59,130,246,.12);
   --bull-dim:rgba(20,160,90,.12);
   --bear-dim:rgba(200,50,55,.12);
   --info-dim:rgba(50,130,210,.12);
@@ -1288,13 +1288,13 @@ select.bd-in option{background:var(--panel);color:var(--text)}
   background:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,.6) 38%),var(--panel);
 }
 .bd-root.light .internals-hero{
-  background:radial-gradient(120% 130% at 0% 0%,rgba(232,180,90,.08),transparent 55%),linear-gradient(135deg,rgba(90,167,232,.04),transparent),var(--panel2);
+  background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.08),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
 }
 .bd-root.light .calendar-summary-tile,
 .bd-root.light .internals-scorecard{background:var(--panel3)}
 .bd-root.light .internals-section{background:var(--panel2)}
 .bd-root.light .th-hero{
-  background:radial-gradient(120% 150% at 50% -20%,rgba(232,180,90,.06),transparent 55%),var(--panel);
+  background:radial-gradient(120% 150% at 50% -20%,rgba(59,130,246,.06),transparent 55%),var(--panel);
 }
 .bd-root.light .spectrum-caret{background:var(--text);box-shadow:0 0 10px rgba(0,0,0,.35)}
 .bd-root.light .vol-marker{background:var(--text);box-shadow:0 0 12px rgba(0,0,0,.25)}
@@ -1427,16 +1427,16 @@ const VixGauge = ({ value, structure }) => {
           const a = ((clamp(tick, lo, hi) - lo) / (hi - lo)) * 180;
           const [tx, ty] = polar(110, 106, 98, a);
           return (
-            <text key={tick} x={tx} y={ty} fontSize="8.5" fill="#55637A" textAnchor="middle" fontFamily="JetBrains Mono, monospace">
+            <text key={tick} x={tx} y={ty} fontSize="8.5" fill="#64748B" textAnchor="middle" fontFamily="JetBrains Mono, monospace">
               {tick}
             </text>
           );
         })}
         <g style={{ transform: `rotate(${deg}deg)`, transformOrigin: "110px 106px", transition: "transform 1s cubic-bezier(.22,1,.36,1)" }}>
-          <line x1="110" y1="106" x2="38" y2="106" stroke="#E8EDF2" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="110" y1="106" x2="38" y2="106" stroke="#E2E8F0" strokeWidth="2.5" strokeLinecap="round" />
         </g>
-        <circle cx="110" cy="106" r="5.5" fill="#E8EDF2" />
-        <text x="110" y="88" textAnchor="middle" fontSize="24" fontWeight="700" fill={zone ? zone.c : "#7E8CA0"} fontFamily="JetBrains Mono, monospace">
+        <circle cx="110" cy="106" r="5.5" fill="#E2E8F0" />
+        <text x="110" y="88" textAnchor="middle" fontSize="24" fontWeight="700" fill={zone ? zone.c : "#94A3B8"} fontFamily="JetBrains Mono, monospace">
           {value == null ? "—" : fmtNum(value, 2)}
         </text>
       </svg>
@@ -1507,7 +1507,7 @@ const FearGreedGauge = ({ data }) => {
             width: 3,
             height: 24,
             borderRadius: 3,
-            background: "#E8EDF2",
+            background: "#E2E8F0",
             boxShadow: `0 0 14px ${color}99`,
             transform: "translateX(-50%)",
             transition: "left 1s cubic-bezier(.22,1,.36,1)",
@@ -1570,8 +1570,8 @@ const SectorHeatmap = ({ sectors }) => {
     <div className="hm">
       {sorted.map((s) => {
         const a = clamp(Math.abs(s.changePct) / maxAbs, 0.12, 1);
-        const bg = s.changePct >= 0 ? `rgba(61,214,140,${0.07 + a * 0.3})` : `rgba(242,85,90,${0.07 + a * 0.3})`;
-        const bc = s.changePct >= 0 ? `rgba(61,214,140,${0.25 + a * 0.45})` : `rgba(242,85,90,${0.25 + a * 0.45})`;
+        const bg = s.changePct >= 0 ? `rgba(34,197,94,${0.07 + a * 0.3})` : `rgba(239,68,68,${0.07 + a * 0.3})`;
+        const bc = s.changePct >= 0 ? `rgba(34,197,94,${0.25 + a * 0.45})` : `rgba(239,68,68,${0.25 + a * 0.45})`;
         return (
           <div key={s.name} className="hm-tile" style={{ background: bg, borderColor: bc }} title={`${s.name}: ${fmtSigned(s.changePct, 2, "%")}`}>
             <div className="hm-name">{s.name}</div>
@@ -1732,7 +1732,7 @@ const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
   const spotCenterX = 80 + spotRectW / 2;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
-      <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E2935" strokeWidth="1" />
+      <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E293B" strokeWidth="1" />
       {rows.map((r, i) => (
         <g key={i}>
           <line x1="74" y1={y(r.v)} x2={W - 12} y2={y(r.v)} stroke={colorOf(r.type)} strokeWidth={r.type === "piv" ? 1.6 : 1.2} strokeDasharray={r.type === "piv" ? "" : "5 4"} opacity="0.75" />
@@ -1745,12 +1745,12 @@ const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
         </g>
       ))}
       <g>
-        <line x1="74" y1={y(spx.spot)} x2={W - 12} y2={y(spx.spot)} stroke="#E8EDF2" strokeWidth="2" />
-        <circle cx="74" cy={y(spx.spot)} r="4.5" fill="#E8EDF2">
+        <line x1="74" y1={y(spx.spot)} x2={W - 12} y2={y(spx.spot)} stroke="#E2E8F0" strokeWidth="2" />
+        <circle cx="74" cy={y(spx.spot)} r="4.5" fill="#E2E8F0">
           <animate attributeName="r" values="4;5.5;4" dur="2s" repeatCount="indefinite" />
         </circle>
-        <rect x="80" y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E8EDF2" />
-        <text x={spotCenterX} y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#0B0F14" fontWeight="700" fontFamily="JetBrains Mono, monospace">
+        <rect x="80" y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E2E8F0" />
+        <text x={spotCenterX} y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#020617" fontWeight="700" fontFamily="JetBrains Mono, monospace">
           {label} {fmtNum(spx.spot, dec)}
         </text>
       </g>
@@ -1775,8 +1775,8 @@ const SentimentDonut = ({ headlines }) => {
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
       <div style={{ position: "relative", width: 128, height: 128, flex: "none" }}>
         <svg viewBox="0 0 128 128" style={{ width: 128, height: 128, transform: "rotate(-90deg)" }}>
-          <circle cx="64" cy="64" r={radius} fill="none" stroke="#1E2935" strokeWidth="16" />
-          {(data.length ? data : [{ value: 1, c: "#1E2935" }]).map((d, i) => {
+          <circle cx="64" cy="64" r={radius} fill="none" stroke="#1E293B" strokeWidth="16" />
+          {(data.length ? data : [{ value: 1, c: "#1E293B" }]).map((d, i) => {
             const length = (d.value / total) * circumference;
             const dash = `${Math.max(0, length - 5)} ${circumference}`;
             const node = (
@@ -1890,12 +1890,12 @@ const FactorRadarChart = ({ weights, onChange }) => {
           return (
             <g key={d.key}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
-              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fill="#7E8CA0" fontSize="10.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
-              <text x={lx} y={ly + 8} textAnchor="middle" dominantBaseline="middle" fill="#E8B45A" fontSize="10.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
+              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fill="#94A3B8" fontSize="10.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
+              <text x={lx} y={ly + 8} textAnchor="middle" dominantBaseline="middle" fill="#3B82F6" fontSize="10.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
             </g>
           );
         })}
-        <polygon points={valuePolygon} fill="rgba(232,180,90,.24)" stroke="#E8B45A" strokeWidth="2" />
+        <polygon points={valuePolygon} fill="rgba(59,130,246,.24)" stroke="#3B82F6" strokeWidth="2" />
         {data.map((d, i) => {
           const [x, y] = point(i, d.v);
           return (
@@ -1903,7 +1903,7 @@ const FactorRadarChart = ({ weights, onChange }) => {
               {interactive && (
                 <circle cx={x} cy={y} r="18" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
               )}
-              <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#E8B45A" stroke="#1A1408" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+              <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#3B82F6" stroke="#020617" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
             </g>
           );
         })}
@@ -2384,7 +2384,7 @@ const CalendarTab = ({ points, onRefresh }) => {
         <Card icon={History} title="Recent catalysts" sub="High-impact events from the past 7 days — context for recent price action">
           <div style={{ display: "flex", flexDirection: "column" }}>
             {groups.recent.map((c, i) => (
-              <div className={`recent-row${c.structural ? " structural" : ""}`} key={`recent-${i}`} style={c.structural ? { background: "linear-gradient(90deg,rgba(232,180,90,.06),transparent)", borderLeft: "2px solid var(--brass)", paddingLeft: 10, borderRadius: 4 } : {}}>
+              <div className={`recent-row${c.structural ? " structural" : ""}`} key={`recent-${i}`} style={c.structural ? { background: "linear-gradient(90deg,rgba(59,130,246,.06),transparent)", borderLeft: "2px solid var(--brass)", paddingLeft: 10, borderRadius: 4 } : {}}>
                 <span className="recent-date">{calendarDateLabel(c.date) || c.date}</span>
                 <span className="recent-ev">
                   {c.event}
@@ -2435,9 +2435,9 @@ const RegimeScoreRail = ({ score, leftLabel = "Defensive", rightLabel = "Constru
 const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
   const segments = [
     { key: "strongUp", label: "Strong up", color: C.bull, value: distribution.strongUp || 0 },
-    { key: "up", label: "Up", color: "rgba(61,214,140,.58)", value: distribution.up || 0 },
+    { key: "up", label: "Up", color: "rgba(34,197,94,.58)", value: distribution.up || 0 },
     { key: "flat", label: "Flat", color: C.brass, value: distribution.flat || 0 },
-    { key: "down", label: "Down", color: "rgba(242,85,90,.58)", value: distribution.down || 0 },
+    { key: "down", label: "Down", color: "rgba(239,68,68,.58)", value: distribution.down || 0 },
     { key: "strongDown", label: "Strong down", color: C.bear, value: distribution.strongDown || 0 },
   ];
   return (
@@ -3035,8 +3035,8 @@ const PayoffChart = ({ payoff, lo, hi, spot, markers = [], title }) => {
     <div style={{ marginTop: 12 }}>
       {title && <div className="lab-label" style={{ marginBottom: 4 }}>{title}</div>}
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
-        <path d={area((val) => Math.max(val, 0))} fill="rgba(61,214,140,.15)" />
-        <path d={area((val) => Math.min(val, 0))} fill="rgba(242,85,90,.15)" />
+        <path d={area((val) => Math.max(val, 0))} fill="rgba(34,197,94,.15)" />
+        <path d={area((val) => Math.min(val, 0))} fill="rgba(239,68,68,.15)" />
         <line x1={padL} y1={zeroY} x2={W - padR} y2={zeroY} stroke="var(--line2)" strokeWidth="1" strokeDasharray="3 3" />
         <polyline points={line} fill="none" stroke="var(--brass)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
         {spot != null && spot >= lo && spot <= hi && (
