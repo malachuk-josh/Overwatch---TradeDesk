@@ -3089,18 +3089,18 @@ const PayoffChart = ({ payoff, lo, hi, spot, markers = [], title }) => {
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
         <path d={area((val) => Math.max(val, 0))} fill="rgba(34,197,94,.15)" />
         <path d={area((val) => Math.min(val, 0))} fill="rgba(239,68,68,.15)" />
-        <line x1={padL} y1={zeroY} x2={W - padR} y2={zeroY} stroke="var(--line2)" strokeWidth="1" strokeDasharray="3 3" />
-        <polyline points={line} fill="none" stroke="var(--brass)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+        <line x1={padL} y1={zeroY} x2={W - padR} y2={zeroY} style={{ stroke: "var(--line2)" }} strokeWidth="1" strokeDasharray="3 3" />
+        <polyline points={line} fill="none" style={{ stroke: "var(--brass)" }} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
         {spot != null && spot >= lo && spot <= hi && (
           <>
-            <line x1={px(spot)} y1={padT} x2={px(spot)} y2={H - padB} stroke="var(--text)" strokeWidth="1" strokeDasharray="2 3" opacity="0.4" />
-            <text x={clamp(px(spot), 18, W - 18)} y={H - 5} fontSize="9" fill="var(--muted)" textAnchor="middle" fontFamily="'JetBrains Mono',monospace">spot {fmtNum(spot, 0)}</text>
+            <line x1={px(spot)} y1={padT} x2={px(spot)} y2={H - padB} style={{ stroke: "var(--text)" }} strokeWidth="1" strokeDasharray="2 3" opacity="0.4" />
+            <text x={clamp(px(spot), 18, W - 18)} y={H - 5} fontSize="9" style={{ fill: "var(--muted)" }} textAnchor="middle" fontFamily="'JetBrains Mono',monospace">spot {fmtNum(spot, 0)}</text>
           </>
         )}
         {markers.filter((m) => m.x != null && m.x >= lo && m.x <= hi).map((m, i) => (
           <g key={i}>
-            <line x1={px(m.x)} y1={padT} x2={px(m.x)} y2={H - padB} stroke={m.color || "var(--faint)"} strokeWidth="1" strokeDasharray="2 2" opacity="0.7" />
-            <text x={clamp(px(m.x), 20, W - 20)} y={padT + 8} fontSize="9" fill={m.color || "var(--muted)"} textAnchor="middle" fontFamily="'JetBrains Mono',monospace">{m.label}</text>
+            <line x1={px(m.x)} y1={padT} x2={px(m.x)} y2={H - padB} style={{ stroke: m.color || "var(--faint)" }} strokeWidth="1" strokeDasharray="2 2" opacity="0.7" />
+            <text x={clamp(px(m.x), 20, W - 20)} y={padT + 8} fontSize="9" style={{ fill: m.color || "var(--muted)" }} textAnchor="middle" fontFamily="'JetBrains Mono',monospace">{m.label}</text>
           </g>
         ))}
       </svg>
@@ -4440,7 +4440,7 @@ export default function Overwatch() {
       <header className="bd-header">
         <div className="bd-logo">
           <div className="bd-mark" title="Overwatch">
-            <svg viewBox="-50 -50 100 100" width="31" height="31" fill="none" stroke="var(--brass)" strokeLinecap="round" strokeLinejoin="round" aria-label="Overwatch">
+            <svg viewBox="-50 -50 100 100" width="31" height="31" fill="none" style={{ stroke: "var(--brass)" }} strokeLinecap="round" strokeLinejoin="round" aria-label="Overwatch">
               <line x1="0" y1="-62" x2="0" y2="62" strokeWidth="2.5" opacity="0.4" />
               <line x1="-62" y1="0" x2="62" y2="0" strokeWidth="2.5" opacity="0.4" />
               <circle cx="0" cy="0" r="37" strokeWidth="5" />
