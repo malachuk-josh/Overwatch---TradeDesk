@@ -3817,7 +3817,7 @@ const ACADEMY_MODULES = [
     level: "Beginner",
     summary: "Start here — how the desk thinks about bias, levels and risk.",
     videos: [
-      { id: "f1", title: "How the Daily Bias Desk works", summary: "A tour of the workflow: sync data, weigh the pillars, build a thesis.", durationSec: 0, embedId: "", tags: ["orientation"] },
+      { id: "f1", title: "Liquidity events & the close", summary: "How quad-witching, rebalances and OpEx reshape liquidity into the bell.", durationSec: 0, embedId: "UxdQCZNIJFk", tags: ["liquidity"] },
       { id: "f2", title: "Reading the pillar weights", summary: "What each pillar measures and how the weighted score is built.", durationSec: 0, embedId: "", tags: ["thesis"] },
       { id: "f3", title: "Support, resistance & the action level", summary: "Turning the level map into an actionable plan.", durationSec: 0, embedId: "", tags: ["levels"] },
     ],
