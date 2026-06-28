@@ -824,11 +824,19 @@ html,body{max-width:100vw;overflow-x:hidden}
   .g-3{grid-template-columns:1fr}
   .pulse-levels-desktop{display:none}
   .pulse-levels-mobile{display:block}
-  .bd-main{padding:14px 12px calc(103px + env(safe-area-inset-bottom,0px) + 10px)}
-  .bd-header{padding:12px 14px;flex-wrap:wrap}
+  .bd-main{padding:12px 12px calc(103px + env(safe-area-inset-bottom,0px) + 10px)}
+  /* condensed header: smaller title/mark, tighter padding */
+  .bd-header{padding:10px 14px;flex-wrap:wrap;gap:10px}
+  .bd-title{font-size:15px}
+  .bd-sub{font-size:9px;letter-spacing:.13em}
+  .bd-mark{width:32px;height:32px;border-radius:8px;font-size:12px}
   .bd-hright{width:100%;justify-content:space-between;margin-left:0}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
+  /* workflow ticker is redundant on mobile (bottom nav + Sync button cover it) */
+  .bd-flow{display:none}
+  /* a touch tighter cards to fit more per screen */
+  .card{padding:13px}
 }
 
 /* ---------- cards ---------- */
