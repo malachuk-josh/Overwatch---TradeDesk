@@ -312,6 +312,19 @@ const addIsoDays = (dateIso, days) => {
   return date.toISOString().slice(0, 10);
 };
 
+// 0 = Sunday … 6 = Saturday (noon-UTC anchor avoids any tz roll).
+const isoWeekday = (dateIso) => {
+  const [year, month, day] = dateIso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12)).getUTCDay();
+};
+// Roll a weekend date forward to the next weekday so a markets desk never anchors
+// "today/tomorrow" on a non-trading Saturday or Sunday.
+const nextTradingDay = (dateIso) => {
+  let day = dateIso;
+  while (isoWeekday(day) === 0 || isoWeekday(day) === 6) day = addIsoDays(day, 1);
+  return day;
+};
+
 const buildSampleCalendar = () => {
   const today = isoDate();
   const tomorrow = addIsoDays(today, 1);
@@ -625,9 +638,12 @@ const pickCalendarCatalyst = (events = []) => {
 
 const fetchEconomicCalendar = async () => {
   if (calendarCache?.expires > Date.now()) return calendarCache.data;
-  const today = isoDate();
-  const tomorrow = addIsoDays(today, 1);
-  const weekStart = addIsoDays(today, -7);
+  // realToday is the literal ET date; today/tomorrow roll forward over weekends so the
+  // Today/Tomorrow cards show the next trading session(s), not a closed Saturday/Sunday.
+  const realToday = isoDate();
+  const today = nextTradingDay(realToday);
+  const tomorrow = nextTradingDay(addIsoDays(today, 1));
+  const weekStart = addIsoDays(realToday, -7);
   const weekEnd = addIsoDays(today, 7);
   const url = `https://economic-calendar.tradingview.com/events?from=${weekStart}T00:00:00.000Z&to=${weekEnd}T23:59:59.999Z&countries=US`;
 
@@ -654,9 +670,12 @@ const fetchEconomicCalendar = async () => {
     }
     const allEvents = mergeCalendarEvents([...fedEvents, ...structureEvents, ...tradingViewEvents]).sort(calendarSort);
     const futureEvents = allEvents.filter((event) => event.date >= today);
-    const todayEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === today && !eventIsPast(event)), 5);
-    const pastTodayEvents = allEvents.filter((event) => event.date === today && eventIsPast(event));
-    const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow && !eventIsPast(event)), 5);
+    // eventIsPast is time-of-day only, so it must only gate events that fall on the literal
+    // current date — a future/rolled-forward day is never "past".
+    const isPastNow = (event) => event.date === realToday && eventIsPast(event);
+    const todayEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === today && !isPastNow(event)), 5);
+    const pastTodayEvents = allEvents.filter((event) => event.date === realToday && eventIsPast(event));
+    const tomorrowEvents = selectCalendarGroup(futureEvents.filter((event) => event.date === tomorrow && !isPastNow(event)), 5);
     const upcoming = selectMajorUpcomingEvents(futureEvents.filter((event) => event.date > tomorrow), 5);
     const isCatalystGrade = (e) => {
       if (e.structural) return true;
@@ -698,7 +717,7 @@ const fetchEconomicCalendar = async () => {
       if (recentEvents.length >= 5) break;
     }
     const nextStructuralFromCalendar = allEvents
-      .filter((event) => event.structural && event.date >= today && !eventIsPast(event))
+      .filter((event) => event.structural && event.date >= today && !isPastNow(event))
       .sort(calendarSort)[0] || null;
     const nextStructuralFromTable = Object.entries(LIQUIDITY_EVENTS)
       .filter(([date]) => date >= today)
