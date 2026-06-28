@@ -2058,8 +2058,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const [tickersOpen, setTickersOpen] = useState(() => !isMobile);
+  // Market snapshot defaults collapsed on every viewport — open it from the header toggle.
+  const [tickersOpen, setTickersOpen] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
