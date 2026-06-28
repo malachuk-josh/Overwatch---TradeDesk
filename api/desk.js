@@ -312,6 +312,16 @@ const addIsoDays = (dateIso, days) => {
   return date.toISOString().slice(0, 10);
 };
 
+// Collapse whitespace and truncate at a word boundary with an ellipsis, so notes never
+// hard-stop mid-word (e.g. "…survey of aroun").
+const clampText = (str, max = 180) => {
+  const s = String(str || "").replace(/\s+/g, " ").trim();
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,.;:]+$/, "")}…`;
+};
+
 // 0 = Sunday … 6 = Saturday (noon-UTC anchor avoids any tz roll).
 const isoWeekday = (dateIso) => {
   const [year, month, day] = dateIso.split("-").map(Number);
@@ -390,7 +400,7 @@ const normalizeCalendarEvent = (item) => {
     forecast,
     previous,
     source: item.source || "TradingView economic calendar",
-    note: item.comment ? String(item.comment).replace(/\s+/g, " ").trim().slice(0, 150) : "",
+    note: clampText(item.comment, 180),
   };
 };
 
