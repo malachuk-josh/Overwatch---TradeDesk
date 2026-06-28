@@ -783,22 +783,26 @@ html,body{max-width:100vw;overflow-x:hidden}
 /* ---------- bottom nav (mobile) ---------- */
 .bd-bottom-nav{
   display:none;
-  position:fixed;bottom:0;left:0;right:0;z-index:200;
-  background:var(--glass-strong);
-  -webkit-backdrop-filter:blur(25px) saturate(130%);
-  backdrop-filter:blur(25px) saturate(130%);
-  border-top:1px solid var(--glass-border);
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  position:fixed;z-index:200;
+  /* float the bar off every edge so it reads as a detached glass pill */
+  left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+  background:var(--glass);
+  -webkit-backdrop-filter:blur(34px) saturate(150%);
+  backdrop-filter:blur(34px) saturate(150%);
+  border:1px solid var(--glass-border);
+  border-radius:20px;
+  box-shadow:0 10px 34px rgba(2,6,23,.5), inset 0 1px 0 rgba(255,255,255,.08);
+  overflow:hidden;
 }
 .bd-bottom-nav-inner{
   display:flex;
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:20px 2px 19px;
+  gap:4px;padding:14px 2px 13px;
   background:none;border:none;cursor:pointer;
-  color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;
-  font-family:'Inter',sans-serif;transition:color .15s;position:relative;
+  color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  font-family:'Space Grotesk',sans-serif;transition:color .15s;position:relative;
 }
 .bd-bnav-btn.on{color:var(--brass)}
 .bd-bnav-btn svg{flex-shrink:0}
