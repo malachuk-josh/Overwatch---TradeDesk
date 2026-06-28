@@ -178,6 +178,11 @@ const INSTRUMENT_GROUPS = [
 const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
   THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
 
+// Single-stock focuses (Mag 7) aren't on the Market Pulse watchlist, but their live prices are
+// still fetched so the Thesis Lab tools can auto-price them like the ETFs/futures.
+const THESIS_STOCK_TICKERS = THESIS_INSTRUMENTS.filter((i) => i.group === "stock").map((i) => ({ symbol: i.symbol, name: i.name }));
+const THESIS_STOCK_SET = new Set(THESIS_STOCK_TICKERS.map((i) => i.symbol));
+
 const InstrumentSelect = ({ value, onChange, className = "bd-in", style }) => (
   <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
     {INSTRUMENT_GROUPS.map((g) => (
@@ -574,8 +579,9 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
 If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
 
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext }) => {
+const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot }) => {
   const focus = thesisInstrumentConfig(instrument);
+  const isStock = focus.group === "stock";
   return `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
 
 === LIVE DESK DATA ===
@@ -592,7 +598,8 @@ ${condenseTiming(timing)}
 Pillar weights (0-100, higher = more influence on the call): Technicals ${weights.technicals}, Macro/News ${weights.macro}, Sentiment ${weights.sentiment}, Positioning/Flows ${weights.positioning}, Event Risk ${weights.eventRisk}.
 Directional lean: ${lean === "auto" ? "none — derive direction purely from the data" : `trader is leaning ${lean} — stress-test that lean against the data and push back if it is not justified`}.
 Risk appetite: ${risk}.
-Primary instrument focus: ${focus.symbol} (${focus.name}) with ${focus.futures} futures as the live execution proxy when relevant.
+Primary instrument focus: ${focus.symbol} (${focus.name})${focusSpot ? `, currently trading near ${fmtNum(focusSpot, 2)}` : ""} with ${focus.futures} futures as the ${isStock ? "index hedge" : "live execution"} proxy when relevant.
+${isStock ? `IMPORTANT — ${focus.symbol} is a SINGLE STOCK. The price levels in the data above (SPX / NDX / DJI support, resistance, pivots) are INDEX levels, not ${focus.symbol}'s. Build the bias, action level, upside/downside targets, game plan, invalidation and watch list around ${focus.symbol}'s OWN price${focusSpot ? ` (live near ${fmtNum(focusSpot, 2)})` : ""} and your knowledge of its recent trading range. Use the Nasdaq/index internals only as macro proxy context and say so explicitly. NEVER quote an index level (e.g. an SPX number) as if it were ${focus.symbol}'s level.` : ""}
 Trader notes: ${notes ? notes : "none"}.
 ${deskContext ? `
 === DESK HEDGE & OPTIONS STRUCTURES (trader is actively considering these) ===
@@ -600,7 +607,7 @@ ${deskContext}
 Weave these into the game plan: comment on whether the hedge sizing and option structures fit today's bias, conviction, and risk appetite, and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
 ` : ""}
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
-{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete SPX/ES/NQ/YM approach for this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
+{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
 
 Be specific — use actual numbers from the data. The sign of score must match bias. Conviction should reflect how aligned the weighted pillars are.
 Treat the pillar weights as a scoring model, not decoration: high-weight pillars must have more influence than low-weight pillars and the drivers must name the highest-weight/highest-impact inputs.
@@ -1870,7 +1877,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
     );
   if (status === "error" && !data) return <ErrBlock msg={error} onRetry={onRefresh} />;
 
-  const tickers = data?.tickers || [];
+  // Thesis-Lab-only single stocks are fetched for the lab tools but kept off the Pulse grid.
+  const tickers = (data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol));
   const orderedTickers = orderAssetCards(tickers);
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
@@ -2768,20 +2776,21 @@ const resolveEnv = (env, live) => ({
 const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
-  if (!(S > 0)) return null;
   const lines = [];
-  lines.push(
-    `Pricing environment: spot ${fmtNum(S, 2)}, IV ${fmtNum(sigma * 100, 1)}%, ${days}d to expiry, rate ${fmtNum(r * 100, 2)}%, dividend ${fmtNum(q * 100, 2)}%.`
-  );
-
-  const oStrike = numOr(deskTools.options.strike, roundStrike(S));
-  const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
-  lines.push(
-    `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
-  );
+  // Spot-dependent context (options scenario + option/futures hedges) only when a focus spot is available.
+  if (S > 0) {
+    lines.push(
+      `Pricing environment: ${live.cfg.symbol} spot ${fmtNum(S, 2)}, IV ${fmtNum(sigma * 100, 1)}%, ${days}d to expiry, rate ${fmtNum(r * 100, 2)}%, dividend ${fmtNum(q * 100, 2)}%.`
+    );
+    const oStrike = numOr(deskTools.options.strike, roundStrike(S));
+    const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
+    lines.push(
+      `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
+    );
+  }
 
   const h = deskTools.hedge;
-  if (h.beta.on) {
+  if (h.beta.on && S > 0) {
     const pv = numOr(h.beta.portfolioValue, 0);
     const beta = numOr(h.beta.beta, 1);
     const notional = pv * beta;
@@ -2800,7 +2809,7 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
       );
     }
   }
-  if (h.vertical.on) {
+  if (h.vertical.on && S > 0) {
     const kL = numOr(h.vertical.longStrike, roundStrike(S));
     const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
     const premL = blackScholes({ S, K: kL, T, r, q, sigma, type: h.vertical.type }).price;
@@ -2810,7 +2819,7 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
       `Vertical spread: ${h.vertical.type} ${fmtNum(kL, 0)}/${fmtNum(kS, 0)} (${v.isDebit ? "debit" : "credit"}) — max profit ${fmtUsd(v.maxProfit)}, max loss ${fmtUsd(v.maxLoss)}, BE ${fmtNum(v.breakeven, 0)}, R/R ${fmtNum(v.rr, 2)}.`
     );
   }
-  if (h.calendar.on) {
+  if (h.calendar.on && S > 0) {
     const kNear = numOr(h.calendar.strike, roundStrike(S));
     const kFar = numOr(h.calendar.farStrike, kNear);
     const nearDays = numOr(h.calendar.nearDays, 7);
@@ -2839,21 +2848,22 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
 const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, days } = resolveEnv(deskTools.env, live);
-  if (!(S > 0)) return [];
   const out = [];
   const o = deskTools.options;
-  out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
   const h = deskTools.hedge;
-  if (h.beta.on) out.push(`Beta hedge · ${h.beta.mode === "puts" ? `${live.cfg.symbol} puts` : `${live.futSym} futures`}`);
-  if (h.vertical.on) {
-    const kL = numOr(h.vertical.longStrike, roundStrike(S));
-    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
-    out.push(`${h.vertical.type} vertical ${fmtNum(kL, 0)}/${fmtNum(kS, 0)}`);
-  }
-  if (h.calendar.on) {
-    const kN = numOr(h.calendar.strike, roundStrike(S));
-    const kF = numOr(h.calendar.farStrike, kN);
-    out.push(`${h.calendar.type} ${kN === kF ? "calendar" : "diagonal"} ${fmtNum(kN, 0)} · ${numOr(h.calendar.nearDays, 7)}d/${numOr(h.calendar.farDays, 37)}d`);
+  if (S > 0) {
+    out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
+    if (h.beta.on) out.push(`Beta hedge · ${h.beta.mode === "puts" ? `${live.cfg.symbol} puts` : `${live.futSym} futures`}`);
+    if (h.vertical.on) {
+      const kL = numOr(h.vertical.longStrike, roundStrike(S));
+      const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
+      out.push(`${h.vertical.type} vertical ${fmtNum(kL, 0)}/${fmtNum(kS, 0)}`);
+    }
+    if (h.calendar.on) {
+      const kN = numOr(h.calendar.strike, roundStrike(S));
+      const kF = numOr(h.calendar.farStrike, kN);
+      out.push(`${h.calendar.type} ${kN === kF ? "calendar" : "diagonal"} ${fmtNum(kN, 0)} · ${numOr(h.calendar.nearDays, 7)}d/${numOr(h.calendar.farDays, 37)}d`);
+    }
   }
   if (h.pairs.on) out.push(`Pairs ${h.pairs.longSym}/${h.pairs.shortSym}`);
   return out;
@@ -3321,7 +3331,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
             {activeInstrument.futures !== activeInstrument.symbol && (
               <> with {activeInstrument.futures} as the {activeInstrument.group === "stock" ? "index hedge" : "live execution"} proxy</>
             )}.
-            {activeInstrument.group === "stock" && <> Single stock — enter its spot manually in the options &amp; hedge tools.</>}
+            {activeInstrument.group === "stock" && <> Single stock — priced live for the lab tools (kept off the Market Pulse grid).</>}
           </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
@@ -4091,7 +4101,11 @@ export default function Overwatch() {
       return false;
     }
   };
-  const refreshMarket = () => runFetch(setMarket, "market", pricesPrompt(watchlist), { watchlist });
+  const refreshMarket = () => {
+    // Append the Thesis Lab single-stock tickers so their live prices are available to the lab tools.
+    const priceList = [...watchlist, ...THESIS_STOCK_TICKERS.filter((s) => !watchlist.some((w) => w.symbol === s.symbol))];
+    return runFetch(setMarket, "market", pricesPrompt(priceList), { watchlist: priceList });
+  };
   const refreshNews = () => runFetch(setNews, "news", newsPrompt());
   const refreshPoints = () => runFetch(setPoints, "points", pointsPrompt());
   const refreshRecap = (payload = {}) => runFetch(setRecap, "recap", sessionPrompt(payload), payload);
@@ -4147,10 +4161,11 @@ export default function Overwatch() {
     setThesis((s) => ({ ...s, status: "loading", error: null }));
     try {
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
+      const focusSpot = deskLiveContext(market.data, points.data, instrument).spot;
       const deskContext = deskTools.feedToThesis
         ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument })
         : null;
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext });
+      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot });
       const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext });
       const entry = {
         ...data,
@@ -4201,7 +4216,7 @@ export default function Overwatch() {
   const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
   const archiveBadge = archiveHistory.length || null;
   const TABS = [
-    { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: market.data?.tickers?.length },
+    { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol)).length || null },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
