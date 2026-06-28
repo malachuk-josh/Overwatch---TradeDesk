@@ -3937,11 +3937,13 @@ const CHART_PRESETS = [
   { symbol: "NASDAQ:QQQ",     label: "QQQ" },
   { symbol: "AMEX:DIA",       label: "DIA" },
   { symbol: "AMEX:IWM",       label: "IWM" },
-  { symbol: "CBOE:VIX",       label: "VIX" },
-  { symbol: "TVC:DXY",        label: "DXY" },
-  { symbol: "TVC:US10Y",      label: "US10Y" },
-  { symbol: "COMEX:GC1!",     label: "Gold" },
-  { symbol: "NYMEX:CL1!",     label: "Crude" },
+  { symbol: "NASDAQ:AAPL",    label: "AAPL" },
+  { symbol: "NASDAQ:MSFT",    label: "MSFT" },
+  { symbol: "NASDAQ:NVDA",    label: "NVDA" },
+  { symbol: "NASDAQ:AMZN",    label: "AMZN" },
+  { symbol: "NASDAQ:META",    label: "META" },
+  { symbol: "NASDAQ:GOOGL",   label: "GOOGL" },
+  { symbol: "NASDAQ:TSLA",    label: "TSLA" },
   { symbol: "COINBASE:BTCUSD", label: "BTC" },
 ];
 
@@ -4007,9 +4009,13 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-char
 const ChartsTab = ({ lightMode }) => {
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
   const [selected, setSelected] = useState(() => {
+    const valid = new Set(CHART_PRESETS.map((p) => p.symbol));
     try {
       const saved = JSON.parse(localStorage.getItem("overwatch:charts") || "null");
-      if (Array.isArray(saved) && saved.length) return saved;
+      if (Array.isArray(saved)) {
+        const kept = saved.filter((s) => valid.has(s));
+        if (kept.length) return kept;
+      }
     } catch {}
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
@@ -4383,11 +4389,11 @@ export default function Overwatch() {
   const archiveBadge = archiveHistory.length || null;
   const TABS = [
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol)).length || null },
-    { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Thesis", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
+    { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
 
   const steps = [
