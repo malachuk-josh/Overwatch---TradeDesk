@@ -785,26 +785,32 @@ html,body{max-width:100vw;overflow-x:hidden}
   display:none;
   position:fixed;z-index:200;
   /* float the bar off every edge so it reads as a detached glass pill */
-  left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+  left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
   background:var(--glass);
   -webkit-backdrop-filter:blur(34px) saturate(150%);
   backdrop-filter:blur(34px) saturate(150%);
   border:1px solid var(--glass-border);
-  border-radius:20px;
-  box-shadow:0 10px 34px rgba(2,6,23,.5), inset 0 1px 0 rgba(255,255,255,.08);
-  overflow:hidden;
+  border-radius:28px;
+  box-shadow:0 14px 38px rgba(2,6,23,.55), inset 0 1px 0 rgba(255,255,255,.08);
+  padding:7px 8px;
 }
 .bd-bottom-nav-inner{
   display:flex;
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:14px 2px 13px;
+  gap:4px;padding:9px 2px;
   background:none;border:none;cursor:pointer;
   color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-  font-family:'Space Grotesk',sans-serif;transition:color .15s;position:relative;
+  font-family:'Space Grotesk',sans-serif;transition:color .15s;position:relative;isolation:isolate;
 }
+/* active tab sits in its own highlighted sub-pill */
 .bd-bnav-btn.on{color:var(--brass)}
+.bd-bnav-btn.on::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background:var(--brass-dim);border-radius:18px;
+  border:1px solid rgba(59,130,246,.28);
+}
 .bd-bnav-btn svg{flex-shrink:0}
 .bd-bnav-dot{
   position:absolute;top:8px;right:calc(50% - 12px);
