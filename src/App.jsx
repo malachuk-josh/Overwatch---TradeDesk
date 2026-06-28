@@ -863,7 +863,10 @@ html,body{max-width:100vw;overflow-x:hidden}
   .bd-title{font-size:15px}
   .bd-sub{font-size:9px;letter-spacing:.13em}
   .bd-mark{width:32px;height:32px;border-radius:8px;font-size:12px}
-  .bd-hright{width:100%;justify-content:space-between;margin-left:0}
+  .bd-hright{width:100%;justify-content:space-between;margin-left:0;flex-wrap:wrap;gap:8px}
+  /* icon-only Sync on mobile so the cluster (clock · session · sync · theme · settings) fits one row */
+  .sync-label{display:none}
+  .bd-hright .btn-brass{padding:8px 11px}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
   /* workflow ticker is redundant on mobile (bottom nav + Sync button cover it) */
@@ -4627,7 +4630,7 @@ export default function Overwatch() {
             {session.label}
           </span>
           <button className="btn btn-brass" onClick={syncAll} disabled={anyLoading}>
-            {anyLoading ? <><RefreshCw size={14} className="spin" /> Syncing…</> : <><Zap size={14} /> Sync live data</>}
+            {anyLoading ? <><RefreshCw size={14} className="spin" /> <span className="sync-label">Syncing…</span></> : <><Zap size={14} /> <span className="sync-label">Sync live data</span></>}
           </button>
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
