@@ -818,8 +818,10 @@ html,body{max-width:100vw;overflow-x:hidden}
 .g-data{grid-template-columns:1fr 1fr 1fr}
 .pulse-levels-mobile{display:none}
 .g-thesis{grid-template-columns:340px 1fr}
+.g-thesis-top{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
 .archives-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.g-thesis-top{grid-template-columns:1fr}}
 @media(max-width:760px){
   .g-3{grid-template-columns:1fr}
   .pulse-levels-desktop{display:none}
@@ -3427,6 +3429,9 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   ].filter(Boolean);
   const feedSummary = feedParts.length ? feedParts.join(" + ") : "nothing yet — toggle a hedge or the options scenario";
   const weightSum = Math.round(FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0));
+  // Once a thesis is on the tape (or one is loading / errored), split into controls-left + output-right.
+  // Before that, the controls ride consolidated across the top instead of leaving a big empty pane.
+  const showSplit = !!t || thesis.status === "loading" || thesis.status === "error";
 
   if (toolView !== "synthesis") {
     return (
@@ -3458,9 +3463,9 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
           </span>
         </div>
       )}
-    <div className="grid g-thesis" style={{ alignItems: "start" }}>
-      {/* controls */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    <div className={showSplit ? "grid g-thesis" : "grid g-thesis-top"} style={{ alignItems: "start" }}>
+      {/* controls — stacked sidebar once a thesis is up, 3-up band across the top when idle */}
+      <div style={showSplit ? { display: "flex", flexDirection: "column", gap: 14 } : { display: "contents" }}>
         <Card
           icon={FlaskConical}
           title="Pillar weights"
@@ -3516,7 +3521,8 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         </Card>
       </div>
 
-      {/* output */}
+      {/* output — only once a thesis exists / is loading / errored */}
+      {showSplit && (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {viewing && (
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
@@ -3528,13 +3534,6 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         {thesis.status === "error" && !t && <ErrBlock msg={thesis.error} onRetry={onGenerate} />}
         {thesis.status === "loading" && !t && (
           <div className="th-hero"><LoadingBlock lines={4} msg="Weighing pillars, stress-testing the lean, writing the call…" /></div>
-        )}
-        {!t && thesis.status === "idle" && (
-          <EmptyState
-            icon={FlaskConical}
-            title="No thesis on the tape yet"
-            body="Set your pillar weights and stance on the left, then run the synthesis. The desk will weigh live prices, headlines and internals into one directional call — with invalidation and stand-aside conditions attached."
-          />
         )}
         {t && (
           <>
@@ -3638,7 +3637,16 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         )}
 
       </div>
+      )}
     </div>
+    {!showSplit && (
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 15px" }}>
+        <FlaskConical size={14} color={C.brass} />
+        <span style={{ fontSize: 12.5, color: C.muted }}>
+          No thesis on the tape yet — set your pillar weights and stance above, then hit <b style={{ color: "var(--text)" }}>Generate today's thesis</b>. The desk weighs live prices, headlines and internals into one directional call.
+        </span>
+      </div>
+    )}
     </div>
   );
 };
