@@ -601,9 +601,12 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
 If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
 
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot }) => {
+const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels }) => {
   const focus = thesisInstrumentConfig(instrument);
   const isStock = focus.group === "stock";
+  const stockLevelsLine = focusLevels
+    ? `${focus.symbol} live levels (use these exact numbers for the action level and targets): spot ${fmtNum(focusLevels.spot, 2)}, pivot ${fmtNum(focusLevels.pivot, 2)}, supports ${(focusLevels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(focusLevels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"} (as of ${focusLevels.asOf || "now"}).`
+    : "";
   return `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
 
 === LIVE DESK DATA ===
@@ -621,7 +624,7 @@ Pillar weights (0-100, higher = more influence on the call): Technicals ${weight
 Directional lean: ${lean === "auto" ? "none — derive direction purely from the data" : `trader is leaning ${lean} — stress-test that lean against the data and push back if it is not justified`}.
 Risk appetite: ${risk}.
 Primary instrument focus: ${focus.symbol} (${focus.name})${focusSpot ? `, currently trading near ${fmtNum(focusSpot, 2)}` : ""} with ${focus.futures} futures as the ${isStock ? "index hedge" : "live execution"} proxy when relevant.
-${isStock ? `IMPORTANT — ${focus.symbol} is a SINGLE STOCK. The price levels in the data above (SPX / NDX / DJI support, resistance, pivots) are INDEX levels, not ${focus.symbol}'s. Build the bias, action level, upside/downside targets, game plan, invalidation and watch list around ${focus.symbol}'s OWN price${focusSpot ? ` (live near ${fmtNum(focusSpot, 2)})` : ""} and your knowledge of its recent trading range. Use the Nasdaq/index internals only as macro proxy context and say so explicitly. NEVER quote an index level (e.g. an SPX number) as if it were ${focus.symbol}'s level.` : ""}
+${isStock ? `IMPORTANT — ${focus.symbol} is a SINGLE STOCK. The support/resistance/pivot numbers in the data above (SPX / NDX / DJI) are INDEX levels, NOT ${focus.symbol}'s — use the index internals only as macro proxy context and say so. ${stockLevelsLine ? `${stockLevelsLine} Build the action level, upside and downside targets, game plan, invalidation and watch list from THESE ${focus.symbol} numbers — give specific prices, not vague descriptions.` : `Build the levels around ${focus.symbol}'s OWN price${focusSpot ? ` (live near ${fmtNum(focusSpot, 2)})` : ""} and your knowledge of its recent range, with specific prices.`} NEVER quote an index level as if it were ${focus.symbol}'s level.` : ""}
 Trader notes: ${notes ? notes : "none"}.
 ${deskContext ? `
 === DESK HEDGE & OPTIONS STRUCTURES (trader is actively considering these) ===
@@ -2829,7 +2832,7 @@ const deskLiveContext = (market, points, instrument) => {
 const DEFAULT_DESK_TOOLS = {
   feedToThesis: false,
   env: { spot: "", sigmaPct: "", ratePct: "", divPct: "1.3", days: "30" },
-  options: { strike: "", type: "call", marketPrice: "" },
+  options: { strike: "", type: "call", marketPrice: "", feed: false },
   hedge: {
     beta: { on: true, portfolioValue: "100000", beta: "1.00", mode: "futures", putOtmPct: "5" },
     vertical: { on: false, type: "call", longStrike: "", shortStrike: "", contracts: "1" },
@@ -2858,11 +2861,13 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
     lines.push(
       `Pricing environment: ${live.cfg.symbol} spot ${fmtNum(S, 2)}, IV ${fmtNum(sigma * 100, 1)}%, ${days}d to expiry, rate ${fmtNum(r * 100, 2)}%, dividend ${fmtNum(q * 100, 2)}%.`
     );
-    const oStrike = numOr(deskTools.options.strike, roundStrike(S));
-    const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
-    lines.push(
-      `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
-    );
+    if (deskTools.options.feed) {
+      const oStrike = numOr(deskTools.options.strike, roundStrike(S));
+      const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
+      lines.push(
+        `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
+      );
+    }
   }
 
   const h = deskTools.hedge;
@@ -2928,7 +2933,7 @@ const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
   const o = deskTools.options;
   const h = deskTools.hedge;
   if (S > 0) {
-    out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
+    if (o.feed) out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
     if (h.beta.on) out.push(`Beta hedge · ${h.beta.mode === "puts" ? `${live.cfg.symbol} puts` : `${live.futSym} futures`}`);
     if (h.vertical.on) {
       const kL = numOr(h.vertical.longStrike, roundStrike(S));
@@ -3098,6 +3103,18 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
                 : "No solution — that price is outside the no-arbitrage bounds."
               : "Enter a quoted price to back out its implied volatility."}
           </div>
+        </div>
+        <div className="lab-field" style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <button
+            onClick={() => setOpt("feed", !opt.feed)}
+            style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: opt.feed ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+            title="Include this options scenario when feeding the thesis"
+          >
+            <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+          </button>
+          <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
+            <b style={{ color: "var(--text)" }}>Include in thesis feed</b> — list this scenario alongside your active hedges when the synthesis runs.
+          </span>
         </div>
       </Card>
 
@@ -3339,7 +3356,11 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
   const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
   const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
-  const feedSummary = `options scenario${activeHedges ? ` + ${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : ""}`;
+  const feedParts = [
+    deskTools.options.feed ? "options scenario" : null,
+    activeHedges ? `${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
+  const feedSummary = feedParts.length ? feedParts.join(" + ") : "nothing yet — toggle a hedge or the options scenario";
   const weightSum = Math.round(FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0));
 
   if (toolView !== "synthesis") {
@@ -3368,7 +3389,7 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
           <Scale size={14} color={C.brass} />
           <span style={{ fontSize: 12.5, color: C.muted }}>
-            Desk tools are feeding the synthesis — the options scenario{activeHedges ? ` and ${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : ""} will be referenced in the next thesis run.
+            Desk tools are feeding the synthesis — {feedSummary} will be referenced in the next thesis run.
           </span>
         </div>
       )}
@@ -4225,11 +4246,16 @@ export default function Overwatch() {
     try {
       const timing = buildTimingSnapshot({ market: market.data, news: news.data, points: points.data });
       const focusSpot = deskLiveContext(market.data, points.data, instrument).spot;
+      // Single-stock focus has no index-style S/R in the feed — fetch real levels for the stock.
+      let focusLevels = null;
+      if (thesisInstrumentConfig(instrument).group === "stock") {
+        try { focusLevels = await callDesk("stocklevels", "", { symbol: instrument }); } catch { focusLevels = null; }
+      }
       const deskContext = deskTools.feedToThesis
         ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument })
         : null;
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext });
+      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels });
+      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels });
       const entry = {
         ...data,
         instrument,

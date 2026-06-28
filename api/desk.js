@@ -1063,6 +1063,22 @@ const indexLevels = (item, decimals = 0) => {
   };
 };
 
+// Real support/resistance/pivot for a single stock, computed from its live OHLC quote — gives
+// single-stock theses concrete levels the same way indexLevels() does for the index complex.
+const fetchStockLevels = async (symbol) => {
+  if (!symbol || typeof symbol !== "string") return null;
+  try {
+    const sym = symbol.toUpperCase();
+    const q = await quote(sym);
+    const levels = indexLevels({ price: q.price, dayHigh: q.dayHigh, dayLow: q.dayLow, changePct: q.changePct }, 2);
+    if (!levels) return null;
+    const asOf = new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
+    return { symbol: sym, ...levels, asOf };
+  } catch {
+    return null;
+  }
+};
+
 const avg = (values) => {
   const clean = values.filter((value) => Number.isFinite(Number(value))).map(Number);
   return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
@@ -1585,7 +1601,7 @@ const THESIS_INSTRUMENTS = {
 
 const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
 
-const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX" }) => {
+const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX", focusLevels = null }) => {
   const focus = getThesisInstrument(instrument);
   const tickers = market?.tickers || [];
   const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"].map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct).filter(Number.isFinite);
@@ -1628,7 +1644,9 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
   const alignmentBoost = alignedPillars >= 4 ? 1 : alignedPillars <= 2 ? -1 : 0;
   const riskConviction = stance.risk === "aggressive" ? 1 : stance.risk === "defensive" ? -1 : 0;
   const conviction = clamp(Math.round(Math.abs(score) / 12) + 3 + alignmentBoost + riskConviction - (eventPenalty >= 25 ? 1 : 0), 3, stance.risk === "defensive" ? 8 : 10);
-  const focusPoints = points?.[focus.pointsKey] || {};
+  // Prefer the index complex's own levels; for single stocks / Russell, fall back to the
+  // web-fetched stock levels so the fallback thesis also gets concrete numbers.
+  const focusPoints = points?.[focus.pointsKey] || focusLevels || {};
   const focusSpot = tickers.find((item) => item.symbol === focus.symbol)?.price;
   // Single stocks (and Russell) have no index-style S/R in the feed — anchor the pivot to the live quote.
   const pivot = focusPoints.pivot || focusPoints.spot || focusSpot;
@@ -1930,6 +1948,7 @@ export default async function handler(req, res) {
     if (operation === "market") data = await fetchMarket(payload.watchlist);
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
+    else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol);
     else if (operation === "recap") {
       try {
         data = await callAnthropic(prompt);
