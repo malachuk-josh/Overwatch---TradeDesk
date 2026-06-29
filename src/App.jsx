@@ -1884,10 +1884,10 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   ].filter((r) => typeof r.v === "number" && !isNaN(r.v));
   // Session OHLC drawn as subtle reference rails. O/C labelled on the left edge, H/L on the right.
   const ohlcRows = [
-    { v: ohlc?.o, label: "O", side: "left" },
-    { v: ohlc?.c, label: "C", side: "left" },
-    { v: ohlc?.h, label: "H", side: "right" },
-    { v: ohlc?.l, label: "L", side: "right" },
+    { v: ohlc?.o, label: "Open", side: "left" },
+    { v: ohlc?.c, label: "Close", side: "left" },
+    { v: ohlc?.h, label: "High", side: "right" },
+    { v: ohlc?.l, label: "Low", side: "right" },
   ].filter((r) => typeof r.v === "number" && !isNaN(r.v));
   const all = [...rows.map((r) => r.v), ...ohlcRows.map((r) => r.v), spx.spot];
   const min = Math.min(...all), max = Math.max(...all);
