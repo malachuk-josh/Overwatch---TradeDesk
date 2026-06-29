@@ -38,25 +38,39 @@ export default async function handler(req, res) {
   const ids = await redisCmd(["ZRANGE", "newsletters:index", "+inf", "-inf", "BYSCORE", "REV", "LIMIT", "0", String(limit)]);
   if (!ids || !ids.length) return json(res, 200, { data: [] });
 
-  const pipeline = ids.map((id) => ["GET", `newsletter:${id}`]);
-  const pipeRes = await fetch(`${url}/pipeline`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(pipeline),
-    signal: AbortSignal.timeout(10000),
-  });
-  const results = await pipeRes.json();
+  const runPipeline = async (commands) => {
+    const r = await fetch(`${url}/pipeline`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(commands),
+      signal: AbortSignal.timeout(10000),
+    });
+    return r.json();
+  };
 
-  const items = results
-    .map((r) => {
-      if (!r?.result) return null;
-      try {
-        const record = JSON.parse(r.result);
-        const { html, ...meta } = record;
-        return { ...meta, url: `${BASE_URL}/archive/${meta.id}` };
-      } catch { return null; }
-    })
-    .filter(Boolean);
+  // Fast path: read the slim meta records (no html). Fall back to the full record only for
+  // legacy newsletters ingested before meta keys existed.
+  const byId = {};
+  const metaRes = await runPipeline(ids.map((id) => ["GET", `newsletter:meta:${id}`]));
+  const missing = [];
+  metaRes.forEach((r, i) => {
+    if (r?.result) {
+      try { byId[ids[i]] = JSON.parse(r.result); return; } catch {}
+    }
+    missing.push(ids[i]);
+  });
+  if (missing.length) {
+    const fullRes = await runPipeline(missing.map((id) => ["GET", `newsletter:${id}`]));
+    fullRes.forEach((r, i) => {
+      if (!r?.result) return;
+      try { const { html, ...meta } = JSON.parse(r.result); byId[missing[i]] = meta; } catch {}
+    });
+  }
+
+  const items = ids
+    .map((id) => byId[id])
+    .filter(Boolean)
+    .map((meta) => ({ ...meta, url: `${BASE_URL}/archive/${meta.id}` }));
 
   const filtered = type ? items.filter((i) => i.type === type) : items;
 
