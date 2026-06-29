@@ -969,7 +969,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.96),rgba(239,68,68,.28));box-shadow:0 0 0 1px rgba(239,68,68,.14) inset, 0 0 10px rgba(239,68,68,.14)}
 .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.16) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
-.mini-candle{position:relative;width:13px;height:34px;flex:none}
+.mini-candle{position:relative;width:20px;height:36px;flex:none}
+/* fatter wick/body than the ticker candle so the header candle reads clearly at this size */
+.mini-candle .candle-wick{width:2.5px}
+.mini-candle .candle-body{width:15px}
 /* pulse the level-map candle while that instrument's market is trading (matches the ticker icons) */
 .mini-candle-live .candle-body{animation:miniCandlePulse 2s ease-in-out infinite}
 @keyframes miniCandlePulse{
@@ -1807,13 +1810,14 @@ const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, li
   const close = Number(price);
   const safeOpen = clamp(open, low, high);
   const safeClose = clamp(close, low, high);
-  const trackHeight = 34;
-  const railPad = 3;
+  // Sized to fill the card header row (set by the two-line title block) without growing the card.
+  const trackHeight = 36;
+  const railPad = 2;
   const scale = trackHeight - railPad * 2;
   const yFor = (value) => railPad + ((high - value) / (high - low)) * scale;
   const openY = yFor(safeOpen);
   const closeY = yFor(safeClose);
-  const bodyHeight = Math.max(Math.abs(closeY - openY), 3);
+  const bodyHeight = Math.max(Math.abs(closeY - openY), 4);
   const bodyTop = clamp(Math.min(openY, closeY), railPad, trackHeight - railPad - bodyHeight);
   const bullish = close >= open;
   const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
