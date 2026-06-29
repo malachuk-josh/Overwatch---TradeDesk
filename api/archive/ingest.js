@@ -47,12 +47,15 @@ export default async function handler(req, res) {
 
   const { id, html, ...meta } = body;
   const record = { ...meta, id, html };
+  // Slim metadata (no html) so the list endpoint never has to transfer full newsletter bodies.
+  const metaRecord = { ...meta, id };
 
   const score = Date.parse(body.sentAt);
   if (Number.isNaN(score)) return json(res, 400, { error: "Invalid sentAt date" });
 
   await redisPipeline([
     ["SET", `newsletter:${id}`, JSON.stringify(record), "EX", "31536000"],
+    ["SET", `newsletter:meta:${id}`, JSON.stringify(metaRecord), "EX", "31536000"],
     ["ZADD", "newsletters:index", score, id],
   ]);
 
