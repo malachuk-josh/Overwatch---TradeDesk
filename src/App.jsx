@@ -1960,23 +1960,29 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const min = Math.min(...all), max = Math.max(...all);
   const pad = (max - min) * 0.1 || 10;
   const H = 252, W = 330;
+  // Balanced gutters: ~70px left (R/S labels + Open/Close) and ~60px right (values inside + High/Low),
+  // so the plot reads centred and the OHLC labels don't bleed into the S/R values or off the card.
+  const AX = 70;        // vertical axis / plot left
+  const PR = 270;       // plot right edge (lines + zone shading end here)
+  const VALX = PR - 4;  // S/R value numbers sit just inside the plot's right edge
   const y = (v) => 14 + ((max + pad - v) / (max - min + 2 * pad)) * (H - 28);
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
   const spotRectW = dec > 0 ? 102 : 86;
-  const spotCenterX = 80 + spotRectW / 2;
+  const spotCenterX = (AX + 6) + spotRectW / 2;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
       {/* zone shading: resistance (red) above the live price, support (green) below — readable at a glance */}
-      <rect x="74" y="8" width={W - 12 - 74} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
-      <rect x="74" y={y(spx.spot)} width={W - 12 - 74} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
-      {/* OHLC reference rails — muted + dotted so they sit under the S/R and pivot lines */}
+      <rect x={AX} y="8" width={PR - AX} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
+      <rect x={AX} y={y(spx.spot)} width={PR - AX} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
+      {/* OHLC reference rails — muted + dotted so they sit under the S/R and pivot lines.
+          Open/Close ride the far-left gutter, High/Low the right gutter (clear of the value numbers). */}
       {ohlcRows.map((r, i) => (
         <g key={`ohlc-${i}`} style={{ opacity: 0.5 }}>
-          <line x1="74" y1={y(r.v)} x2={W - 12} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
+          <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
           <text
-            x={r.side === "left" ? 5 : W - 3}
+            x={r.side === "left" ? 4 : PR + 5}
             y={y(r.v) + 3.5}
-            textAnchor={r.side === "left" ? "start" : "end"}
+            textAnchor="start"
             fontSize="9"
             fill="#94A3B8"
             fontFamily="JetBrains Mono, monospace"
@@ -1986,24 +1992,24 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
           </text>
         </g>
       ))}
-      <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E293B" strokeWidth="1" />
+      <line x1={AX} y1="8" x2={AX} y2={H - 8} stroke="#1E293B" strokeWidth="1" />
       {rows.map((r, i) => (
         <g key={i}>
-          <line x1="74" y1={y(r.v)} x2={W - 12} y2={y(r.v)} stroke={colorOf(r.type)} strokeWidth={r.type === "piv" ? 1.6 : 1.2} strokeDasharray={r.type === "piv" ? "" : "5 4"} opacity="0.75" />
-          <text x="66" y={y(r.v) + 3.5} textAnchor="end" fontSize="10" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace" fontWeight="600">
+          <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke={colorOf(r.type)} strokeWidth={r.type === "piv" ? 1.6 : 1.2} strokeDasharray={r.type === "piv" ? "" : "5 4"} opacity="0.75" />
+          <text x={AX - 6} y={y(r.v) + 3.5} textAnchor="end" fontSize="10" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace" fontWeight="600">
             {r.label}
           </text>
-          <text x={W - 12} y={y(r.v) - 4} textAnchor="end" fontSize="10.5" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace">
+          <text x={VALX} y={y(r.v) - 4} textAnchor="end" fontSize="10.5" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace">
             {fmtNum(r.v, dec)}
           </text>
         </g>
       ))}
       <g>
-        <line x1="74" y1={y(spx.spot)} x2={W - 12} y2={y(spx.spot)} stroke="#E2E8F0" strokeWidth="2" />
-        <circle cx="74" cy={y(spx.spot)} r="4.5" fill="#E2E8F0">
+        <line x1={AX} y1={y(spx.spot)} x2={PR} y2={y(spx.spot)} stroke="#E2E8F0" strokeWidth="2" />
+        <circle cx={AX} cy={y(spx.spot)} r="4.5" fill="#E2E8F0">
           <animate attributeName="r" values="4;5.5;4" dur="2s" repeatCount="indefinite" />
         </circle>
-        <rect x="80" y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E2E8F0" />
+        <rect x={AX + 6} y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E2E8F0" />
         <text x={spotCenterX} y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#020617" fontWeight="700" fontFamily="JetBrains Mono, monospace">
           {label} {fmtNum(spx.spot, dec)}
         </text>
