@@ -1666,7 +1666,7 @@ const THESIS_INSTRUMENTS = {
 
 const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
 
-const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX", focusLevels = null }) => {
+const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX", focusLevels = null, secondary = "" }) => {
   const focus = getThesisInstrument(instrument);
   const tickers = market?.tickers || [];
   const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"].map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct).filter(Number.isFinite);
@@ -1747,6 +1747,9 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
     summary: `The ${timingRead.staleCashRisk ? "futures-adjusted" : "index"} tape is averaging ${round(tape)}% while the headline balance scores ${Math.round(newsScore)}. ${points?.internals?.trendDetail?.read || `The live trend read is ${points?.internals?.trend || "range"}.`} ${pillarRead} ${stanceSummary} That combination produces a ${bias} call with ${conviction}/10 conviction for ${focus.symbol}${notes ? ", with the desk note treated as a secondary constraint" : ""}.`,
     pillarRead,
     stanceRead: stanceSummary,
+    pairRead: secondary
+      ? `Relative-value angle: with a ${bias} read on ${focus.symbol}, favour ${bias === "bearish" ? `short ${focus.symbol} / long ${secondary}` : `long ${focus.symbol} / short ${secondary}`} while ${focus.symbol} holds its action level. Watch for the two re-converging — that unwinds the spread.`
+      : "",
     pillarWeights: weighted.weights,
     pillarScores: Object.fromEntries(weighted.rows.map((row) => [row.key, row.score])),
     weightedPillars: weighted.rows,
@@ -2007,6 +2010,22 @@ async function getArchiveKV() {
   return result ? JSON.parse(result) : null;
 }
 
+async function saveSharedThesis(html) {
+  const kvUrl = _kvUrl();
+  const kvToken = _kvToken();
+  if (!kvUrl || !kvToken) throw new Error("Sharing is not configured");
+  if (!html || typeof html !== "string") throw new Error("Nothing to share");
+  const id = Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+  await fetch(kvUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${kvToken}`, "Content-Type": "application/json" },
+    // keep shared theses for 90 days
+    body: JSON.stringify(["SET", `thesis:${id}`, JSON.stringify({ html, createdAt: Date.now() }), "EX", "7776000"]),
+    signal: AbortSignal.timeout(6000),
+  });
+  return { id, url: `/api/thesis/${id}` };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { error: "Method not allowed" });
@@ -2052,6 +2071,8 @@ export default async function handler(req, res) {
     } else if (operation === "savearchive") {
       await saveArchiveKV(payload.archive);
       data = { ok: true };
+    } else if (operation === "saveshared") {
+      data = await saveSharedThesis(payload.html);
     } else {
       return json(res, 400, { error: "Unknown desk operation" });
     }
