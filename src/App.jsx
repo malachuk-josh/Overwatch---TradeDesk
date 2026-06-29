@@ -900,8 +900,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .academy-player{aspect-ratio:16/9;background:#000}
 .academy-player iframe{width:100%;height:100%;border:none;display:block}
 @media(max-width:760px){.academy-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
-/* Session read collapse toggle is mobile-only */
-.read-toggle{display:none}
+/* Session read defaults collapsed on every viewport — headline stays, the rest folds away */
+.read-toggle{display:inline-flex}
+.session-read-body.read-collapsed{display:none}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.g-thesis-top{grid-template-columns:1fr}}
 @media(max-width:760px){
@@ -918,9 +919,6 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   /* icon-only Sync on mobile so the cluster (clock · session · sync · theme · settings) fits one row */
   .sync-label{display:none}
   .bd-hright .btn-brass{padding:8px 11px}
-  /* Session read defaults collapsed on mobile — headline stays, the rest folds away */
-  .read-toggle{display:inline-flex}
-  .session-read-body.read-collapsed{display:none}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
   /* workflow ticker is redundant on mobile (bottom nav + Sync button cover it) */
@@ -2255,7 +2253,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
   // Market snapshot defaults collapsed on every viewport — open it from the header toggle.
   const [tickersOpen, setTickersOpen] = useState(false);
-  // Session read collapses on mobile (headline stays visible); always expanded on desktop.
+  // Session read defaults collapsed on every viewport — headline stays visible, the rest folds away.
   const [readOpen, setReadOpen] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
