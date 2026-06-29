@@ -694,7 +694,8 @@ const CSS = `
   --r:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{max-width:100vw;overflow-x:hidden}
+/* dark backdrop fills the iOS safe-area / status-bar inset under the translucent bar */
+html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark}
 .bd-root{
   min-height:100vh;width:100%;
   background-color:var(--ink);color:var(--text);
@@ -717,6 +718,13 @@ html,body{max-width:100vw;overflow-x:hidden}
     radial-gradient(900px 760px at 50% 118%, rgba(37,99,235,.077), transparent 62%),
     radial-gradient(rgba(0,30,60,.05) 1px, transparent 1px);
 }
+/* always-dark band behind the iOS status bar (black-translucent forces white status text,
+   so this keeps it legible in light mode too); zero height off iOS where the inset is 0 */
+.bd-root::before{
+  content:"";position:fixed;top:0;left:0;right:0;
+  height:env(safe-area-inset-top,0px);background:#0B0F14;
+  z-index:60;pointer-events:none;
+}
 .bd-root ::selection{background:rgba(59,130,246,.3)}
 .mono{font-family:'JetBrains Mono',monospace}
 .disp{font-family:'Space Grotesk',sans-serif}
@@ -730,6 +738,8 @@ html,body{max-width:100vw;overflow-x:hidden}
 /* ---------- header ---------- */
 .bd-header{
   display:flex;align-items:center;gap:18px;padding:14px 22px;
+  /* extend the header glass up into the status-bar safe area so its title clears the notch */
+  padding-top:calc(14px + env(safe-area-inset-top,0px));
   border-bottom:1px solid var(--glass-border);
   background:var(--glass-strong);
   -webkit-backdrop-filter:blur(25px) saturate(130%);
@@ -900,7 +910,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .pulse-levels-mobile{display:block}
   .bd-main{padding:12px 12px calc(103px + env(safe-area-inset-bottom,0px) + 10px)}
   /* condensed header: smaller title/mark, tighter padding */
-  .bd-header{padding:10px 14px;flex-wrap:wrap;gap:10px}
+  .bd-header{padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px));flex-wrap:wrap;gap:10px}
   .bd-title{font-size:15px}
   .bd-sub{font-size:9px;letter-spacing:.13em}
   .bd-mark{width:32px;height:32px;border-radius:8px;font-size:12px}
