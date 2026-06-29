@@ -61,10 +61,17 @@ export default async function handler(req, res) {
   });
   if (missing.length) {
     const fullRes = await runPipeline(missing.map((id) => ["GET", `newsletter:${id}`]));
+    // Lazy backfill: write the slim meta for any legacy newsletter so the next list is fast.
+    const backfill = [];
     fullRes.forEach((r, i) => {
       if (!r?.result) return;
-      try { const { html, ...meta } = JSON.parse(r.result); byId[missing[i]] = meta; } catch {}
+      try {
+        const { html, ...meta } = JSON.parse(r.result);
+        byId[missing[i]] = meta;
+        backfill.push(["SET", `newsletter:meta:${missing[i]}`, JSON.stringify(meta), "EX", "31536000"]);
+      } catch {}
     });
+    if (backfill.length) { try { await runPipeline(backfill); } catch {} }
   }
 
   const items = ids
