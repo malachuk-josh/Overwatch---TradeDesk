@@ -836,7 +836,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   position:fixed;z-index:200;
   /* float the bar off every edge so it reads as a detached glass pill; sit low but keep a small
      gap above the home indicator / screen edge */
-  left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) - 6px);
+  left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) - 8px);
   background:var(--glass);
   -webkit-backdrop-filter:blur(34px) saturate(150%);
   backdrop-filter:blur(34px) saturate(150%);
@@ -850,7 +850,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:8px 2px;
+  gap:4px;padding:7px 2px;
   background:none;border:none;cursor:pointer;
   color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   font-family:'Space Grotesk',sans-serif;transition:color .15s;position:relative;isolation:isolate;
