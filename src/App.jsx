@@ -903,6 +903,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 /* Session read defaults collapsed on every viewport — headline stays, the rest folds away */
 .read-toggle{display:inline-flex}
 .session-read-body.read-collapsed{display:none}
+.session-read-foot{display:flex;justify-content:flex-end;margin-top:8px}
+.read-clickable{cursor:pointer;transition:border-color .15s}
+.read-clickable:hover{border-color:var(--line2)}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
 @media(max-width:980px){.g-thesis-top{grid-template-columns:1fr}}
 @media(max-width:760px){
@@ -1469,8 +1472,8 @@ select.bd-in option{background:var(--panel);color:var(--text)}
    PRIMITIVES
    ================================================================ */
 
-const Card = ({ icon: Ic, title, sub, tools, children, className = "", style }) => (
-  <div className={`card ${className}`} style={style}>
+const Card = ({ icon: Ic, title, sub, tools, children, className = "", style, onClick }) => (
+  <div className={`card ${className}`} style={style} onClick={onClick}>
     {(title || tools) && (
       <div className="card-head">
         {Ic && <Ic size={15} className="ic" />}
@@ -2261,12 +2264,11 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         icon={Activity}
         title="Session read"
         sub="Plain-English market brief"
-        tools={<>
-          <button className="read-toggle btn btn-ghost btn-sm" onClick={() => setReadOpen((o) => !o)} title={readOpen ? "Collapse" : "Expand"} aria-expanded={readOpen}>
-            {readOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </button>
+        className={readOpen ? "" : "read-clickable"}
+        onClick={readOpen ? undefined : () => setReadOpen(true)}
+        tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" />
-        </>}
+        </span>}
       >
         <div className="session-summary">{session.summary}</div>
         <div className={`session-read-body${readOpen ? "" : " read-collapsed"}`}>
@@ -2305,6 +2307,16 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           ))}
         </div>
         {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
+        </div>
+        <div className="session-read-foot">
+          <button
+            className="read-toggle btn btn-ghost btn-sm"
+            onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
+            title={readOpen ? "Collapse" : "Expand"}
+            aria-expanded={readOpen}
+          >
+            {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
         </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
