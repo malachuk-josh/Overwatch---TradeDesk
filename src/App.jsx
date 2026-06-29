@@ -2001,7 +2001,7 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
         const gTop = Math.min(y(gapC), y(gapFrontier));
         const gBot = Math.max(y(gapC), y(gapFrontier));
         const gh = gBot - gTop;
-        const cx = AX + (PR - AX) * 0.7;  // sits between the spot label box and the value column
+        const cx = AX + (PR - AX) * 0.5;  // centred horizontally on the map
         const cy = (gTop + gBot) / 2;
         return (
           <g style={{ pointerEvents: "none" }}>
