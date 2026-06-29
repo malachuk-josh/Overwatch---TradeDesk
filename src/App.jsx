@@ -4084,6 +4084,8 @@ const CloudNewsletterList = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewId, setPreviewId] = useState(null);
+  const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     fetch("/api/archive?limit=50")
@@ -4097,11 +4099,19 @@ const CloudNewsletterList = () => {
   if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
 
   const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
+  const rowDate = (sentAt) => `${new Date(sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })} ${new Date(sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}`;
+  const query = q.trim().toLowerCase();
+  const filtered = !query ? items : items.filter((item) =>
+    [item.type, item.bias, item.instrument, item.title, rowDate(item.sentAt)].filter(Boolean).join(" ").toLowerCase().includes(query));
+  const effectiveExpanded = expanded || !!query;
+  const shown = effectiveExpanded ? filtered : filtered.slice(0, 3);
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
-        {items.map((item) => (
+      <input className="bd-in" style={{ marginBottom: 8 }} placeholder="Search newsletters — title, ticker, bias or date…" value={q} onChange={(e) => setQ(e.target.value)} />
+      {!filtered.length && <div style={{ color: C.muted, fontSize: 12.5 }}>No newsletters match “{q}”.</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: effectiveExpanded ? 320 : "none", overflowY: effectiveExpanded ? "auto" : "visible" }}>
+        {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
             <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
               {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
@@ -4121,6 +4131,11 @@ const CloudNewsletterList = () => {
           </div>
         ))}
       </div>
+      {!query && filtered.length > 3 && (
+        <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
+          {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - 3} more</>}
+        </button>
+      )}
       {previewId && (
         <div style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
           <iframe
@@ -4142,18 +4157,20 @@ const ArchiveTab = ({
   onGoThesis,
 }) => {
   const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const query = q.trim().toLowerCase();
   const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
     const t = entry._type === "newsletter" ? entry._thesis : entry;
     return [entry.instrument, t?.instrument, t?.bias, entry.headline, t?.headline, entry._date, archiveStamp(entry)]
       .filter(Boolean).join(" ").toLowerCase().includes(query);
   });
+  const effectiveExpanded = expanded || !!query;
+  const shownHistory = effectiveExpanded ? filteredHistory : filteredHistory.slice(0, 3);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
         <CloudNewsletterList />
       </Card>
-      <AcademyCard />
       <Card icon={History} title="Thesis Library" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
@@ -4164,8 +4181,8 @@ const ArchiveTab = ({
         {archiveHistory.length > 0 && !filteredHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>No saved theses match “{q}”.</div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 480, overflowY: "auto" }}>
-          {filteredHistory.map((entry) => {
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: effectiveExpanded ? 320 : "none", overflowY: effectiveExpanded ? "auto" : "visible" }}>
+          {shownHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
             const isViewingThis = viewing?._id === entry._id;
@@ -4196,7 +4213,13 @@ const ArchiveTab = ({
             );
           })}
         </div>
+        {!query && filteredHistory.length > 3 && (
+          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
+            {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - 3} more</>}
+          </button>
+        )}
       </Card>
+      <AcademyCard />
     </div>
   );
 };
