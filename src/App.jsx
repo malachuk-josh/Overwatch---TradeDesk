@@ -834,8 +834,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bd-bottom-nav{
   display:none;
   position:fixed;z-index:200;
-  /* float the bar off every edge so it reads as a detached glass pill */
-  left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
+  /* float the bar off every edge so it reads as a detached glass pill; sit low but keep a small
+     gap above the home indicator / screen edge */
+  left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);
   background:var(--glass);
   -webkit-backdrop-filter:blur(34px) saturate(150%);
   backdrop-filter:blur(34px) saturate(150%);
