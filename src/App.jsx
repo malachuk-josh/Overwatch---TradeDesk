@@ -2003,17 +2003,14 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
         const gh = gBot - gTop;
         const cx = AX + (PR - AX) * 0.5;  // centred horizontally on the map
         const cy = (gTop + gBot) / 2;
+        const wordY = (y(gapO) + y(gapC)) / 2 + 3;  // left "GAP" sits between the Open and Close labels
         return (
           <g style={{ pointerEvents: "none" }}>
             <rect x={AX} y={gTop} width={PR - AX} height={gh} fill={`url(#gapHatch-${gapId})`} />
-            {gh >= 22 ? (
-              <text x={cx} y={cy} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fill="#D9A05A" fontWeight="700">
-                <tspan x={cx} dy="-2" fontSize="9" letterSpacing="0.08em">GAP</tspan>
-                <tspan x={cx} dy="11" fontSize="8.5">{fmtSigned(unfilledPct, 2, "%")}</tspan>
-              </text>
-            ) : gh >= 12 ? (
-              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">GAP</text>
-            ) : null}
+            <text x={4} y={wordY} textAnchor="start" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">GAP</text>
+            {gh >= 12 && (
+              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">{fmtSigned(unfilledPct, 2, "%")}</text>
+            )}
           </g>
         );
       })()}
