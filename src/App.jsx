@@ -1969,11 +1969,43 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
   const spotRectW = dec > 0 ? 102 : 86;
   const spotCenterX = (AX + 6) + spotRectW / 2;
+  // Opening gap: the unfilled space between the prior close and today's open. Only flag a real gap.
+  const gapPts = (ohlc && Number.isFinite(Number(ohlc.o)) && Number.isFinite(Number(ohlc.c))) ? Number(ohlc.o) - Number(ohlc.c) : null;
+  const gapPct = gapPts != null && Number(ohlc.c) ? (gapPts / Number(ohlc.c)) * 100 : null;
+  const hasGap = gapPts != null && gapPct != null && Math.abs(gapPct) >= 0.1;
+  const gapId = String(label).replace(/[^A-Za-z0-9]/g, "") || "x";
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+      <defs>
+        <pattern id={`gapHatch-${gapId}`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="7" height="7" fill="rgba(217,160,90,0.05)" />
+          <line x1="0" y1="0" x2="0" y2="7" stroke="rgba(217,160,90,0.30)" strokeWidth="1" />
+        </pattern>
+      </defs>
       {/* zone shading: resistance (red) above the live price, support (green) below — readable at a glance */}
       <rect x={AX} y="8" width={PR - AX} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
       <rect x={AX} y={y(spx.spot)} width={PR - AX} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
+      {/* opening gap: hatched band between prior close and today's open, with its size */}
+      {hasGap && (() => {
+        const gTop = Math.min(y(Number(ohlc.o)), y(Number(ohlc.c)));
+        const gBot = Math.max(y(Number(ohlc.o)), y(Number(ohlc.c)));
+        const gh = gBot - gTop;
+        const cx = AX + (PR - AX) * 0.7;  // sits between the spot label box and the value column
+        const cy = (gTop + gBot) / 2;
+        return (
+          <g style={{ pointerEvents: "none" }}>
+            <rect x={AX} y={gTop} width={PR - AX} height={gh} fill={`url(#gapHatch-${gapId})`} />
+            {gh >= 22 ? (
+              <text x={cx} y={cy} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fill="#D9A05A" fontWeight="700">
+                <tspan x={cx} dy="-2" fontSize="9" letterSpacing="0.08em">GAP</tspan>
+                <tspan x={cx} dy="11" fontSize="8.5">{fmtSigned(gapPct, 2, "%")}</tspan>
+              </text>
+            ) : gh >= 12 ? (
+              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">GAP</text>
+            ) : null}
+          </g>
+        );
+      })()}
       {/* OHLC reference rails — muted + dotted so they sit under the S/R and pivot lines.
           Open/Close ride the far-left gutter, High/Low the right gutter (clear of the value numbers). */}
       {ohlcRows.map((r, i) => (
