@@ -1151,8 +1151,11 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   .internals-grid,.internals-two,.internals-footer{grid-template-columns:1fr}
   .internals-section-head{flex-direction:column;gap:4px}
   .internals-section-head span{text-align:left}
-  .vol-bands{grid-template-columns:repeat(2,1fr)}
-  .vol-marker{height:112px}
+  /* keep the four zones in one row so the linear VIX marker still maps correctly; just tighten spacing */
+  .vol-bands{gap:2px}
+  .vol-band{padding:7px 3px;min-height:46px}
+  .vol-band b{font-size:8.5px;letter-spacing:.04em}
+  .vol-band small{font-size:8px}
 }
 .cal-row{display:flex;align-items:center;gap:11px;padding:9px 4px;border-bottom:1px dashed var(--line)}
 .cal-row:last-child{border-bottom:none}
