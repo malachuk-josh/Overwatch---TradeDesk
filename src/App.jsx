@@ -970,6 +970,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.16) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
 .mini-candle{position:relative;width:13px;height:34px;flex:none}
+/* pulse the level-map candle while that instrument's market is trading (matches the ticker icons) */
+.mini-candle-live .candle-body{animation:miniCandlePulse 2.4s ease-in-out infinite}
+@keyframes miniCandlePulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--candle-glow))}50%{filter:drop-shadow(0 0 5px var(--candle-glow))}}
 .tk-dir{display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .tk-dir-live{border-radius:50%;animation:tkDirPulse 2.4s ease-in-out infinite}
 @keyframes tkDirPulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--dir-glow));opacity:.8}50%{filter:drop-shadow(0 0 4px var(--dir-glow));opacity:1}}
@@ -1788,7 +1791,7 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
 
 // Compact header candle for the level maps — same visual language as the ticker-card candle,
 // shrunk to a single wick+body so it tucks into the card's top-right corner.
-const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
+const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, live = false }) => {
   if (low == null || high == null || price == null || high <= low) return null;
   const open = Number.isFinite(Number(dayOpen))
     ? Number(dayOpen)
@@ -1809,10 +1812,12 @@ const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) 
   const bullish = close >= open;
   const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
   const toneClass = flat ? "flat" : bullish ? "bull" : "bear";
+  const glow = flat ? "#3B82F6" : bullish ? C.bull : C.bear;
   return (
     <div
-      className="mini-candle"
-      title={`Open ${fmtNum(open, decimals)} · High ${fmtNum(high, decimals)} · Low ${fmtNum(low, decimals)} · Close ${fmtNum(close, decimals)}`}
+      className={`mini-candle${live ? " mini-candle-live" : ""}`}
+      style={live ? { "--candle-glow": glow } : undefined}
+      title={`Open ${fmtNum(open, decimals)} · High ${fmtNum(high, decimals)} · Low ${fmtNum(low, decimals)} · Close ${fmtNum(close, decimals)}${live ? " · market open" : ""}`}
       aria-label={`Daily candlestick: open ${fmtNum(open, decimals)}, high ${fmtNum(high, decimals)}, low ${fmtNum(low, decimals)}, close ${fmtNum(close, decimals)}.`}
     >
       <div className="candle-wick" style={{ top: `${railPad}px`, height: `${scale}px` }} />
@@ -2162,6 +2167,7 @@ const levelMapCandle = (tickers, symbol) => {
       dayOpen={t.dayOpen}
       previousClose={t.previousClose}
       decimals={ETF_INSTRUMENTS.has(symbol) ? 2 : 0}
+      live={symbolMarketOpen(symbol)}
     />
   );
 };
