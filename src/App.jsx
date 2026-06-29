@@ -1394,6 +1394,8 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 }
 .collapsible-header:hover{background:rgba(255,255,255,.04)}
 .collapsible-header .ic{opacity:.6;flex-shrink:0}
+/* snapshot icon pulses green while any watchlist market is open (reuses the ticker-icon pulse) */
+.collapsible-header .ic.ic-live{opacity:1;color:var(--bull);--dir-glow:var(--bull);animation:tkDirPulse 2s ease-in-out infinite}
 
 /* ========== CHART FULLSCREEN ========== */
 .chart-fs-overlay{
@@ -2257,6 +2259,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   // Thesis-Lab-only single stocks are fetched for the lab tools but kept off the Pulse grid.
   const tickers = (data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol));
   const orderedTickers = orderAssetCards(tickers);
+  // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
+  const anyMarketOpen = orderedTickers.some((t) => symbolMarketOpen(t.symbol));
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
@@ -2331,7 +2335,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           onClick={() => setTickersOpen((o) => !o)}
           aria-expanded={tickersOpen}
         >
-          <Activity size={14} className="ic" />
+          <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
           <span>Market snapshot</span>
           <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>{orderedTickers.length} instruments</small>
           <span style={{ marginLeft: "auto" }}>
