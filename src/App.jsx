@@ -901,9 +901,15 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .academy-player iframe{width:100%;height:100%;border:none;display:block}
 @media(max-width:760px){.academy-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
 /* Session read defaults collapsed on every viewport — headline stays, the rest folds away */
-.read-toggle{display:inline-flex}
 .session-read-body.read-collapsed{display:none}
-.session-read-foot{display:flex;justify-content:flex-end;margin-top:8px}
+/* full-width footer bar that collapses the card; chevron aligns with the Market snapshot toggle (14px inset) */
+.session-read-foot{
+  display:flex;align-items:center;justify-content:flex-end;
+  margin:12px -16px -16px;padding:11px 14px;
+  border-top:1px solid var(--line);border-radius:0 0 var(--r) var(--r);
+  color:var(--muted);cursor:pointer;transition:background .15s,color .15s;
+}
+.session-read-foot:hover{background:rgba(255,255,255,.04);color:var(--text)}
 .read-clickable{cursor:pointer;transition:border-color .15s}
 .read-clickable:hover{border-color:var(--line2)}
 @media(max-width:1100px){.g-2,.g-market-read,.g-data,.g-thesis,.archives-grid{grid-template-columns:1fr}}
@@ -2308,15 +2314,15 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         </div>
         {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
         </div>
-        <div className="session-read-foot">
-          <button
-            className="read-toggle btn btn-ghost btn-sm"
-            onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
-            title={readOpen ? "Collapse" : "Expand"}
-            aria-expanded={readOpen}
-          >
-            {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
+        <div
+          className="session-read-foot"
+          role="button"
+          tabIndex={0}
+          aria-expanded={readOpen}
+          title={readOpen ? "Collapse" : "Expand"}
+          onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
+        >
+          {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
