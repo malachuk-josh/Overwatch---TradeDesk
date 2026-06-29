@@ -906,7 +906,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .session-read-foot{
   display:flex;align-items:center;justify-content:flex-end;
   margin:12px -16px -16px;padding:11px 14px;
-  border-top:1px solid var(--line);border-radius:0 0 var(--r) var(--r);
+  border-radius:0 0 var(--r) var(--r);
   color:var(--muted);cursor:pointer;transition:background .15s,color .15s;
 }
 .session-read-foot:hover{background:rgba(255,255,255,.04);color:var(--text)}
