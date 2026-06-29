@@ -971,11 +971,17 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
 .mini-candle{position:relative;width:13px;height:34px;flex:none}
 /* pulse the level-map candle while that instrument's market is trading (matches the ticker icons) */
-.mini-candle-live .candle-body{animation:miniCandlePulse 2.4s ease-in-out infinite}
-@keyframes miniCandlePulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--candle-glow))}50%{filter:drop-shadow(0 0 5px var(--candle-glow))}}
+.mini-candle-live .candle-body{animation:miniCandlePulse 2s ease-in-out infinite}
+@keyframes miniCandlePulse{
+  0%,100%{filter:drop-shadow(0 0 1px var(--candle-glow))}
+  50%{filter:drop-shadow(0 0 5px var(--candle-glow)) drop-shadow(0 0 11px var(--candle-glow)) drop-shadow(0 0 18px var(--candle-glow))}
+}
 .tk-dir{display:inline-flex;align-items:center;justify-content:center;line-height:0}
-.tk-dir-live{border-radius:50%;animation:tkDirPulse 2.4s ease-in-out infinite}
-@keyframes tkDirPulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--dir-glow));opacity:.8}50%{filter:drop-shadow(0 0 4px var(--dir-glow));opacity:1}}
+.tk-dir-live{border-radius:50%;animation:tkDirPulse 2s ease-in-out infinite}
+@keyframes tkDirPulse{
+  0%,100%{filter:drop-shadow(0 0 1px var(--dir-glow));opacity:.7;transform:scale(1)}
+  50%{filter:drop-shadow(0 0 5px var(--dir-glow)) drop-shadow(0 0 11px var(--dir-glow)) drop-shadow(0 0 17px var(--dir-glow));opacity:1;transform:scale(1.14)}
+}
 
 /* ---------- session read ---------- */
 .session-summary{font-size:14px;line-height:1.6;color:var(--text);font-weight:500}
