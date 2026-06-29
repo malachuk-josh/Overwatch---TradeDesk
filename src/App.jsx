@@ -969,6 +969,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.96),rgba(239,68,68,.28));box-shadow:0 0 0 1px rgba(239,68,68,.14) inset, 0 0 10px rgba(239,68,68,.14)}
 .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.16) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
+.mini-candle{position:relative;width:13px;height:34px;flex:none}
 .tk-dir{display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .tk-dir-live{border-radius:50%;animation:tkDirPulse 2.4s ease-in-out infinite}
 @keyframes tkDirPulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--dir-glow));opacity:.8}50%{filter:drop-shadow(0 0 4px var(--dir-glow));opacity:1}}
@@ -1785,6 +1786,41 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
   );
 };
 
+// Compact header candle for the level maps — same visual language as the ticker-card candle,
+// shrunk to a single wick+body so it tucks into the card's top-right corner.
+const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
+  if (low == null || high == null || price == null || high <= low) return null;
+  const open = Number.isFinite(Number(dayOpen))
+    ? Number(dayOpen)
+    : Number.isFinite(Number(previousClose))
+      ? Number(previousClose)
+      : Number(price);
+  const close = Number(price);
+  const safeOpen = clamp(open, low, high);
+  const safeClose = clamp(close, low, high);
+  const trackHeight = 34;
+  const railPad = 3;
+  const scale = trackHeight - railPad * 2;
+  const yFor = (value) => railPad + ((high - value) / (high - low)) * scale;
+  const openY = yFor(safeOpen);
+  const closeY = yFor(safeClose);
+  const bodyHeight = Math.max(Math.abs(closeY - openY), 3);
+  const bodyTop = clamp(Math.min(openY, closeY), railPad, trackHeight - railPad - bodyHeight);
+  const bullish = close >= open;
+  const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
+  const toneClass = flat ? "flat" : bullish ? "bull" : "bear";
+  return (
+    <div
+      className="mini-candle"
+      title={`Open ${fmtNum(open, decimals)} · High ${fmtNum(high, decimals)} · Low ${fmtNum(low, decimals)} · Close ${fmtNum(close, decimals)}`}
+      aria-label={`Daily candlestick: open ${fmtNum(open, decimals)}, high ${fmtNum(high, decimals)}, low ${fmtNum(low, decimals)}, close ${fmtNum(close, decimals)}.`}
+    >
+      <div className="candle-wick" style={{ top: `${railPad}px`, height: `${scale}px` }} />
+      <div className={`candle-body ${toneClass}`} style={{ top: `${bodyTop}px`, height: `${bodyHeight}px` }} />
+    </div>
+  );
+};
+
 const buildSessionRead = ({ market, points, news, recap }) => {
   const tickers = Array.isArray(market?.tickers) ? market.tickers : [];
   const bySymbol = (symbol) => tickers.find((t) => t.symbol === symbol);
@@ -2114,12 +2150,28 @@ const ohlcForSymbol = (tickers, symbol) => {
   return { o: num(t.dayOpen), h: num(t.dayHigh), l: num(t.dayLow), c: num(t.previousClose) };
 };
 
+// Mini header candle for the active instrument, sourced from its market ticker.
+const levelMapCandle = (tickers, symbol) => {
+  const t = (tickers || []).find((x) => x.symbol === symbol);
+  if (!t) return null;
+  return (
+    <MiniCandle
+      low={t.dayLow}
+      high={t.dayHigh}
+      price={t.price}
+      dayOpen={t.dayOpen}
+      previousClose={t.previousClose}
+      decimals={ETF_INSTRUMENTS.has(symbol) ? 2 : 0}
+    />
+  );
+};
+
 const LevelMapCard = ({ group, points, tickers }) => {
   const [active, setActive] = useState(group.keys[0]);
   const dataKey = active.toLowerCase();
   const data = points?.[dataKey];
   return (
-    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]}>
+    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]} tools={levelMapCandle(tickers, active)}>
       <div className="seg" style={{ marginBottom: 10 }}>
         {group.keys.map((k) => (
           <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
@@ -2138,7 +2190,7 @@ const LevelMapPanel = ({ points, tickers }) => {
   const [active, setActive] = useState(group.keys[0]);
   const data = points?.[active.toLowerCase()];
   return (
-    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]}>
+    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]} tools={levelMapCandle(tickers, active)}>
       <div className="seg" style={{ marginBottom: 8 }}>
         {LEVEL_MAP_GROUPS.map((g, i) => (
           <button key={g.name} className={groupIdx === i ? "on" : ""} onClick={() => { setGroupIdx(i); setActive(g.keys[0]); }}>{g.name}</button>
