@@ -850,7 +850,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 }
 .bd-bnav-btn{
   flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:4px;padding:9px 2px;
+  gap:4px;padding:8px 2px;
   background:none;border:none;cursor:pointer;
   color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
   font-family:'Space Grotesk',sans-serif;transition:color .15s;position:relative;isolation:isolate;
