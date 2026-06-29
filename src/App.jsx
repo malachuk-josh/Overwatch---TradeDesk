@@ -976,8 +976,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 /* pulse the level-map candle while that instrument's market is trading (matches the ticker icons) */
 .mini-candle-live .candle-body{animation:miniCandlePulse 2s ease-in-out infinite}
 @keyframes miniCandlePulse{
-  0%,100%{filter:drop-shadow(0 0 1px var(--candle-glow))}
-  50%{filter:drop-shadow(0 0 5px var(--candle-glow)) drop-shadow(0 0 11px var(--candle-glow)) drop-shadow(0 0 18px var(--candle-glow))}
+  0%,100%{filter:drop-shadow(0 0 0.5px var(--candle-glow))}
+  50%{filter:drop-shadow(0 0 3px var(--candle-glow)) drop-shadow(0 0 7px var(--candle-glow))}
 }
 .tk-dir{display:inline-flex;align-items:center;justify-content:center;line-height:0}
 .tk-dir-live{border-radius:50%;animation:tkDirPulse 2s ease-in-out infinite}
