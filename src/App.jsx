@@ -12,6 +12,7 @@ import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 import PlayCircle from "lucide-react/dist/esm/icons/play-circle.mjs";
 import Lock from "lucide-react/dist/esm/icons/lock.mjs";
 import WifiOff from "lucide-react/dist/esm/icons/wifi-off.mjs";
+import Share2 from "lucide-react/dist/esm/icons/share-2.mjs";
 import Plus from "lucide-react/dist/esm/icons/plus.mjs";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Copy from "lucide-react/dist/esm/icons/copy.mjs";
@@ -203,8 +204,9 @@ const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
 const THESIS_STOCK_TICKERS = THESIS_INSTRUMENTS.filter((i) => i.group === "stock").map((i) => ({ symbol: i.symbol, name: i.name }));
 const THESIS_STOCK_SET = new Set(THESIS_STOCK_TICKERS.map((i) => i.symbol));
 
-const InstrumentSelect = ({ value, onChange, className = "bd-in", style }) => (
+const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel }) => (
   <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
+    {noneLabel && <option value="">{noneLabel}</option>}
     {INSTRUMENT_GROUPS.map((g) => (
       <optgroup key={g.group} label={g.label}>
         {THESIS_INSTRUMENTS.filter((it) => it.group === g.group).map((it) => (
@@ -605,12 +607,17 @@ Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact
 Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
 If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
 
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels }) => {
+const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair }) => {
   const focus = thesisInstrumentConfig(instrument);
   const isStock = focus.group === "stock";
   const stockLevelsLine = focusLevels
     ? `${focus.symbol} live levels (use these exact numbers for the action level and targets): spot ${fmtNum(focusLevels.spot, 2)}, pivot ${fmtNum(focusLevels.pivot, 2)}, supports ${(focusLevels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(focusLevels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"} (as of ${focusLevels.asOf || "now"}).`
     : "";
+  const pairBlock = pair ? `
+=== PAIRED INSTRUMENT (relative-value context) ===
+The trader is weighing ${focus.symbol} alongside ${pair.symbol} (${pair.name})${pair.spot ? `, trading near ${fmtNum(pair.spot, 2)}` : ""}.${pair.levels ? ` ${pair.symbol} levels: pivot ${fmtNum(pair.levels.pivot, 2)}, supports ${(pair.levels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(pair.levels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}.` : ""}
+In "pairRead", give a concise relative-value read: how ${focus.symbol} is likely to perform RELATIVE to ${pair.symbol} today (e.g. favour long ${focus.symbol} / short ${pair.symbol} or the reverse), the correlation or divergence to watch, and the key level on each leg. Keep the headline bias, score and levels focused on ${focus.symbol}; the pair read is an additional relative-value angle, not the primary call.
+` : "";
   return `You are the head strategist at Overwatch Intelligence's index desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
 
 === LIVE DESK DATA ===
@@ -634,9 +641,9 @@ ${deskContext ? `
 === DESK HEDGE & OPTIONS STRUCTURES (trader is actively considering these) ===
 ${deskContext}
 Weave these into the game plan: comment on whether the hedge sizing and option structures fit today's bias, conviction, and risk appetite, and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
-` : ""}
+` : ""}${pairBlock}
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
-{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
+{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","pairRead":${pair ? `"<relative-value read: ${focus.symbol} vs ${pair.symbol}, the lean (which leg long/short), correlation/divergence to watch, and the key level on each leg>"` : '""'},"drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
 
 Be specific — use actual numbers from the data. The sign of score must match bias. Conviction should reflect how aligned the weighted pillars are.
 Treat the pillar weights as a scoring model, not decoration: high-weight pillars must have more influence than low-weight pillars and the drivers must name the highest-weight/highest-impact inputs.
@@ -1185,6 +1192,8 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .th-bias{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:38px;letter-spacing:.02em;line-height:1}
 .th-head{font-family:'Lora',serif;font-size:17px;font-style:italic;color:var(--text);margin-top:10px;opacity:.92}
 .th-summary{font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:11px}
+.th-pairread{margin-top:11px;border:1px solid rgba(59,130,246,.35);background:linear-gradient(135deg,rgba(59,130,246,.08),transparent);border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.6;color:var(--text)}
+.th-pairread b{display:flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--brass);margin-bottom:5px}
 .timing-note{border:1px solid rgba(59,130,246,.28);background:rgba(59,130,246,.07);border-radius:8px;padding:10px 12px;margin-top:13px;font-size:12px;line-height:1.55;color:#F0D5A0}
 .timing-note b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-bottom:4px}
 .th-scorecard{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:12px 13px;margin-top:13px;display:flex;flex-direction:column;gap:10px}
@@ -3529,7 +3538,7 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   const activeInstrument = thesisInstrumentConfig(instrument);
@@ -3545,6 +3554,20 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
       ta.value = text; document.body.appendChild(ta); ta.select();
       try { document.execCommand("copy"); done(); } catch {}
       document.body.removeChild(ta);
+    }
+  };
+  const [shareState, setShareState] = useState("idle"); // idle | saving | done | error
+  const shareThesis = async (thesisObj) => {
+    setShareState("saving");
+    try {
+      const { url } = await callDesk("saveshared", undefined, { html: buildThesisPrintHTML(thesisObj) });
+      const full = `${window.location.origin}${url}`;
+      try { await navigator.clipboard?.writeText(full); } catch {}
+      setShareState("done");
+      setTimeout(() => setShareState("idle"), 2200);
+    } catch {
+      setShareState("error");
+      setTimeout(() => setShareState("idle"), 2600);
     }
   };
 
@@ -3623,6 +3646,15 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
             )}.
             {activeInstrument.group === "stock" && <> Single stock — priced live for the lab tools (kept off the Market Pulse grid).</>}
           </div>
+          <div className="lab-field">
+            <span className="lab-label">Pair with — optional relative-value leg</span>
+            <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" />
+            {secondary && secondary !== instrument && (
+              <div style={{ marginTop: 8, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
+                Adds a relative-value read ({activeInstrument.symbol} vs {thesisInstrumentConfig(secondary).symbol}) to the thesis. The primary call stays built for {activeInstrument.symbol}.
+              </div>
+            )}
+          </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
           <span className="lab-label">Directional lean</span>
@@ -3692,6 +3724,12 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
                 </div>
               )}
               <div className="th-summary">{t.summary}</div>
+              {t.pairRead && (
+                <div className="th-pairread">
+                  <b><Scale size={12} /> Pair read{t.secondary ? ` · ${t.instrument || instrument} vs ${t.secondary}` : ""}</b>
+                  <span>{t.pairRead}</span>
+                </div>
+              )}
               {(t.timingNote || t.timestamp || t._generatedAt) && (
                 <div className="timing-note">
                   <b>Timing context</b>
@@ -3772,6 +3810,12 @@ const ThesisTab = ({ instrument, setInstrument, weights, setWeights, lean, setLe
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
               <button className="btn" onClick={() => copyThesis(t)} title="Copy thesis as text">
                 {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+              </button>
+              <button className="btn" onClick={() => shareThesis(t)} disabled={shareState === "saving"} title="Create a shareable link">
+                {shareState === "saving" ? <><RefreshCw size={14} className="spin" /> Saving…</>
+                  : shareState === "done" ? <><Check size={14} /> Link copied</>
+                    : shareState === "error" ? <><AlertTriangle size={14} /> Failed</>
+                      : <><Share2 size={14} /> Share</>}
               </button>
               <button className="btn" onClick={() => downloadPDF(buildThesisPrintHTML(t), `overwatch-thesis-${t._date || t.instrument || "today"}.pdf`)} title="Download thesis as PDF">
                 <FileText size={14} /> Download PDF
@@ -4472,6 +4516,7 @@ export default function Overwatch() {
 
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
   const [instrument, setInstrument] = useState(DEFAULT_THESIS_INSTRUMENT);
+  const [secondary, setSecondary] = useState(""); // optional paired instrument for relative-value context
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [lean, setLean] = useState("auto");
   const [risk, setRisk] = useState("balanced");
@@ -4660,14 +4705,30 @@ export default function Overwatch() {
       if (thesisInstrumentConfig(instrument).group === "stock") {
         try { focusLevels = await callDesk("stocklevels", "", { symbol: instrument }); } catch { focusLevels = null; }
       }
+      // Optional paired instrument: pull its live spot + levels for a relative-value read.
+      let pair = null;
+      if (secondary && secondary !== instrument) {
+        const secCfg = thesisInstrumentConfig(secondary);
+        let secLevels = null;
+        if (secCfg.group === "stock") {
+          try { secLevels = await callDesk("stocklevels", "", { symbol: secondary }); } catch { secLevels = null; }
+        }
+        pair = {
+          symbol: secCfg.symbol,
+          name: secCfg.name,
+          spot: deskLiveContext(market.data, points.data, secondary).spot,
+          levels: secLevels || points.data?.[secCfg.pointsKey] || null,
+        };
+      }
       const deskContext = deskTools.feedToThesis
         ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument })
         : null;
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels });
+      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair });
+      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels, secondary: pair ? pair.symbol : "" });
       const entry = {
         ...data,
         instrument,
+        secondary: pair ? pair.symbol : "",
         timestamp: data.timestamp || `${timing.generatedAtShort} · ${timing.session}`,
         timingNote: data.timingNote || timing.timingNote,
         _id: uid(),
@@ -4810,6 +4871,7 @@ export default function Overwatch() {
         {tab === "thesis" && (
           <ThesisTab
             instrument={instrument} setInstrument={setInstrument}
+            secondary={secondary} setSecondary={setSecondary}
             weights={weights} setWeights={setWeights}
             lean={lean} setLean={setLean}
             risk={risk} setRisk={setRisk}
