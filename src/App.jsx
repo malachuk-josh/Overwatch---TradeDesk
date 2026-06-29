@@ -295,6 +295,27 @@ const marketSession = () => {
   return { label: "CLOSED", tone: "off" };
 };
 
+// CME Globex hours (ET): Sun 18:00 → Fri 17:00, with a daily 17:00–18:00 maintenance halt.
+const futuresOpenNow = () => {
+  const { wd, h, m } = nyParts();
+  const mins = h * 60 + m;
+  if (wd === "Sat") return false;
+  if (wd === "Sun") return mins >= 1080;        // opens 18:00 Sun
+  if (wd === "Fri") return mins < 1020;         // closes 17:00 Fri
+  return !(mins >= 1020 && mins < 1080);        // Mon–Thu: open except the 17:00–18:00 halt
+};
+
+const FUTURES_SYMBOLS = new Set(["ES", "NQ", "YM", "RTY", "GC", "CL", "DXY", "US10Y"]);
+const CRYPTO_SYMBOLS = new Set(["BTC", "ETH"]);
+
+// Is this specific instrument's market trading right now? Futures run nearly 24h,
+// crypto is 24/7, and cash indexes / ETFs only count their regular session.
+const symbolMarketOpen = (symbol) => {
+  if (CRYPTO_SYMBOLS.has(symbol)) return true;
+  if (FUTURES_SYMBOLS.has(symbol)) return futuresOpenNow();
+  return marketSession().tone === "live";
+};
+
 const dateLine = () =>
   new Date().toLocaleString("en-US", {
     timeZone: "America/New_York",
@@ -938,6 +959,9 @@ html,body{max-width:100vw;overflow-x:hidden}
 .candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.96),rgba(239,68,68,.28));box-shadow:0 0 0 1px rgba(239,68,68,.14) inset, 0 0 10px rgba(239,68,68,.14)}
 .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.16) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
+.tk-dir{display:inline-flex;align-items:center;justify-content:center;line-height:0}
+.tk-dir-live{border-radius:50%;animation:tkDirPulse 2.4s ease-in-out infinite}
+@keyframes tkDirPulse{0%,100%{filter:drop-shadow(0 0 0.5px var(--dir-glow));opacity:.8}50%{filter:drop-shadow(0 0 4px var(--dir-glow));opacity:1}}
 
 /* ---------- session read ---------- */
 .session-summary{font-size:14px;line-height:1.6;color:var(--text);font-weight:500}
@@ -1833,7 +1857,7 @@ const buildSessionRead = ({ market, points, news, recap }) => {
 
 const ETF_INSTRUMENTS = new Set(["SPY", "QQQ", "DIA"]);
 
-const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
+const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const dec = decimals != null ? decimals : (ETF_INSTRUMENTS.has(label) ? 2 : 0);
   if (!spx || spx.spot == null) return <div style={{ color: C.muted, fontSize: 12 }}>No {label} levels in last sync.</div>;
   const rows = [
@@ -1841,7 +1865,14 @@ const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
     ...(spx.pivot != null ? [{ v: spx.pivot, type: "piv", label: "PIVOT" }] : []),
     ...(spx.supports || []).map((v, i) => ({ v, type: "sup", label: `S${i + 1}` })),
   ].filter((r) => typeof r.v === "number" && !isNaN(r.v));
-  const all = [...rows.map((r) => r.v), spx.spot];
+  // Session OHLC drawn as subtle reference rails. O/C labelled on the left edge, H/L on the right.
+  const ohlcRows = [
+    { v: ohlc?.o, label: "O", side: "left" },
+    { v: ohlc?.c, label: "C", side: "left" },
+    { v: ohlc?.h, label: "H", side: "right" },
+    { v: ohlc?.l, label: "L", side: "right" },
+  ].filter((r) => typeof r.v === "number" && !isNaN(r.v));
+  const all = [...rows.map((r) => r.v), ...ohlcRows.map((r) => r.v), spx.spot];
   const min = Math.min(...all), max = Math.max(...all);
   const pad = (max - min) * 0.1 || 10;
   const H = 252, W = 330;
@@ -1854,6 +1885,23 @@ const LevelsLadder = ({ spx, label = "SPX", decimals }) => {
       {/* zone shading: resistance (red) above the live price, support (green) below — readable at a glance */}
       <rect x="74" y="8" width={W - 12 - 74} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
       <rect x="74" y={y(spx.spot)} width={W - 12 - 74} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
+      {/* OHLC reference rails — muted + dotted so they sit under the S/R and pivot lines */}
+      {ohlcRows.map((r, i) => (
+        <g key={`ohlc-${i}`} style={{ opacity: 0.5 }}>
+          <line x1="74" y1={y(r.v)} x2={W - 12} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
+          <text
+            x={r.side === "left" ? 5 : W - 3}
+            y={y(r.v) + 3.5}
+            textAnchor={r.side === "left" ? "start" : "end"}
+            fontSize="9"
+            fill="#94A3B8"
+            fontFamily="JetBrains Mono, monospace"
+            fontWeight="700"
+          >
+            {r.label}
+          </text>
+        </g>
+      ))}
       <line x1="74" y1="8" x2="74" y2={H - 8} stroke="#1E293B" strokeWidth="1" />
       {rows.map((r, i) => (
         <g key={i}>
@@ -2040,7 +2088,16 @@ const LEVEL_MAP_GROUPS = [
   { name: "Dow", keys: ["DIA", "DJI", "YM"], subs: { DIA: "Dow Jones ETF", DJI: "Dow Jones Index", YM: "E-mini Dow Futures" } },
 ];
 
-const LevelMapCard = ({ group, points }) => {
+// Pull the active instrument's session OHLC off its market ticker so the level map can draw
+// O/H/L/C rails. C uses the prior close so it stays distinct from the live spot line.
+const ohlcForSymbol = (tickers, symbol) => {
+  const t = (tickers || []).find((x) => x.symbol === symbol);
+  if (!t) return null;
+  const num = (v) => (typeof v === "number" && !isNaN(v) ? v : null);
+  return { o: num(t.dayOpen), h: num(t.dayHigh), l: num(t.dayLow), c: num(t.previousClose) };
+};
+
+const LevelMapCard = ({ group, points, tickers }) => {
   const [active, setActive] = useState(group.keys[0]);
   const dataKey = active.toLowerCase();
   const data = points?.[dataKey];
@@ -2051,14 +2108,14 @@ const LevelMapCard = ({ group, points }) => {
           <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
         ))}
       </div>
-      <LevelsLadder spx={data} label={active} />
+      <LevelsLadder spx={data} label={active} ohlc={ohlcForSymbol(tickers, active)} />
     </Card>
   );
 };
 
 // Mobile-only: collapses the three stacked level maps into one card with a complex selector,
 // so phones don't scroll through three screen-heights of pivot ladders.
-const LevelMapPanel = ({ points }) => {
+const LevelMapPanel = ({ points, tickers }) => {
   const [groupIdx, setGroupIdx] = useState(0);
   const group = LEVEL_MAP_GROUPS[groupIdx];
   const [active, setActive] = useState(group.keys[0]);
@@ -2075,7 +2132,7 @@ const LevelMapPanel = ({ points }) => {
           <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
         ))}
       </div>
-      <LevelsLadder spx={data} label={active} />
+      <LevelsLadder spx={data} label={active} ohlc={ohlcForSymbol(tickers, active)} />
     </Card>
   );
 };
@@ -2189,7 +2246,21 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
                   <span className="tk-sym">{t.symbol}</span>
                   {t._stale
                     ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
-                    : t.changePct != null && (t.changePct >= 0 ? <TrendingUp size={14} color={C.bull} /> : <TrendingDown size={14} color={C.bear} />)}
+                    : t.changePct != null && (() => {
+                        const up = t.changePct >= 0;
+                        const col = up ? C.bull : C.bear;
+                        const live = symbolMarketOpen(t.symbol);
+                        const DirIcon = up ? TrendingUp : TrendingDown;
+                        return (
+                          <span
+                            className={`tk-dir${live ? " tk-dir-live" : ""}`}
+                            style={live ? { "--dir-glow": col } : undefined}
+                            title={live ? "Market open — trading now" : undefined}
+                          >
+                            <DirIcon size={14} color={col} />
+                          </span>
+                        );
+                      })()}
                 </div>
                 <div className="tk-body">
                   <div className="tk-left">
@@ -2209,11 +2280,11 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
       </div>
       <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
         {LEVEL_MAP_GROUPS.map((g) => (
-          <LevelMapCard key={g.keys[0]} group={g} points={points} />
+          <LevelMapCard key={g.keys[0]} group={g} points={points} tickers={tickers} />
         ))}
       </div>
       <div className="pulse-levels-mobile">
-        <LevelMapPanel points={points} />
+        <LevelMapPanel points={points} tickers={tickers} />
       </div>
       <div className="grid g-market-read">
         <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
