@@ -1270,6 +1270,13 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 }
 .hist-row:hover{border-color:var(--line2);background:var(--panel3)}
 .hist-row.viewing{border-color:var(--brass)}
+/* mobile: let library/journal rows wrap instead of overflowing the card — the fixed date
+   column shrinks to its content and the title takes a full line and wraps */
+@media (max-width:760px){
+  .hist-row{flex-wrap:wrap;gap:6px 8px}
+  .hist-date{width:auto !important}
+  .hist-title{flex:1 1 100% !important;white-space:normal !important;overflow:visible !important;text-overflow:clip !important;line-height:1.4}
+}
 
 /* ---------- drawer / overlay ---------- */
 .overlay{position:fixed;inset:0;background:rgba(5,8,12,.66);backdrop-filter:blur(2px);z-index:90}
@@ -4194,7 +4201,7 @@ const CloudNewsletterList = () => {
       <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: effectiveExpanded ? 320 : "none", overflowY: effectiveExpanded ? "auto" : "visible" }}>
         {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
-            <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
+            <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
               {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
               {" "}
               {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
@@ -4202,7 +4209,7 @@ const CloudNewsletterList = () => {
             <span className="chip b-brass" style={{ flex: "none", fontSize: 10 }}>{item.type || "wrap"}</span>
             {item.bias && <span className="chip" style={{ color: biasColor(item.bias), borderColor: biasColor(item.bias) + "66", flex: "none", fontSize: 10 }}>{item.bias}</span>}
             <span className="chip" style={{ flex: "none", fontSize: 10 }}>{item.instrument || "SPX"}</span>
-            <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+            <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
               {item.title || "Untitled"}
             </span>
             {item.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{item.score}</span>}
@@ -4273,11 +4280,11 @@ const ArchiveTab = ({
                 className={`hist-row ${isViewingThis ? "viewing" : ""}`}
                 onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }}
               >
-                <span className="mono" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
+                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
                 <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
-                <span style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+                <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
                   {entry.headline || t?.headline || "—"}
                 </span>
                 {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
