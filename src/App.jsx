@@ -931,6 +931,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   .bd-hright .btn-brass{padding:8px 11px}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
+  /* lift toasts above the floating nav so sync notifications don't cover it */
+  .toasts{left:14px;right:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 88px)}
+  .toast{max-width:none}
   /* workflow ticker is redundant on mobile (bottom nav + Sync button cover it) */
   .bd-flow{display:none}
   /* a touch tighter cards to fit more per screen */
