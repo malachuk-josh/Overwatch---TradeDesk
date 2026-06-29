@@ -1969,10 +1969,21 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
   const spotRectW = dec > 0 ? 102 : 86;
   const spotCenterX = (AX + 6) + spotRectW / 2;
-  // Opening gap: the unfilled space between the prior close and today's open. Only flag a real gap.
-  const gapPts = (ohlc && Number.isFinite(Number(ohlc.o)) && Number.isFinite(Number(ohlc.c))) ? Number(ohlc.o) - Number(ohlc.c) : null;
-  const gapPct = gapPts != null && Number(ohlc.c) ? (gapPts / Number(ohlc.c)) * 100 : null;
-  const hasGap = gapPts != null && gapPct != null && Math.abs(gapPct) >= 0.1;
+  // Opening gap: the space between the prior close and today's open. As price retraces into it
+  // the gap "fills"; we shade only the portion that is still unfilled (closest to the prior close).
+  const gapO = ohlc && Number.isFinite(Number(ohlc.o)) ? Number(ohlc.o) : null;
+  const gapC = ohlc && Number.isFinite(Number(ohlc.c)) ? Number(ohlc.c) : null;
+  const gapHi = ohlc && Number.isFinite(Number(ohlc.h)) ? Number(ohlc.h) : null;
+  const gapLo = ohlc && Number.isFinite(Number(ohlc.l)) ? Number(ohlc.l) : null;
+  const gapPts = gapO != null && gapC != null ? gapO - gapC : null;
+  const gapPct = gapPts != null && gapC ? (gapPts / gapC) * 100 : null;
+  const gapUp = gapPts != null && gapPts > 0;
+  // frontier = how deep price has traded back into the gap; unfilled band spans prior close → frontier
+  const gapFrontier = gapPts == null ? null : gapUp
+    ? (gapLo != null ? clamp(gapLo, gapC, gapO) : gapO)
+    : (gapHi != null ? clamp(gapHi, gapO, gapC) : gapO);
+  const unfilledPct = gapFrontier != null && gapC ? ((gapFrontier - gapC) / gapC) * 100 : null;
+  const hasGap = gapPct != null && Math.abs(gapPct) >= 0.1 && unfilledPct != null && Math.abs(unfilledPct) >= 0.05;
   const gapId = String(label).replace(/[^A-Za-z0-9]/g, "") || "x";
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
@@ -1985,10 +1996,10 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
       {/* zone shading: resistance (red) above the live price, support (green) below — readable at a glance */}
       <rect x={AX} y="8" width={PR - AX} height={Math.max(0, y(spx.spot) - 8)} fill="rgba(239,68,68,.07)" />
       <rect x={AX} y={y(spx.spot)} width={PR - AX} height={Math.max(0, (H - 8) - y(spx.spot))} fill="rgba(34,197,94,.07)" />
-      {/* opening gap: hatched band between prior close and today's open, with its size */}
+      {/* opening gap: hatched band over the still-unfilled portion (prior close → retrace frontier) */}
       {hasGap && (() => {
-        const gTop = Math.min(y(Number(ohlc.o)), y(Number(ohlc.c)));
-        const gBot = Math.max(y(Number(ohlc.o)), y(Number(ohlc.c)));
+        const gTop = Math.min(y(gapC), y(gapFrontier));
+        const gBot = Math.max(y(gapC), y(gapFrontier));
         const gh = gBot - gTop;
         const cx = AX + (PR - AX) * 0.7;  // sits between the spot label box and the value column
         const cy = (gTop + gBot) / 2;
@@ -1998,7 +2009,7 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
             {gh >= 22 ? (
               <text x={cx} y={cy} textAnchor="middle" fontFamily="JetBrains Mono, monospace" fill="#D9A05A" fontWeight="700">
                 <tspan x={cx} dy="-2" fontSize="9" letterSpacing="0.08em">GAP</tspan>
-                <tspan x={cx} dy="11" fontSize="8.5">{fmtSigned(gapPct, 2, "%")}</tspan>
+                <tspan x={cx} dy="11" fontSize="8.5">{fmtSigned(unfilledPct, 2, "%")}</tspan>
               </text>
             ) : gh >= 12 ? (
               <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">GAP</text>
