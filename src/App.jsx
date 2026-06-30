@@ -871,6 +871,11 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 
 /* ---------- layout ---------- */
 .bd-main{padding:20px 22px 30px;max-width:1480px;margin:0 auto}
+/* large workstation monitors: progressively use more width instead of a narrow centred column
+   (laptops and standard ~1920px external monitors stay at 1480 — untouched) */
+@media(min-width:2000px){.bd-main{max-width:1800px;padding:24px 32px 34px}}
+@media(min-width:2560px){.bd-main{max-width:2200px}}
+@media(min-width:3400px){.bd-main{max-width:2600px}}
 .grid{display:grid;gap:14px}
 .g-pulse{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
 .g-2{grid-template-columns:1.15fr .85fr}
