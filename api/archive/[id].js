@@ -1,6 +1,24 @@
 const kvUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const kvToken = () => process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
+// Make archived letters read cleanly on mobile: keep the page from scrolling sideways and let
+// genuinely-wide tables scroll inside their own box instead of widening the whole document.
+function makeResponsive(html) {
+  const hasViewport = /<meta[^>]+name=["']viewport["']/i.test(html);
+  const inject =
+    (hasViewport ? "" : '<meta name="viewport" content="width=device-width, initial-scale=1">') +
+    `<style>
+@media (max-width:680px){
+  html,body{max-width:100%!important;overflow-x:hidden!important}
+  table{display:block!important;width:100%;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  img,svg,video,pre{max-width:100%!important;height:auto}
+}
+</style>`;
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => m + inject);
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + "<head>" + inject + "</head>");
+  return inject + html;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.statusCode = 405;
@@ -47,7 +65,7 @@ export default async function handler(req, res) {
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400");
-    res.end(record.html);
+    res.end(makeResponsive(record.html));
   } catch (err) {
     res.statusCode = 500;
     res.setHeader("Content-Type", "text/html");
