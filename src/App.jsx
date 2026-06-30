@@ -761,9 +761,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bd-hright{margin-left:auto;display:flex;align-items:center;gap:12px}
 .bd-clock{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);letter-spacing:.04em}
 .bd-clock span{color:var(--faint);font-size:10px;margin-left:5px}
-.bd-asof{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--faint);padding:5px 9px;border-radius:999px;border:1px solid var(--line2);background:var(--panel2);white-space:nowrap}
-.bd-asof.aging{color:var(--brass);border-color:rgba(212,160,72,.4)}
-.bd-asof.stale{color:var(--bear);border-color:rgba(239,68,68,.45)}
+/* dark-yellow pill to flag that prices are on a delay (not real-time) */
+.bd-asof{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#C9A227;padding:5px 9px;border-radius:999px;border:1px solid rgba(201,162,39,.45);background:rgba(201,162,39,.1);white-space:nowrap}
+.bd-asof.stale{color:var(--bear);border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.1)}
 @media(max-width:760px){.bd-asof{display:none}}
 .bd-session{
   display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
