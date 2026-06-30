@@ -2346,6 +2346,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
   const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
   // Market snapshot defaults collapsed on every viewport — open it from the header toggle.
   const [tickersOpen, setTickersOpen] = useState(false);
+  // Level maps section is collapsible (open by default — it's a core read).
+  const [levelsOpen, setLevelsOpen] = useState(true);
   // Session read defaults collapsed on every viewport — headline stays visible, the rest folds away.
   const [readOpen, setReadOpen] = useState(false);
   return (
@@ -2463,13 +2465,31 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           </div>
         )}
       </div>
-      <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
-        {LEVEL_MAP_GROUPS.map((g) => (
-          <LevelMapCard key={g.keys[0]} group={g} points={points} tickers={tickers} />
-        ))}
-      </div>
-      <div className="pulse-levels-mobile">
-        <LevelMapPanel points={points} tickers={tickers} />
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <button
+          className="collapsible-header"
+          onClick={() => setLevelsOpen((o) => !o)}
+          aria-expanded={levelsOpen}
+        >
+          <Crosshair size={14} className="ic" />
+          <span>Level maps</span>
+          <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>pivots · S/R · OHLC</small>
+          <span style={{ marginLeft: "auto" }}>
+            {levelsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </span>
+        </button>
+        {levelsOpen && (
+          <div style={{ padding: "0 12px 12px" }}>
+            <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
+              {LEVEL_MAP_GROUPS.map((g) => (
+                <LevelMapCard key={g.keys[0]} group={g} points={points} tickers={tickers} />
+              ))}
+            </div>
+            <div className="pulse-levels-mobile">
+              <LevelMapPanel points={points} tickers={tickers} />
+            </div>
+          </div>
+        )}
       </div>
       <div className="grid g-market-read">
         <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
