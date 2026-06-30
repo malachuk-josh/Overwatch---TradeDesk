@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
 import Newspaper from "lucide-react/dist/esm/icons/newspaper.mjs";
 import Crosshair from "lucide-react/dist/esm/icons/crosshair.mjs";
@@ -4447,7 +4448,7 @@ const CloudNewsletterList = () => {
           {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - 3} more</>}
         </button>
       )}
-      {current && (
+      {current && createPortal(
         <div className="nl-reader-overlay" onClick={() => setPreviewId(null)}>
           <div className="nl-reader" onClick={(e) => e.stopPropagation()}>
             <div className="nl-reader-head">
@@ -4465,7 +4466,8 @@ const CloudNewsletterList = () => {
             </div>
             <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
