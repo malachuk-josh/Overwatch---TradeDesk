@@ -1225,6 +1225,11 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
 .struct-hero .struct-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass);margin-top:6px}
+.tv-cal-embed{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
+.tv-cal-embed-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 8px 14px;border-bottom:1px solid var(--line)}
+.tv-cal-embed-title{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}
+.tv-cal-embed .tradingview-widget-container{height:560px}
+@media(max-width:680px){.tv-cal-embed .tradingview-widget-container{height:420px}}
 .calendar-heroes{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:stretch}
 .recent-row{display:flex;align-items:center;gap:11px;padding:8px 4px;border-bottom:1px dashed var(--line);opacity:.85}
 .recent-row:last-child{border-bottom:none}
@@ -2697,6 +2702,38 @@ const calendarImpactColor = (importance) => (importance === "high" ? C.bear : im
 // Compact figure formatter for calendar prev/est/actual readings.
 const calFig = (v) => (v == null ? "—" : fmtNum(Number(v), Math.abs(Number(v)) < 100 ? 1 : 0));
 
+// Embedded TradingView economic-calendar widget. The full tradingview.com calendar page
+// can't be framed (X-Frame-Options), so we use TradingView's official embed widget, which
+// renders the same live calendar inside an iframe it injects into our container.
+const TradingViewCalendarWidget = ({ lightMode }) => {
+  const containerRef = useRef(null);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = "";
+    const widget = document.createElement("div");
+    widget.className = "tradingview-widget-container__widget";
+    widget.style.height = "100%";
+    widget.style.width = "100%";
+    container.appendChild(widget);
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      colorTheme: lightMode ? "light" : "dark",
+      isTransparent: true,
+      locale: "en",
+      countryFilter: "us,eu,gb,jp,cn,ca,au,de,fr",
+      importanceFilter: "0,1",
+      width: "100%",
+      height: "100%",
+    });
+    container.appendChild(script);
+    return () => { container.innerHTML = ""; };
+  }, [lightMode]);
+  return <div className="tradingview-widget-container" ref={containerRef} style={{ height: "100%", width: "100%" }} />;
+};
+
 const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   <div className="cal-group">
     <div className="cal-group-title">
@@ -2722,8 +2759,9 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   </div>
 );
 
-const CalendarTab = ({ points, onRefresh }) => {
+const CalendarTab = ({ points, onRefresh, lightMode }) => {
   const { status, data, error, at } = points;
+  const [tvOpen, setTvOpen] = useState(false);
   if (status === "idle")
     return (
       <EmptyState
@@ -2753,12 +2791,29 @@ const CalendarTab = ({ points, onRefresh }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
-        <a href="https://www.tradingview.com/economic-calendar/" target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--muted)", textDecoration: "none", fontFamily: "'JetBrains Mono', monospace" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--brass)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}>
-          TradingView Calendar <ExternalLink size={11} />
-        </a>
+        <button
+          type="button"
+          onClick={() => setTvOpen((v) => !v)}
+          aria-expanded={tvOpen}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: tvOpen ? "var(--brass)" : "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'JetBrains Mono', monospace" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--brass)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = tvOpen ? "var(--brass)" : "var(--muted)")}
+        >
+          TradingView Calendar {tvOpen ? <ChevronUp size={12} /> : <ExternalLink size={11} />}
+        </button>
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
+
+      {tvOpen && (
+        <div className="tv-cal-embed">
+          <div className="tv-cal-embed-head">
+            <span className="tv-cal-embed-title"><CalendarDays size={13} /> TradingView Economic Calendar</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTvOpen(false)} title="Close"><X size={15} /></button>
+          </div>
+          <TradingViewCalendarWidget lightMode={lightMode} />
+        </div>
+      )}
 
       <div className="calendar-heroes">
       {nextStruct && (
@@ -5168,7 +5223,7 @@ export default function Overwatch() {
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />;
       case "calendar":
-        return <CalendarTab points={points} onRefresh={refreshPoints} />;
+        return <CalendarTab points={points} onRefresh={refreshPoints} lightMode={lightMode} />;
       case "thesis":
         return (
           <ThesisTab
