@@ -2038,18 +2038,6 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const VALX = PR - 4;  // S/R value numbers sit just inside the plot's right edge
   const y = (v) => 14 + ((max + pad - v) / (max - min + 2 * pad)) * (H - 28);
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
-  // Hide an OHLC rail's label when it would land on a nearby S/R label/value (or another OHLC
-  // label) so the gutters never show overlapping text. The dotted reference rail still draws.
-  const LABEL_GAP = 11;
-  const rowYs = rows.map((r) => y(r.v));
-  const placedOhlcY = { left: [], right: [] };
-  const ohlcShowLabel = ohlcRows.map((r) => {
-    const yy = y(r.v);
-    const near = (arr) => arr.some((o) => Math.abs(o - yy) < LABEL_GAP);
-    if (near(rowYs) || near(placedOhlcY[r.side])) return false;
-    placedOhlcY[r.side].push(yy);
-    return true;
-  });
   const spotRectW = dec > 0 ? 102 : 86;
   const spotCenterX = (AX + 6) + spotRectW / 2;
   // Opening gap: the space between the prior close and today's open. As price retraces into it
@@ -2102,19 +2090,17 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
       {ohlcRows.map((r, i) => (
         <g key={`ohlc-${i}`} style={{ opacity: 0.5 }}>
           <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
-          {ohlcShowLabel[i] && (
-            <text
-              x={r.side === "left" ? 4 : PR + 5}
-              y={y(r.v) + 3.5}
-              textAnchor="start"
-              fontSize="9"
-              fill="#94A3B8"
-              fontFamily="JetBrains Mono, monospace"
-              fontWeight="700"
-            >
-              {r.label}
-            </text>
-          )}
+          <text
+            x={r.side === "left" ? 4 : PR + 5}
+            y={y(r.v) + 3.5}
+            textAnchor="start"
+            fontSize="9"
+            fill="#94A3B8"
+            fontFamily="JetBrains Mono, monospace"
+            fontWeight="700"
+          >
+            {r.label}
+          </text>
         </g>
       ))}
       <line x1={AX} y1="8" x2={AX} y2={H - 8} stroke="#1E293B" strokeWidth="1" />
