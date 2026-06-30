@@ -4672,6 +4672,8 @@ const ArchiveTab = ({
 }) => {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [journalOpen, setJournalOpen] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(true);
   const query = q.trim().toLowerCase();
   const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
     const t = entry._type === "newsletter" ? entry._thesis : entry;
@@ -4682,10 +4684,21 @@ const ArchiveTab = ({
   const shownHistory = effectiveExpanded ? filteredHistory : filteredHistory.slice(0, 3);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
-        <CloudNewsletterList inSplit={inSplit} />
+      <Card
+        icon={Mail}
+        title="Jacks Journal"
+        sub="Market wraps delivered by the Overwatch automation — stored in the cloud"
+        tools={<button className="btn btn-ghost btn-sm" onClick={() => setJournalOpen((o) => !o)} title={journalOpen ? "Collapse" : "Expand"}>{journalOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>}
+      >
+        {journalOpen && <CloudNewsletterList inSplit={inSplit} />}
       </Card>
-      <Card icon={History} title="Thesis Library" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
+      <Card
+        icon={History}
+        title="Thesis Library"
+        sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
+        tools={<button className="btn btn-ghost btn-sm" onClick={() => setLibraryOpen((o) => !o)} title={libraryOpen ? "Collapse" : "Expand"}>{libraryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>}
+      >
+        {libraryOpen && (<>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
@@ -4732,6 +4745,7 @@ const ArchiveTab = ({
             {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - 3} more</>}
           </button>
         )}
+        </>)}
       </Card>
       <AcademyCard />
     </div>
