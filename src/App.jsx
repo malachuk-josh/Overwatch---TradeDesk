@@ -1244,7 +1244,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .calendar-summary-tile b{display:block;font-family:'JetBrains Mono',monospace;font-size:19px;color:var(--text)}
 .calendar-summary-tile span{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .calendar-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}
-@media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.calendar-summary{min-width:0;width:100%}}
+.cal-embed-card{grid-column:span 2;display:flex;flex-direction:column}
+.cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
+.cal-embed-card-body .tradingview-widget-container{height:100%}
+@media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.cal-embed-card{grid-column:auto}.calendar-summary{min-width:0;width:100%}}
 .flow-summary{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(56,189,248,.035)),var(--panel2);font-size:12.5px;line-height:1.6;color:var(--text)}
 .flow-row{display:grid;grid-template-columns:54px 1fr auto;gap:9px;align-items:start;padding:9px 0;border-bottom:1px dashed var(--line)}
 .flow-row:last-child{border-bottom:none}
@@ -2819,16 +2822,6 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          onClick={() => setTvOpen((v) => !v)}
-          aria-expanded={tvOpen}
-          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: tvOpen ? "var(--brass)" : "var(--muted)", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "'JetBrains Mono', monospace" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--brass)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = tvOpen ? "var(--brass)" : "var(--muted)")}
-        >
-          TradingView Calendar {tvOpen ? <ChevronUp size={12} /> : <ExternalLink size={11} />}
-        </button>
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
@@ -2871,11 +2864,14 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
       </div>
       </div>
       <div className="calendar-grid">
-        <Card icon={CalendarDays} title={`Today · ${calendarDateLabel(data?.calendarRange?.today) || "—"}`} sub={`${groups.today?.length || 0} event${groups.today?.length === 1 ? "" : "s"} on deck`}>
-          <CalendarGroup label="Today" items={groups.today || []} empty="No U.S. releases found for today." />
-        </Card>
-        <Card icon={CalendarDays} title={`Tomorrow · ${calendarDateLabel(data?.calendarRange?.tomorrow) || "—"}`} sub={`${groups.tomorrow?.length || 0} event${groups.tomorrow?.length === 1 ? "" : "s"} queued`}>
-          <CalendarGroup label="Tomorrow" items={groups.tomorrow || []} empty="No U.S. releases found for tomorrow." />
+        <Card
+          className="cal-embed-card"
+          icon={CalendarDays}
+          title="Economic calendar"
+          sub="Live U.S. macro · TradingView"
+          tools={<button className="btn btn-ghost btn-sm" onClick={() => setTvOpen(true)} title="Expand to full view"><Maximize2 size={14} /></button>}
+        >
+          <div className="cal-embed-card-body"><TradingViewCalendarWidget /></div>
         </Card>
         <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
           <CalendarGroup label="Major Upcoming" items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
