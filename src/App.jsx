@@ -935,6 +935,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .nl-reader-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nl-reader-nav{display:flex;gap:4px;flex:none}
 .nl-reader-frame{flex:1;width:100%;border:none;background:#fff}
+/* in-pane reader (split view): fills the pane's column, leaves the other pane visible */
+.nl-reader-inpane{height:calc(100vh - 240px);min-height:420px;border:1px solid var(--line);border-radius:10px}
 @media(max-width:760px){
   .nl-reader-overlay{padding:0}
   .nl-reader{width:100%;height:100%;max-height:100%;border:none;border-radius:0}
@@ -4371,7 +4373,7 @@ const AcademyCard = () => {
   );
 };
 
-const CloudNewsletterList = () => {
+const CloudNewsletterList = ({ inSplit = false }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewId, setPreviewId] = useState(null);
@@ -4398,9 +4400,10 @@ const CloudNewsletterList = () => {
       }
     };
     window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    // only lock background scroll for the full-screen overlay; the in-pane reader leaves the page scrollable
+    if (!inSplit) document.body.style.overflow = "hidden";
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [previewId, items]);
+  }, [previewId, items, inSplit]);
 
   if (loading) return <div style={{ color: C.muted, fontSize: 12.5, padding: "8px 0" }}>Loading cloud newsletters…</div>;
   if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
@@ -4417,6 +4420,30 @@ const CloudNewsletterList = () => {
   const current = previewId ? items.find((i) => i.id === previewId) : null;
   const idx = current ? items.findIndex((i) => i.id === previewId) : -1;
   const go = (delta) => { const n = items[idx + delta]; if (n) setPreviewId(n.id); };
+
+  const reader = current ? (
+    <>
+      <div className="nl-reader-head">
+        <Mail size={15} style={{ opacity: 0.6, flex: "none" }} />
+        <div className="nl-reader-title">
+          <span className="nl-reader-name">{current.title || "Newsletter"}</span>
+          <span className="nl-reader-date">{rowDate(current.sentAt)}{current.instrument ? ` · ${current.instrument}` : ""}</span>
+        </div>
+        <div className="nl-reader-nav">
+          <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={15} /></button>
+          <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={15} /></button>
+        </div>
+        <a href={current.url || `/api/archive/${current.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" title="Open in new tab"><ExternalLink size={13} /></a>
+        <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
+      </div>
+      <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
+    </>
+  ) : null;
+
+  // In split view, take over just this pane (inline) so the other pane stays visible.
+  if (inSplit && current) {
+    return <div className="nl-reader nl-reader-inpane">{reader}</div>;
+  }
 
   return (
     <>
@@ -4450,22 +4477,7 @@ const CloudNewsletterList = () => {
       )}
       {current && createPortal(
         <div className="nl-reader-overlay" onClick={() => setPreviewId(null)}>
-          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>
-            <div className="nl-reader-head">
-              <Mail size={15} style={{ opacity: 0.6, flex: "none" }} />
-              <div className="nl-reader-title">
-                <span className="nl-reader-name">{current.title || "Newsletter"}</span>
-                <span className="nl-reader-date">{rowDate(current.sentAt)}{current.instrument ? ` · ${current.instrument}` : ""}</span>
-              </div>
-              <div className="nl-reader-nav">
-                <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={15} /></button>
-                <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={15} /></button>
-              </div>
-              <a href={current.url || `/api/archive/${current.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" title="Open in new tab"><ExternalLink size={13} /></a>
-              <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
-            </div>
-            <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
-          </div>
+          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{reader}</div>
         </div>,
         document.body
       )}
@@ -4479,6 +4491,7 @@ const ArchiveTab = ({
   setViewing,
   onDeleteEntry,
   onGoThesis,
+  inSplit = false,
 }) => {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -4493,7 +4506,7 @@ const ArchiveTab = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
-        <CloudNewsletterList />
+        <CloudNewsletterList inSplit={inSplit} />
       </Card>
       <Card icon={History} title="Thesis Library" sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}>
         {!archiveHistory.length && (
@@ -5183,6 +5196,7 @@ export default function Overwatch() {
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => setTab("thesis")}
+            inSplit={splitOn}
           />
         );
       default:
