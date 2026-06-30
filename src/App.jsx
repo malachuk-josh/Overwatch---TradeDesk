@@ -4558,6 +4558,17 @@ const AcademyCard = () => {
   );
 };
 
+// Per-type identity for Jacks Journal rows: a distinct icon + color so the wrap / pre-market /
+// prediction-market entries are scannable at a glance instead of all reading as the same chip.
+const JOURNAL_TYPE_META = {
+  premarket: { Icon: Sun, color: "#E0A93C" },        // morning / pre-market — amber
+  wrap: { Icon: Moon, color: "#8B7CF6" },            // end-of-day wrap — violet
+  predmarkets: { Icon: TrendingUp, color: "#2DD4BF" }, // prediction markets — teal
+  thesis: { Icon: Sparkles, color: "#3B82F6" },      // daily thesis — blue
+};
+const journalTypeMeta = (type) =>
+  JOURNAL_TYPE_META[String(type || "wrap").toLowerCase()] || { Icon: Mail, color: "var(--muted)" };
+
 const CloudNewsletterList = ({ inSplit = false }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -4641,7 +4652,15 @@ const CloudNewsletterList = ({ inSplit = false }) => {
               {" "}
               {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
             </span>
-            <span className="chip b-brass" style={{ flex: "none", fontSize: 10 }}>{item.type || "wrap"}</span>
+            {(() => {
+              const m = journalTypeMeta(item.type);
+              const Ic = m.Icon;
+              return (
+                <span className="chip" style={{ flex: "none", fontSize: 10, color: m.color, borderColor: m.color + "66", background: m.color + "14", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Ic size={11} /> {item.type || "wrap"}
+                </span>
+              );
+            })()}
             {item.bias && <span className="chip" style={{ color: biasColor(item.bias), borderColor: biasColor(item.bias) + "66", flex: "none", fontSize: 10 }}>{item.bias}</span>}
             <span className="chip" style={{ flex: "none", fontSize: 10 }}>{item.instrument || "SPX"}</span>
             <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
