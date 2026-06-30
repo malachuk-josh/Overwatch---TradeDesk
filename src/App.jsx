@@ -4435,7 +4435,7 @@ const CloudNewsletterList = ({ inSplit = false }) => {
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
       </div>
-      <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
+      <iframe key={current.id} src={`/api/archive/${current.id}?rv=2`} title="Newsletter" className="nl-reader-frame" />
     </>
   ) : null;
 
