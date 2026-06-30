@@ -896,6 +896,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .split-pane-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;letter-spacing:.03em;transition:color .15s,background .15s,border-color .15s}
 .split-pane-tab:hover{color:var(--text);background:var(--panel3)}
 .split-pane-tab.on{color:var(--brass);background:var(--brass-dim);border-color:rgba(59,130,246,.28)}
+.split-pane-bar-extra{margin-left:auto}
+.split-pane-exit{color:var(--muted);border-color:var(--line2)}
+.split-pane-exit:hover{color:var(--bear);border-color:rgba(239,68,68,.4);background:var(--bear-dim)}
 /* split toggle lives at the right end of the tab row */
 .split-toggle{margin-left:auto}
 @media(max-width:1200px){.split-toggle .split-label{display:none}}
@@ -5447,8 +5450,10 @@ export default function Overwatch() {
     }
   };
 
-  // Compact tab picker that sits atop each split pane.
-  const paneTabs = (activeId, onPick) => (
+  // Compact tab picker that sits atop each split pane. In split view these per-pane bars are the
+  // only navigation (the full-width top nav is hidden), so an optional right-aligned `extra` slot
+  // carries the Exit-split control on the second pane.
+  const paneTabs = (activeId, onPick, extra = null) => (
     <div className="split-pane-bar">
       {TABS.map((t) => (
         <button key={t.id} className={`split-pane-tab${activeId === t.id ? " on" : ""}`} onClick={() => onPick(t.id)} title={t.label}>
@@ -5456,6 +5461,7 @@ export default function Overwatch() {
           <span>{t.short}</span>
         </button>
       ))}
+      {extra && <div className="split-pane-bar-extra">{extra}</div>}
     </div>
   );
 
@@ -5511,20 +5517,24 @@ export default function Overwatch() {
         </div>
       </header>
 
-      <nav className="bd-tabs">
-        {TABS.map((t) => (
-          <button key={t.id} className={`bd-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
-            <t.icon size={15} />
-            {t.label}
-            {t.badge ? <span className="tab-badge">{t.badge}</span> : null}
-          </button>
-        ))}
-        {splitEligible && (
-          <button className={`bd-tab split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
-            <Columns2 size={15} /> <span className="split-label">{splitOn ? "Exit split view" : "Split view"}</span>
-          </button>
-        )}
-      </nav>
+      {/* In split view the two per-pane bars below are the only navigation, so the full-width top
+          nav is hidden to remove the duplicate row (it otherwise just mirrors the left pane). */}
+      {!splitOn && (
+        <nav className="bd-tabs">
+          {TABS.map((t) => (
+            <button key={t.id} className={`bd-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
+              <t.icon size={15} />
+              {t.label}
+              {t.badge ? <span className="tab-badge">{t.badge}</span> : null}
+            </button>
+          ))}
+          {splitEligible && (
+            <button className="bd-tab split-toggle" onClick={toggleSplit} title="Split view — show two tabs side by side">
+              <Columns2 size={15} /> <span className="split-label">Split view</span>
+            </button>
+          )}
+        </nav>
+      )}
 
       <div className="bd-bottom-nav">
         <div className="bd-bottom-nav-inner">
@@ -5545,7 +5555,11 @@ export default function Overwatch() {
             <div className="split-pane-body">{renderTab(tab)}</div>
           </section>
           <section className="split-pane">
-            {paneTabs(splitTab, setSplitTab)}
+            {paneTabs(splitTab, setSplitTab, (
+              <button className="split-pane-tab split-pane-exit" onClick={toggleSplit} title="Exit split view">
+                <Columns2 size={14} /> <span>Exit split</span>
+              </button>
+            ))}
             <div className="split-pane-body">{renderTab(splitTab)}</div>
           </section>
         </main>
