@@ -884,10 +884,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .split-pane-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;letter-spacing:.03em;transition:color .15s,background .15s,border-color .15s}
 .split-pane-tab:hover{color:var(--text);background:var(--panel3)}
 .split-pane-tab.on{color:var(--brass);background:var(--brass-dim);border-color:rgba(59,130,246,.28)}
-.split-toggle{gap:7px}
-.split-toggle .split-label{font-size:12px;font-weight:600}
-.split-toggle.on{color:var(--brass);background:var(--panel3);border-color:var(--line2)}
-/* keep the label off the narrowest desktop widths where the header is tight */
+/* split toggle lives at the right end of the tab row */
+.split-toggle{margin-left:auto}
 @media(max-width:1200px){.split-toggle .split-label{display:none}}
 /* each pane is a size container, so its grids collapse to its own width (not the window's) */
 @container (max-width:1080px){
@@ -5172,11 +5170,6 @@ export default function Overwatch() {
           <button className="btn btn-brass" onClick={syncAll} disabled={anyLoading}>
             {anyLoading ? <><RefreshCw size={14} className="spin" /> <span className="sync-label">Syncing…</span></> : <><Zap size={14} /> <span className="sync-label">Sync live data</span></>}
           </button>
-          {splitEligible && (
-            <button className={`btn btn-ghost split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
-              <Columns2 size={16} /> <span className="split-label">{splitOn ? "Exit split" : "Split"}</span>
-            </button>
-          )}
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
@@ -5204,6 +5197,11 @@ export default function Overwatch() {
             {t.badge ? <span className="tab-badge">{t.badge}</span> : null}
           </button>
         ))}
+        {splitEligible && (
+          <button className={`bd-tab split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
+            <Columns2 size={15} /> <span className="split-label">{splitOn ? "Exit split" : "Split"}</span>
+          </button>
+        )}
       </nav>
 
       <div className="bd-bottom-nav">
