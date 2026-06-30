@@ -2718,7 +2718,9 @@ const TradingViewCalendarWidget = () => {
     script.async = true;
     script.innerHTML = JSON.stringify({
       colorTheme: "dark",
-      isTransparent: true,
+      // Keep transparency off: the Events widget falls back to a light surface and ignores
+      // colorTheme:"dark" when isTransparent is true, so force it to paint its own dark background.
+      isTransparent: false,
       locale: "en",
       countryFilter: "us",
       importanceFilter: "1",
