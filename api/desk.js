@@ -1084,9 +1084,9 @@ const scoreHeadlineSentiment = async (headlines) => {
   return headlines;
 };
 
-// Recency-weighted net tone over the headline set (newest news dominates via a ~7h half-life).
+// Recency-weighted net tone over the headline set (newest news dominates via a 24h half-life).
 const recencyWeightedSentiment = (headlines, nowSec) => {
-  const HALF_LIFE_H = 7;
+  const HALF_LIFE_H = 24;
   let wsum = 0, ssum = 0;
   for (const h of headlines) {
     const ageH = h.providerPublishTime ? Math.max(0, (nowSec - h.providerPublishTime) / 3600) : 24;
