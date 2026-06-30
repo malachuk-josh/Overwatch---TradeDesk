@@ -761,6 +761,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bd-hright{margin-left:auto;display:flex;align-items:center;gap:12px}
 .bd-clock{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);letter-spacing:.04em}
 .bd-clock span{color:var(--faint);font-size:10px;margin-left:5px}
+.bd-asof{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:var(--faint);padding:5px 9px;border-radius:999px;border:1px solid var(--line2);background:var(--panel2);white-space:nowrap}
+.bd-asof.aging{color:var(--brass);border-color:rgba(212,160,72,.4)}
+.bd-asof.stale{color:var(--bear);border-color:rgba(239,68,68,.45)}
+@media(max-width:760px){.bd-asof{display:none}}
 .bd-session{
   display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
   font-size:10.5px;letter-spacing:.14em;padding:6px 11px;border-radius:999px;
@@ -2188,8 +2192,12 @@ const SentimentDonut = ({ headlines }) => {
 // redistributes from a snapshot taken at drag-start, so the move is stable and fully reversible.
 const FactorRadarChart = ({ weights, onChange }) => {
   const data = FACTORS.map((f) => ({ key: f.key, k: f.label.split(" ")[0], v: Number(weights[f.key]) || 0 }));
-  const max = MAX_PILLAR; // full scale tracks the per-pillar cap
   const n = data.length;
+  // Zoom the radial scale to the current weights (rounded up to a clean bound, with headroom) so a
+  // balanced ~20% spread fills most of the chart instead of hugging the center, while still letting a
+  // pillar grow toward the per-pillar cap. Drag values are always clamped to the real cap, not this.
+  const evenSplit = WEIGHT_TOTAL / n;
+  const max = clamp(Math.ceil((Math.max(...data.map((d) => d.v), evenSplit) * 1.3) / 5) * 5, Math.ceil(evenSplit * 1.4), MAX_PILLAR);
   const cx = 150;
   const cy = 120;
   const outer = 80;
@@ -2220,7 +2228,7 @@ const FactorRadarChart = ({ weights, onChange }) => {
     const loc = pt.matrixTransform(ctm.inverse());
     const [ux, uy] = axis(i);
     const proj = (loc.x - cx) * ux + (loc.y - cy) * uy; // distance along this pillar's spoke
-    return clamp(Math.round((proj / outer) * max), 0, max);
+    return clamp(Math.round((proj / outer) * max), 0, MAX_PILLAR);
   };
   const onMove = (e) => {
     if (drag == null || !interactive || !baseRef.current) return;
@@ -2249,6 +2257,10 @@ const FactorRadarChart = ({ weights, onChange }) => {
         {[0.25, 0.5, 0.75, 1].map((f) => (
           <polygon key={f} points={polygon(max * f)} fill="none" stroke="#243140" strokeWidth="1" />
         ))}
+        {/* even-split anchor: where every pillar would sit if weighted equally — vertices outside this
+            ring are overweight, inside are underweight, giving the shape a fixed reference to read against */}
+        <polygon points={polygon(evenSplit)} fill="none" stroke="#3B82F6" strokeWidth="1" strokeDasharray="3 3" opacity="0.45" />
+        <text x={cx} y={cy - outer * (evenSplit / max) - 3} textAnchor="middle" fill="#3B82F6" fontSize="7.5" opacity="0.7" fontFamily="JetBrains Mono, monospace">even {fmtPct(evenSplit)}%</text>
         {data.map((d, i) => {
           const [x1, y1] = point(i, 0);
           const [x2, y2] = point(i, max);
@@ -2270,6 +2282,12 @@ const FactorRadarChart = ({ weights, onChange }) => {
                 <circle cx={x} cy={y} r="18" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
               )}
               <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#3B82F6" stroke="#020617" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
+              {drag === i && (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect x={x - 17} y={y - 26} rx="3" width="34" height="16" fill="#3B82F6" />
+                  <text x={x} y={y - 14.5} textAnchor="middle" fill="#fff" fontSize="10" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
+                </g>
+              )}
             </g>
           );
         })}
@@ -2314,6 +2332,12 @@ const LevelMapCard = ({ group, points, tickers }) => {
   const [active, setActive] = useState(group.keys[0]);
   const dataKey = active.toLowerCase();
   const data = points?.[dataKey];
+  // Draw the spot line off the live market ticker (same source as the header candle and Market
+  // Snapshot) rather than the separately-fetched levels payload, so the price doesn't diverge
+  // panel-to-panel. The R/S/pivot levels still come from the points feed.
+  const liveT = (tickers || []).find((x) => x.symbol === active);
+  const livePrice = liveT && typeof liveT.price === "number" && !isNaN(liveT.price) ? liveT.price : null;
+  const spxData = data && livePrice != null ? { ...data, spot: livePrice } : data;
   return (
     <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]} tools={levelMapCandle(tickers, active)}>
       <div className="seg" style={{ marginBottom: 10 }}>
@@ -2321,7 +2345,7 @@ const LevelMapCard = ({ group, points, tickers }) => {
           <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
         ))}
       </div>
-      <LevelsLadder spx={data} label={active} ohlc={ohlcForSymbol(tickers, active)} />
+      <LevelsLadder spx={spxData} label={active} ohlc={ohlcForSymbol(tickers, active)} />
     </Card>
   );
 };
@@ -3630,11 +3654,11 @@ const FeedToggle = ({ on, onToggle, summary }) => (
       <span style={{ position: "absolute", top: 2.5, left: on ? 19 : 2.5, width: 18, height: 18, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
     </button>
     <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.5 }}>
-      <b style={{ color: "var(--text)", fontSize: 13 }}>Feed into thesis synthesis</b>
+      <b style={{ color: "var(--text)", fontSize: 13 }}>Send desk tools to the thesis</b>
       <div>
         {on
-          ? <>The next thesis run will reference: <span style={{ color: C.brass }}>{summary}</span>.</>
-          : "When on, the desk's next thesis run references your active hedge structures and the options scenario."}
+          ? <>Master switch is on — the next thesis run will reference: <span style={{ color: C.brass }}>{summary}</span>.</>
+          : "Master switch — when on, the next thesis run factors in the hedge structures and options scenario you've enabled below."}
       </div>
     </div>
   </div>
@@ -3642,7 +3666,7 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, live, feedOn = false }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
   const K = numOr(opt.strike, roundStrike(S));
   const bs = blackScholes({ S, K, T, r, q, sigma, type: opt.type });
@@ -3695,7 +3719,10 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, live }) => {
             <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
           </button>
           <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
-            <b style={{ color: "var(--text)" }}>Include in thesis feed</b> — list this scenario alongside your active hedges when the synthesis runs.
+            <b style={{ color: "var(--text)" }}>Add this scenario to the thesis</b> — includes this specific options scenario in the desk-tools bundle.
+            {opt.feed && !feedOn && (
+              <span style={{ color: C.brass }}> Turn on “Send desk tools to the thesis” above for this to apply.</span>
+            )}
           </span>
         </div>
       </Card>
@@ -4006,7 +4033,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
         </div>
         <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />
-        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} live={live} />}
+        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} live={live} feedOn={deskTools.feedToThesis} />}
         {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
       </div>
     );
@@ -5353,6 +5380,15 @@ export default function Overwatch() {
         </div>
         <div className="bd-hright">
           <span className="bd-clock">{clock}<span>ET</span></span>
+          {market.at && (() => {
+            const ageMin = Math.floor((Date.now() - market.at.ts) / 60000);
+            const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+            return (
+              <span className={`bd-asof ${tier}`} title={`Live desk prices last synced ${ageMin}m ago — the single source of truth across panels`}>
+                {tier === "stale" ? "STALE " : ""}prices {market.at.label}{ageMin >= 2 ? ` · ${ageMin}m` : ""}
+              </span>
+            );
+          })()}
           <span className={`bd-session bd-session-${session.tone}`}>
             <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
             {session.label}
