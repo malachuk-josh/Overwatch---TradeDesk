@@ -996,33 +996,138 @@ const catalystStack = (headlines) => {
     .sort((a, b) => b.maxImpact - a.maxImpact || b.count - a.count);
 };
 
+// Plain-text fetch for RSS/XML feeds.
+const fetchText = async (url) => {
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; OverwatchDesk/1.0)" },
+    signal: AbortSignal.timeout(9000),
+  });
+  if (!response.ok) throw new Error(`Feed returned ${response.status}`);
+  return response.text();
+};
+
+const decodeEntities = (s = "") =>
+  s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .trim();
+
+// Parse a Google News RSS search feed into normalized { title, publisher, link, ts } items.
+const parseGoogleNewsRss = (xml) => {
+  const items = [];
+  for (const block of xml.split(/<item>/i).slice(1)) {
+    const body = block.split(/<\/item>/i)[0] || "";
+    const rawTitle = decodeEntities(body.match(/<title>([\s\S]*?)<\/title>/i)?.[1] || "");
+    if (!rawTitle) continue;
+    // Google News appends " - Publisher"; split it off for a clean headline + source.
+    const m = rawTitle.match(/^(.*) - ([^-]+)$/);
+    const title = m ? m[1].trim() : rawTitle;
+    const sourceTag = decodeEntities(body.match(/<source[^>]*>([\s\S]*?)<\/source>/i)?.[1] || "");
+    const link = decodeEntities(body.match(/<link>([\s\S]*?)<\/link>/i)?.[1] || "");
+    const pub = body.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1];
+    const ts = pub ? Math.floor(Date.parse(pub) / 1000) : 0;
+    items.push({ title, publisher: sourceTag || (m ? m[2].trim() : "Google News"), link: link || null, ts: Number.isFinite(ts) ? ts : 0 });
+  }
+  return items;
+};
+
+// News sources, each normalized to { title, publisher, link, ts } and isolated so one failing
+// feed never sinks the others.
+const fetchYahooNews = async (queries) => {
+  const payloads = await Promise.allSettled(
+    queries.map((q) => fetchJson(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=0&newsCount=10`)),
+  );
+  return payloads
+    .flatMap((r) => (r.status === "fulfilled" ? r.value.news || [] : []))
+    .map((it) => ({ title: it.title, publisher: it.publisher || "Yahoo Finance", link: it.link || null, ts: it.providerPublishTime || 0 }));
+};
+
+const fetchGoogleNews = async (queries) => {
+  const results = await Promise.allSettled(
+    queries.map((q) => fetchText(`https://news.google.com/rss/search?q=${encodeURIComponent(`${q} when:2d`)}&hl=en-US&gl=US&ceid=US:en`)),
+  );
+  return results.flatMap((r) => (r.status === "fulfilled" ? parseGoogleNewsRss(r.value) : []));
+};
+
+const fetchFinnhubNews = async () => {
+  const key = process.env.FINNHUB_API_KEY;
+  if (!key) return [];
+  try {
+    const data = await fetchJson(`https://finnhub.io/api/v1/news?category=general&token=${key}`);
+    return (Array.isArray(data) ? data : []).map((it) => ({ title: it.headline, publisher: it.source || "Finnhub", link: it.url || null, ts: it.datetime || 0 }));
+  } catch {
+    return [];
+  }
+};
+
+// Best-effort Claude pass that re-scores each headline's sentiment for US index direction; returns
+// the headlines untouched if there's no key or the call fails (the keyword classifier stands in).
+const scoreHeadlineSentiment = async (headlines) => {
+  if (!process.env.ANTHROPIC_API_KEY || !headlines.length) return headlines;
+  try {
+    const list = headlines.map((h, i) => `${i}. ${h.title}`).join("\n");
+    const out = await callAnthropic(
+      `You are a markets desk classifying news for US equity index direction (S&P 500, Nasdaq, Dow). ` +
+      `For each numbered headline, decide whether it is bullish, bearish, or neutral for US stock indices over the next 1-3 sessions. ` +
+      `Reply with ONLY JSON in the form {"sentiments":[{"i":0,"s":"bullish"}, ...]} and include every headline index.\n\n${list}`
+    );
+    const arr = out?.sentiments;
+    if (Array.isArray(arr)) {
+      const map = new Map(arr.map((x) => [Number(x.i), String(x.s || "").toLowerCase()]));
+      headlines.forEach((h, i) => {
+        const s = map.get(i);
+        if (s === "bullish" || s === "bearish" || s === "neutral") h.sentiment = s;
+      });
+    }
+  } catch { /* keep keyword sentiment */ }
+  return headlines;
+};
+
+// Recency-weighted net tone over the headline set (newest news dominates via a ~7h half-life).
+const recencyWeightedSentiment = (headlines, nowSec) => {
+  const HALF_LIFE_H = 7;
+  let wsum = 0, ssum = 0;
+  for (const h of headlines) {
+    const ageH = h.providerPublishTime ? Math.max(0, (nowSec - h.providerPublishTime) / 3600) : 24;
+    const w = Math.pow(0.5, ageH / HALF_LIFE_H);
+    const signed = h.sentiment === "bullish" ? 1 : h.sentiment === "bearish" ? -1 : 0;
+    wsum += w;
+    ssum += w * signed;
+  }
+  return wsum > 0 ? Math.round((ssum / wsum) * 100) : 0;
+};
+
 const fetchNews = async () => {
   if (newsCache?.expires > Date.now()) return newsCache.data;
 
   const promise = (async () => {
   try {
-    const queries = [
-      "^GSPC",
-      "^NDX",
-      "^DJI",
-      "^VIX",
-      "^TNX",
-      "ES=F",
-      "NQ=F",
-      "YM=F",
+    const yahooQueries = [
+      "^GSPC", "^NDX", "^DJI", "^VIX", "^TNX", "ES=F", "NQ=F", "YM=F",
       "Fed rates inflation CPI jobs Treasury",
       "stock market futures Nasdaq Dow S&P 500",
       "Nvidia Apple Microsoft earnings Nasdaq",
       "oil dollar gold market geopolitics tariffs",
     ];
-    const payloads = await Promise.allSettled(
-      queries.map((query) => fetchJson(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=0&newsCount=10`)),
-    );
+    const googleQueries = [
+      "S&P 500 Nasdaq Dow stock market",
+      "Federal Reserve interest rates inflation CPI",
+      "stock market futures today",
+      "Nvidia Apple Microsoft tech stocks earnings",
+      "oil prices US dollar treasury yields",
+    ];
+    // Merge multiple free feeds for breadth + recency; any feed that fails contributes nothing.
+    const [yahooItems, googleItems, finnhubItems] = await Promise.all([
+      fetchYahooNews(yahooQueries).catch(() => []),
+      fetchGoogleNews(googleQueries).catch(() => []),
+      fetchFinnhubNews(),
+    ]);
+    const rawItems = [...yahooItems, ...googleItems, ...finnhubItems];
     const seen = new Set();
     const relevant = /market|stocks|s&p|spx|nasdaq|ndx|dow|dji|fed|inflation|cpi|ppi|rates|treasury|yield|futures|vix|volatility|iran|oil|crude|trump|tariff|economy|jobs|dollar|bitcoin|gold|nvidia|apple|microsoft|earnings|chips|semiconductor/i;
     const falsePositive = /tire inflation|roadside|jump start|jump-start|charging station|fast charging|power bank|portable charger|battery pack|electric vehicle charging/i;
-    const sourceItems = payloads
-      .flatMap((result) => result.status === "fulfilled" ? result.value.news || [] : [])
+    const sourceItems = rawItems
       .filter((item) => {
         const title = String(item.title || "").trim();
         const key = title.toLowerCase().replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
@@ -1035,14 +1140,14 @@ const fetchNews = async () => {
     const enriched = sourceItems.map((item) => {
       const read = classifyHeadline(item.title || "");
       const tickers = headlineTickers(item.title || "");
-      const ageHours = item.providerPublishTime ? Math.max(0, (nowSec - item.providerPublishTime) / 3600) : 999;
+      const ageHours = item.ts ? Math.max(0, (nowSec - item.ts) / 3600) : 999;
       const urgency = read.impact >= 5 || ageHours < 2 ? "high" : read.impact >= 4 || ageHours < 8 ? "medium" : "low";
       return {
         title: item.title,
         source: item.publisher || "Market wire",
-        timeAgo: timeAgo(item.providerPublishTime || nowSec),
+        timeAgo: timeAgo(item.ts || nowSec),
         url: item.link || null,
-        providerPublishTime: item.providerPublishTime || 0,
+        providerPublishTime: item.ts || 0,
         ageHours,
         urgency,
         tickers,
@@ -1058,6 +1163,10 @@ const fetchNews = async () => {
       // Keep providerPublishTime so the UI can order chronologically; rank still reflects significance.
       .map(({ ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
+    // Upgrade each headline's sentiment with a single Claude pass (keyword read is the fallback),
+    // then derive the aggregates from the improved labels.
+    await scoreHeadlineSentiment(headlines);
+    const sentimentScore = recencyWeightedSentiment(headlines, nowSec);
     const bullish = headlines.filter((item) => item.sentiment === "bullish").length;
     const bearish = headlines.filter((item) => item.sentiment === "bearish").length;
     const highImpact = headlines.filter((item) => item.impact >= 5).length;
@@ -1073,6 +1182,7 @@ const fetchNews = async () => {
       .map((item) => `${item.tickers?.length ? `${item.tickers.join("/")} — ` : ""}${item.note}`);
     return {
       mood,
+      sentimentScore,
       sourceCount: sourceItems.length,
       lastUpdated: new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
       brief: `${headlines.length} filtered headlines across ${catalysts.length} catalyst buckets; ${highImpact} high-impact items currently lead the tape.`,
@@ -1692,9 +1802,12 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
       ? indexChanges.reduce((sum, value) => sum + value, 0) / indexChanges.length
       : 0;
   const headlines = news?.headlines || [];
-  const newsScore = headlines.length
-    ? (headlines.filter((item) => item.sentiment === "bullish").length - headlines.filter((item) => item.sentiment === "bearish").length) / headlines.length * 100
-    : 0;
+  // Prefer the recency-weighted net tone from the news feed; fall back to a flat count if absent.
+  const newsScore = Number.isFinite(Number(news?.sentimentScore))
+    ? Number(news.sentimentScore)
+    : headlines.length
+      ? (headlines.filter((item) => item.sentiment === "bullish").length - headlines.filter((item) => item.sentiment === "bearish").length) / headlines.length * 100
+      : 0;
   const trendScore = Number.isFinite(Number(points?.internals?.trendDetail?.score))
     ? Number(points.internals.trendDetail.score)
     : points?.internals?.trend === "uptrend" ? 55 : points?.internals?.trend === "downtrend" ? -55 : 0;
