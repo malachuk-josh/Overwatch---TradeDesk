@@ -904,12 +904,24 @@ const fetchMarket = async (watchlist = []) => {
 
 const textHas = (text, words) => words.some((word) => text.includes(word));
 
+// Count how many of the given words/phrases appear in `text` as whole words.
+// Word-boundary matching avoids false positives like "update" matching "up".
+const countToneHits = (words, text) =>
+  words.reduce((n, w) => {
+    const esc = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return n + (new RegExp(`(?:^|[^a-z])${esc}(?:[^a-z]|$)`).test(text) ? 1 : 0);
+  }, 0);
+
 const classifyHeadline = (title) => {
-  const text = title.toLowerCase();
-  const negative = ["fall", "drop", "sell", "threat", "war", "inflation", "higher", "slump", "risk", "fear", "tariff", "down", "miss", "warning", "loss", "recession", "default", "attack"];
-  const positive = ["rise", "rally", "gain", "surge", "cool", "cut", "record", "rebound", "up", "beat", "optimism", "soft landing", "eases", "deal"];
-  const bearish = negative.some((word) => text.includes(word));
-  const bullish = positive.some((word) => text.includes(word));
+  const text = ` ${title.toLowerCase()} `;
+  // Whole-word/phrase tone lists. Score by how many of each appear, so a single trap
+  // word can't flip the read and mixed headlines fall through to neutral.
+  const negative = ["fall", "falls", "falling", "fell", "drop", "drops", "selloff", "sell-off", "slump", "slumps", "slide", "slides", "plunge", "plunges", "threat", "war", "slowdown", "slows", "fear", "fears", "tariff", "tariffs", "down", "miss", "misses", "warning", "loss", "losses", "recession", "default", "attack", "weak", "weaker", "softer", "tumble", "tumbles", "sink", "sinks", "lower", "selloff"];
+  const positive = ["rise", "rises", "rising", "rose", "rally", "rallies", "gain", "gains", "surge", "surges", "soar", "soars", "jump", "jumps", "climb", "climbs", "cool", "cools", "cut", "cuts", "record", "records", "rebound", "rebounds", "beat", "beats", "optimism", "soft landing", "eases", "ease", "deal", "best", "strong", "stronger", "advance", "advances", "tops", "outperform", "recovery", "boost", "up"];
+  const negScore = countToneHits(negative, text);
+  const posScore = countToneHits(positive, text);
+  const bearish = negScore > posScore;
+  const bullish = posScore > negScore;
   const category = /fed|fomc|powell|rate|inflation|cpi|ppi|jobs|payroll|econom|treasury|yield/.test(text)
     ? "macro"
     : /earnings|revenue|profit|guidance/.test(text)

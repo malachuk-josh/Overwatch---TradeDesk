@@ -1247,6 +1247,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .cal-left-col{grid-column:span 2;display:flex;flex-direction:column;gap:14px;min-width:0}
 .cal-embed-card{display:flex;flex-direction:column}
 .cal-right-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.hedge-warn{margin-top:10px;padding:9px 11px;border:1px solid var(--brass);border-radius:8px;background:linear-gradient(90deg,rgba(212,160,72,.1),transparent);font-size:11.5px;line-height:1.55;color:var(--muted)}
 .cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
 .cal-embed-card-body .tradingview-widget-container{height:100%}
 @media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.cal-left-col{grid-column:auto}.calendar-summary{min-width:0;width:100%}}
@@ -2018,6 +2019,18 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const VALX = PR - 4;  // S/R value numbers sit just inside the plot's right edge
   const y = (v) => 14 + ((max + pad - v) / (max - min + 2 * pad)) * (H - 28);
   const colorOf = (t) => (t === "res" ? C.bear : t === "sup" ? C.bull : C.brass);
+  // Hide an OHLC rail's label when it would land on a nearby S/R label/value (or another OHLC
+  // label) so the gutters never show overlapping text. The dotted reference rail still draws.
+  const LABEL_GAP = 11;
+  const rowYs = rows.map((r) => y(r.v));
+  const placedOhlcY = { left: [], right: [] };
+  const ohlcShowLabel = ohlcRows.map((r) => {
+    const yy = y(r.v);
+    const near = (arr) => arr.some((o) => Math.abs(o - yy) < LABEL_GAP);
+    if (near(rowYs) || near(placedOhlcY[r.side])) return false;
+    placedOhlcY[r.side].push(yy);
+    return true;
+  });
   const spotRectW = dec > 0 ? 102 : 86;
   const spotCenterX = (AX + 6) + spotRectW / 2;
   // Opening gap: the space between the prior close and today's open. As price retraces into it
@@ -2070,17 +2083,19 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
       {ohlcRows.map((r, i) => (
         <g key={`ohlc-${i}`} style={{ opacity: 0.5 }}>
           <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
-          <text
-            x={r.side === "left" ? 4 : PR + 5}
-            y={y(r.v) + 3.5}
-            textAnchor="start"
-            fontSize="9"
-            fill="#94A3B8"
-            fontFamily="JetBrains Mono, monospace"
-            fontWeight="700"
-          >
-            {r.label}
-          </text>
+          {ohlcShowLabel[i] && (
+            <text
+              x={r.side === "left" ? 4 : PR + 5}
+              y={y(r.v) + 3.5}
+              textAnchor="start"
+              fontSize="9"
+              fill="#94A3B8"
+              fontFamily="JetBrains Mono, monospace"
+              fontWeight="700"
+            >
+              {r.label}
+            </text>
+          )}
         </g>
       ))}
       <line x1={AX} y1="8" x2={AX} y2={H - 8} stroke="#1E293B" strokeWidth="1" />
@@ -3723,6 +3738,12 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
   // futures' own price — not the focus instrument's spot. Falls back to spot if unavailable.
   const futPrice = live.priceOf(live.futSym) ?? live.spot;
   const futContracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
+  // Micro contracts are 1/10 the notional of the full-size future (e.g. MES ×5 vs ES ×50),
+  // so a book too small for a whole ES contract can still hedge cleanly with micros.
+  const microMult = live.futMult / 10;
+  const microSym = `M${live.futSym}`;
+  const microContracts = futPrice > 0 ? notional / (futPrice * microMult) : 0;
+  const fullContractNotional = futPrice * live.futMult;
   const putStrike = roundStrike(S * (1 - numOr(b.putOtmPct, 5) / 100));
   const putBs = blackScholes({ S, K: putStrike, T, r, q, sigma, type: "put" });
   const putContracts = S > 0 && putBs.delta !== 0 ? notional / (S * 100 * Math.abs(putBs.delta)) : 0;
@@ -3784,6 +3805,11 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
                 <ToolStat k="SPY-share equiv" v={fmtNum(spyShares, 0)} sub={spyPrice > 0 ? `shares @ ${fmtNum(spyPrice, 2)}` : "SPY not synced"} />
               </div>
               <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>Shorting {live.futSym} neutralizes directional delta both ways — it caps downside but also gives up the upside on the hedged exposure. No premium outlay, but margin and roll risk apply.</div>
+              {Math.round(futContracts) === 0 && notional > 0 && futPrice > 0 && (
+                <div className="hedge-warn">
+                  <b>Book too small for one full {live.futSym} contract</b> (≈{fmtUsd(fullContractNotional, 0)} notional each), so a whole-size futures hedge rounds to 0 and leaves you effectively unhedged. Use micro futures instead — <b style={{ color: "var(--text)" }}>~{fmtNum(microContracts, 1)} {microSym}</b> (×{microMult}), round to {fmtNum(Math.round(microContracts), 0)} — or hedge with {live.cfg.symbol} puts or the {fmtNum(spyShares, 0)}-share SPY equivalent above.
+                </div>
+              )}
             </>
           ) : (
             <>
