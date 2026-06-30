@@ -884,7 +884,11 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .split-pane-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;letter-spacing:.03em;transition:color .15s,background .15s,border-color .15s}
 .split-pane-tab:hover{color:var(--text);background:var(--panel3)}
 .split-pane-tab.on{color:var(--brass);background:var(--brass-dim);border-color:rgba(59,130,246,.28)}
-.split-toggle.on{color:var(--brass);background:var(--panel3)}
+.split-toggle{gap:7px}
+.split-toggle .split-label{font-size:12px;font-weight:600}
+.split-toggle.on{color:var(--brass);background:var(--panel3);border-color:var(--line2)}
+/* keep the label off the narrowest desktop widths where the header is tight */
+@media(max-width:1200px){.split-toggle .split-label{display:none}}
 /* each pane is a size container, so its grids collapse to its own width (not the window's) */
 @container (max-width:1080px){
   .split-pane .g-data,.split-pane .g-market-read,.split-pane .g-2,.split-pane .g-thesis-top,.split-pane .g-thesis,.split-pane .calendar-grid{grid-template-columns:1fr}
@@ -5170,7 +5174,7 @@ export default function Overwatch() {
           </button>
           {splitEligible && (
             <button className={`btn btn-ghost split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
-              <Columns2 size={16} />
+              <Columns2 size={16} /> <span className="split-label">{splitOn ? "Exit split" : "Split"}</span>
             </button>
           )}
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
