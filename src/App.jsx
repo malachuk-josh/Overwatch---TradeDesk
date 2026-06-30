@@ -5488,9 +5488,12 @@ export default function Overwatch() {
           {market.at && (() => {
             const ageMin = Math.floor((Date.now() - market.at.ts) / 60000);
             const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+            // Show the effective quote time (~15 min behind the sync) since the free feed is delayed.
+            const quoteLabel = new Date(market.at.ts - 15 * 60 * 1000)
+              .toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
             return (
-              <span className={`bd-asof ${tier}`} title={`Quotes come from a free public feed on a ~15-minute delay — they are not real-time. Desk last synced ${ageMin}m ago (${market.at.label} ET).`}>
-                {tier === "stale" ? "STALE · " : ""}~15m delayed · synced {market.at.label}{ageMin >= 2 ? ` · ${ageMin}m` : ""}
+              <span className={`bd-asof ${tier}`} title={`Quotes are on a ~15-minute delay from a free public feed — not real-time. Displayed price time ≈ ${quoteLabel} ET; desk last synced ${ageMin}m ago.`}>
+                {tier === "stale" ? "STALE · " : ""}prices as of {quoteLabel} ET
               </span>
             );
           })()}
