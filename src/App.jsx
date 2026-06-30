@@ -1225,7 +1225,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
 .struct-hero .struct-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass);margin-top:6px}
-.cal-reader-body{flex:1;min-height:0;background:var(--panel)}
+.cal-reader-body{flex:1;min-height:0;background:#0b0f14}
 .cal-reader-body .tradingview-widget-container{height:100%}
 .calendar-heroes{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:stretch}
 .recent-row{display:flex;align-items:center;gap:11px;padding:8px 4px;border-bottom:1px dashed var(--line);opacity:.85}
