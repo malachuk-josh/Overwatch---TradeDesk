@@ -2303,6 +2303,14 @@ const FactorRadarChart = ({ weights, onChange }) => {
             </g>
           );
         })}
+        {/* center hub — click to reset every pillar back to an even split */}
+        {interactive && (
+          <g style={{ cursor: "pointer" }} onPointerDown={(e) => { e.preventDefault(); onChange({ ...DEFAULT_WEIGHTS }); }}>
+            <title>Reset to an even split</title>
+            <circle cx={cx} cy={cy} r="14" fill="transparent" />
+            <circle cx={cx} cy={cy} r="3.5" fill="#475569" stroke="#020617" strokeWidth="1" />
+          </g>
+        )}
       </svg>
     </div>
   );
