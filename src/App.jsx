@@ -5481,8 +5481,8 @@ export default function Overwatch() {
             const ageMin = Math.floor((Date.now() - market.at.ts) / 60000);
             const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
             return (
-              <span className={`bd-asof ${tier}`} title={`Live desk prices last synced ${ageMin}m ago — the single source of truth across panels`}>
-                {tier === "stale" ? "STALE " : ""}prices {market.at.label}{ageMin >= 2 ? ` · ${ageMin}m` : ""}
+              <span className={`bd-asof ${tier}`} title={`Quotes come from a free public feed on a ~15-minute delay — they are not real-time. Desk last synced ${ageMin}m ago (${market.at.label} ET).`}>
+                {tier === "stale" ? "STALE · " : ""}~15m delayed · synced {market.at.label}{ageMin >= 2 ? ` · ${ageMin}m` : ""}
               </span>
             );
           })()}
@@ -5543,7 +5543,7 @@ export default function Overwatch() {
       )}
 
       <footer className="bd-foot">
-        OVERWATCH DAILY BIAS DESK · LIVE PUBLIC MARKET DATA + OPTIONAL AI SYNTHESIS — VERIFY LEVELS ON YOUR PLATFORM BEFORE TRADING · NOT FINANCIAL ADVICE
+        OVERWATCH DAILY BIAS DESK · DELAYED PUBLIC MARKET DATA (~15 MIN) + OPTIONAL AI SYNTHESIS — VERIFY LEVELS ON YOUR PLATFORM BEFORE TRADING · NOT FINANCIAL ADVICE
       </footer>
 
       <SettingsDrawer
