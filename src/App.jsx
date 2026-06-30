@@ -2720,8 +2720,8 @@ const TradingViewCalendarWidget = ({ lightMode }) => {
       colorTheme: lightMode ? "light" : "dark",
       isTransparent: true,
       locale: "en",
-      countryFilter: "us,eu,gb,jp,cn,ca,au,de,fr",
-      importanceFilter: "0,1",
+      countryFilter: "us",
+      importanceFilter: "1",
       width: "100%",
       height: "100%",
     });
