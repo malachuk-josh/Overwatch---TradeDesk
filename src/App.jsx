@@ -1266,6 +1266,11 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
 .cal-embed-card-body .tradingview-widget-container{height:100%}
 .tv-skeleton{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);background:var(--panel);background-image:linear-gradient(100deg,transparent 30%,rgba(148,163,184,.07) 50%,transparent 70%);background-size:200% 100%;animation:tvShimmer 1.3s ease-in-out infinite}
+.news-feed-scroll{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.news-feed-scroll::-webkit-scrollbar{width:9px}
+.news-feed-scroll::-webkit-scrollbar-track{background:transparent}
+.news-feed-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}
+.news-feed-scroll::-webkit-scrollbar-thumb:hover{background:#3a4d66}
 .academy-progress{height:5px;border-radius:5px;background:var(--line2);overflow:hidden}
 .academy-progress span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#3B82F6,#6BA6FF)}
 @keyframes tvShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -2659,7 +2664,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
             <button key={v} className={`fchip ${imp === v ? "on" : ""}`} onClick={() => setImp(v)} title={`Impact: ${lbl}`}>{lbl}</button>
           ))}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="news-feed-scroll" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 760, overflowY: "auto", paddingRight: 6 }}>
           {filtered.map((h, i) => (
             <div className="news-card" key={i} style={{ borderLeftColor: sentColor(h.sentiment) }}>
               <div className="news-top">

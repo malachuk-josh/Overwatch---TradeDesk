@@ -1159,7 +1159,7 @@ const fetchNews = async () => {
     const pool = recent.length >= 5 ? recent : enriched;
     const headlines = pool
       .sort((a, b) => (b.impact - a.impact) || (b.providerPublishTime - a.providerPublishTime))
-      .slice(0, 30)
+      .slice(0, 50)
       // Keep providerPublishTime so the UI can order chronologically; rank still reflects significance.
       .map(({ ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
