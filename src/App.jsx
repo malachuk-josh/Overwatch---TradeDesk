@@ -2685,7 +2685,12 @@ const calendarEventGroups = (data) => {
     today: topCalendarEvents(groups.today || [], 5),
     tomorrow: topCalendarEvents(groups.tomorrow || [], 5),
     upcoming: topCalendarEvents(groups.upcoming || [], 5),
-    recent: groups.recent || [],
+    // Show recent catalysts in date order (newest first) rather than the server's priority order.
+    recent: [...(groups.recent || [])].sort((a, b) => {
+      const ta = Date.parse(a?.date), tb = Date.parse(b?.date);
+      if (Number.isNaN(ta) || Number.isNaN(tb)) return 0;
+      return tb - ta;
+    }),
   };
 };
 
