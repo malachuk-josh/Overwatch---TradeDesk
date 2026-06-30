@@ -64,7 +64,7 @@ export default async function handler(req, res) {
 
     res.statusCode = 200;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400");
+    res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600, stale-while-revalidate=86400");
     res.end(makeResponsive(record.html));
   } catch (err) {
     res.statusCode = 500;
