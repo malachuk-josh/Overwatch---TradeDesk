@@ -2702,7 +2702,7 @@ const calFig = (v) => (v == null ? "—" : fmtNum(Number(v), Math.abs(Number(v))
 // Embedded TradingView economic-calendar widget. The full tradingview.com calendar page
 // can't be framed (X-Frame-Options), so we use TradingView's official embed widget, which
 // renders the same live calendar inside an iframe it injects into our container.
-const TradingViewCalendarWidget = ({ lightMode }) => {
+const TradingViewCalendarWidget = () => {
   const containerRef = useRef(null);
   useEffect(() => {
     const container = containerRef.current;
@@ -2717,7 +2717,7 @@ const TradingViewCalendarWidget = ({ lightMode }) => {
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
     script.async = true;
     script.innerHTML = JSON.stringify({
-      colorTheme: lightMode ? "light" : "dark",
+      colorTheme: "dark",
       isTransparent: true,
       locale: "en",
       countryFilter: "us",
@@ -2727,7 +2727,7 @@ const TradingViewCalendarWidget = ({ lightMode }) => {
     });
     container.appendChild(script);
     return () => { container.innerHTML = ""; };
-  }, [lightMode]);
+  }, []);
   return <div className="tradingview-widget-container" ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 };
 
@@ -2756,7 +2756,7 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   </div>
 );
 
-const CalendarTab = ({ points, onRefresh, lightMode, inSplit = false }) => {
+const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
   const { status, data, error, at } = points;
   const [tvOpen, setTvOpen] = useState(false);
 
@@ -2805,7 +2805,7 @@ const CalendarTab = ({ points, onRefresh, lightMode, inSplit = false }) => {
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => setTvOpen(false)} title="Close (Esc)"><X size={16} /></button>
       </div>
-      <div className="cal-reader-body"><TradingViewCalendarWidget lightMode={lightMode} /></div>
+      <div className="cal-reader-body"><TradingViewCalendarWidget /></div>
     </>
   );
 
@@ -5246,7 +5246,7 @@ export default function Overwatch() {
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />;
       case "calendar":
-        return <CalendarTab points={points} onRefresh={refreshPoints} lightMode={lightMode} inSplit={splitOn} />;
+        return <CalendarTab points={points} onRefresh={refreshPoints} inSplit={splitOn} />;
       case "thesis":
         return (
           <ThesisTab
