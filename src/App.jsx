@@ -2600,6 +2600,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
+  const [imp, setImp] = useState("all"); // all | high (≥5) | med (4) | low (≤3)
 
   if (status === "idle")
     return (
@@ -2621,9 +2622,11 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
 
   const heads = data?.headlines || [];
   const cats = ["all", ...Array.from(new Set(heads.map((h) => h.category).filter(Boolean)))];
+  const impactMatch = (n) => imp === "all" || (imp === "high" ? n >= 5 : imp === "med" ? n === 4 : n <= 3);
   const filtered = heads.filter((h) =>
     (cat === "all" || h.category === cat) &&
-    (tone === "all" || h.sentiment === tone)
+    (tone === "all" || h.sentiment === tone) &&
+    impactMatch(h.impact)
   ).sort((a, b) => (b.providerPublishTime || 0) - (a.providerPublishTime || 0));
 
   return (
@@ -2648,6 +2651,12 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
           <span style={{ flex: 1 }} />
           {["all", "bullish", "bearish", "neutral"].map((t) => (
             <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => setTone(t)} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
+          ))}
+        </div>
+        <div className="filter-row" style={{ marginTop: -3 }}>
+          <span style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: ".1em", alignSelf: "center", marginRight: 2 }}>IMPACT</span>
+          {[["all", "Any"], ["high", "High"], ["med", "Med"], ["low", "Low"]].map(([v, lbl]) => (
+            <button key={v} className={`fchip ${imp === v ? "on" : ""}`} onClick={() => setImp(v)} title={`Impact: ${lbl}`}>{lbl}</button>
           ))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
