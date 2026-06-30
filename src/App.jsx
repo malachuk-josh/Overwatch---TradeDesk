@@ -935,8 +935,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .nl-reader-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nl-reader-nav{display:flex;gap:4px;flex:none}
 .nl-reader-frame{flex:1;width:100%;border:none;background:#fff}
-/* in-pane reader (split view): fills the pane's column, leaves the other pane visible */
-.nl-reader-inpane{height:calc(100vh - 240px);min-height:420px;border:1px solid var(--line);border-radius:10px}
+/* in-pane reader (split view): centred in the pane's column, leaves the other pane visible */
+.nl-reader-inpane{height:calc(100vh - 240px);min-height:420px;border:1px solid var(--line);border-radius:10px;margin:0 auto}
 @media(max-width:760px){
   .nl-reader-overlay{padding:0}
   .nl-reader{width:100%;height:100%;max-height:100%;border:none;border-radius:0}
@@ -4433,7 +4433,6 @@ const CloudNewsletterList = ({ inSplit = false }) => {
           <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={15} /></button>
           <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={15} /></button>
         </div>
-        <a href={current.url || `/api/archive/${current.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" title="Open in new tab"><ExternalLink size={13} /></a>
         <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
       </div>
       <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
