@@ -41,6 +41,7 @@ import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
 import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
+import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -876,6 +877,26 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 @media(min-width:2000px){.bd-main{max-width:1800px;padding:24px 32px 34px}}
 @media(min-width:2560px){.bd-main{max-width:2200px}}
 @media(min-width:3400px){.bd-main{max-width:2600px}}
+/* ===== split view: two tabs side by side ===== */
+.bd-main-split{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;max-width:2600px}
+.split-pane{min-width:0;container-type:inline-size}
+.split-pane-bar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:13px;padding-bottom:11px;border-bottom:1px solid var(--line)}
+.split-pane-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid transparent;background:none;color:var(--muted);cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;letter-spacing:.03em;transition:color .15s,background .15s,border-color .15s}
+.split-pane-tab:hover{color:var(--text);background:var(--panel3)}
+.split-pane-tab.on{color:var(--brass);background:var(--brass-dim);border-color:rgba(59,130,246,.28)}
+.split-toggle.on{color:var(--brass);background:var(--panel3)}
+/* each pane is a size container, so its grids collapse to its own width (not the window's) */
+@container (max-width:1080px){
+  .split-pane .g-data,.split-pane .g-market-read,.split-pane .g-2,.split-pane .g-thesis-top,.split-pane .g-thesis,.split-pane .calendar-grid{grid-template-columns:1fr}
+  .split-pane .pulse-levels-desktop{display:none}
+  .split-pane .pulse-levels-mobile{display:block}
+}
+@container (max-width:560px){
+  .split-pane .hist-row{flex-wrap:wrap;gap:6px 8px}
+  .split-pane .hist-date{width:auto}
+  .split-pane .hist-title{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip}
+}
+@media(max-width:1023px){.bd-main-split{grid-template-columns:1fr}}
 .grid{display:grid;gap:14px}
 .g-pulse{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
 .g-2{grid-template-columns:1.15fr .85fr}
@@ -4618,8 +4639,8 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-char
   return <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />;
 };
 
-const ChartsTab = ({ lightMode }) => {
-  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
+const ChartsTab = ({ lightMode, compact = false }) => {
+  const isMobileView = (typeof window !== "undefined" && window.innerWidth < 768) || compact;
   const [selected, setSelected] = useState(() => {
     const valid = new Set(CHART_PRESETS.map((p) => p.symbol));
     try {
@@ -4768,6 +4789,9 @@ const IDLE = { status: "idle", data: null, error: null, at: null };
 
 export default function Overwatch() {
   const [tab, setTab] = useState("pulse");
+  // Split view: the right-pane tab id (null = single-tab mode). Restored from storage.
+  const [splitTab, setSplitTab] = useState(() => { try { return localStorage.getItem("overwatch:split") || null; } catch { return null; } });
+  const [winW, setWinW] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
   const [clock, setClock] = useState(nyClock());
   const [session, setSession] = useState(marketSession());
 
@@ -4794,6 +4818,18 @@ export default function Overwatch() {
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
 
   useEffect(() => { try { localStorage.setItem("overwatch:light", lightMode ? "1" : "0"); } catch {} }, [lightMode]);
+
+  useEffect(() => {
+    const f = () => setWinW(window.innerWidth);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  useEffect(() => { try { splitTab ? localStorage.setItem("overwatch:split", splitTab) : localStorage.removeItem("overwatch:split"); } catch {} }, [splitTab]);
+
+  // Split view is offered on desktop widths only; the right pane shows a second tab beside the main one.
+  const splitEligible = winW >= 1024;
+  const splitOn = splitEligible && !!splitTab;
+  const toggleSplit = () => setSplitTab((s) => (s ? null : (tab === "charts" ? "pulse" : "charts")));
 
   useEffect(() => {
     const up = () => setOnline(true);
@@ -5045,6 +5081,60 @@ export default function Overwatch() {
     { n: 2, label: "Build the thesis", desc: "Weight the pillars and set your stance, then generate today's directional call and game plan.", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
   ];
 
+  // Render a tab's content by id so it can be placed in either the single view or a split pane.
+  const renderTab = (id) => {
+    switch (id) {
+      case "pulse":
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
+      case "news":
+        return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />;
+      case "calendar":
+        return <CalendarTab points={points} onRefresh={refreshPoints} />;
+      case "thesis":
+        return (
+          <ThesisTab
+            instrument={instrument} setInstrument={setInstrument}
+            secondary={secondary} setSecondary={setSecondary}
+            weights={weights} setWeights={setWeights}
+            lean={lean} setLean={setLean}
+            risk={risk} setRisk={setRisk}
+            notes={notes} setNotes={setNotes}
+            thesis={thesis} onGenerate={generateThesis}
+            history={thesisHistory} viewing={viewing} setViewing={setViewing}
+            onDeleteHist={deleteArchiveEntry} anyData={anyData}
+            deskTools={deskTools} setDeskTools={setDeskTools}
+            market={market.data} points={points.data}
+          />
+        );
+      case "charts":
+        return <ChartsTab lightMode={lightMode} compact={splitOn} />;
+      case "archives":
+        return (
+          <ArchiveTab
+            archiveHistory={archiveHistory}
+            viewing={viewing}
+            setViewing={setViewing}
+            onDeleteEntry={deleteArchiveEntry}
+            onGoThesis={() => setTab("thesis")}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Compact tab picker that sits atop each split pane.
+  const paneTabs = (activeId, onPick) => (
+    <div className="split-pane-bar">
+      {TABS.map((t) => (
+        <button key={t.id} className={`split-pane-tab${activeId === t.id ? " on" : ""}`} onClick={() => onPick(t.id)} title={t.label}>
+          <t.icon size={14} />
+          <span>{t.short}</span>
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className={`bd-root${lightMode ? " light" : ""}`}>
       <style>{CSS}</style>
@@ -5078,6 +5168,11 @@ export default function Overwatch() {
           <button className="btn btn-brass" onClick={syncAll} disabled={anyLoading}>
             {anyLoading ? <><RefreshCw size={14} className="spin" /> <span className="sync-label">Syncing…</span></> : <><Zap size={14} /> <span className="sync-label">Sync live data</span></>}
           </button>
+          {splitEligible && (
+            <button className={`btn btn-ghost split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
+              <Columns2 size={16} />
+            </button>
+          )}
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
@@ -5119,38 +5214,20 @@ export default function Overwatch() {
         </div>
       </div>
 
-      <main className="bd-main">
-        {tab === "pulse" && (
-          <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />
-        )}
-        {tab === "news" && <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />}
-        {tab === "calendar" && <CalendarTab points={points} onRefresh={refreshPoints} />}
-        {tab === "thesis" && (
-          <ThesisTab
-            instrument={instrument} setInstrument={setInstrument}
-            secondary={secondary} setSecondary={setSecondary}
-            weights={weights} setWeights={setWeights}
-            lean={lean} setLean={setLean}
-            risk={risk} setRisk={setRisk}
-            notes={notes} setNotes={setNotes}
-            thesis={thesis} onGenerate={generateThesis}
-            history={thesisHistory} viewing={viewing} setViewing={setViewing}
-            onDeleteHist={deleteArchiveEntry} anyData={anyData}
-            deskTools={deskTools} setDeskTools={setDeskTools}
-            market={market.data} points={points.data}
-          />
-        )}
-        {tab === "charts" && <ChartsTab lightMode={lightMode} />}
-        {tab === "archives" && (
-          <ArchiveTab
-            archiveHistory={archiveHistory}
-            viewing={viewing}
-            setViewing={setViewing}
-            onDeleteEntry={deleteArchiveEntry}
-            onGoThesis={() => setTab("thesis")}
-          />
-        )}
-      </main>
+      {splitOn ? (
+        <main className="bd-main bd-main-split">
+          <section className="split-pane">
+            {paneTabs(tab, setTab)}
+            <div className="split-pane-body">{renderTab(tab)}</div>
+          </section>
+          <section className="split-pane">
+            {paneTabs(splitTab, setSplitTab)}
+            <div className="split-pane-body">{renderTab(splitTab)}</div>
+          </section>
+        </main>
+      ) : (
+        <main className="bd-main">{renderTab(tab)}</main>
+      )}
 
       <footer className="bd-foot">
         OVERWATCH DAILY BIAS DESK · LIVE PUBLIC MARKET DATA + OPTIONAL AI SYNTHESIS — VERIFY LEVELS ON YOUR PLATFORM BEFORE TRADING · NOT FINANCIAL ADVICE
