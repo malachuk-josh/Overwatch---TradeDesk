@@ -53,10 +53,16 @@ export default async function handler(req, res) {
   const score = Date.parse(body.sentAt);
   if (Number.isNaN(score)) return json(res, 400, { error: "Invalid sentAt date" });
 
+  // Newsletters auto-delete 30 days after they're sent: the stored blobs carry a 30-day TTL so
+  // they expire on their own, and we prune the index of anything past the window on every ingest.
+  const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
+  const cutoffMs = Date.now() - THIRTY_DAYS_S * 1000;
+
   await redisPipeline([
-    ["SET", `newsletter:${id}`, JSON.stringify(record), "EX", "31536000"],
-    ["SET", `newsletter:meta:${id}`, JSON.stringify(metaRecord), "EX", "31536000"],
+    ["SET", `newsletter:${id}`, JSON.stringify(record), "EX", String(THIRTY_DAYS_S)],
+    ["SET", `newsletter:meta:${id}`, JSON.stringify(metaRecord), "EX", String(THIRTY_DAYS_S)],
     ["ZADD", "newsletters:index", score, id],
+    ["ZREMRANGEBYSCORE", "newsletters:index", "-inf", `(${cutoffMs}`],
   ]);
 
   return json(res, 200, { ok: true, id, url: `${BASE_URL}/archive/${id}` });

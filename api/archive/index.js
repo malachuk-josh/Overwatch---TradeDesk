@@ -35,7 +35,10 @@ export default async function handler(req, res) {
   const { type, limit: rawLimit } = req.query || {};
   const limit = Math.min(Math.max(Number(rawLimit) || 50, 1), 200);
 
-  const ids = await redisCmd(["ZRANGE", "newsletters:index", "+inf", "-inf", "BYSCORE", "REV", "LIMIT", "0", String(limit)]);
+  // Newsletters auto-delete after 30 days — only surface letters inside that window, so anything
+  // older drops out of the archive immediately even before its stored blob's TTL lapses.
+  const cutoffMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const ids = await redisCmd(["ZRANGE", "newsletters:index", "+inf", String(cutoffMs), "BYSCORE", "REV", "LIMIT", "0", String(limit)]);
   if (!ids || !ids.length) return json(res, 200, { data: [] });
 
   const runPipeline = async (commands) => {
@@ -68,7 +71,7 @@ export default async function handler(req, res) {
       try {
         const { html, ...meta } = JSON.parse(r.result);
         byId[missing[i]] = meta;
-        backfill.push(["SET", `newsletter:meta:${missing[i]}`, JSON.stringify(meta), "EX", "31536000"]);
+        backfill.push(["SET", `newsletter:meta:${missing[i]}`, JSON.stringify(meta), "EX", String(30 * 24 * 60 * 60)]);
       } catch {}
     });
     if (backfill.length) { try { await runPipeline(backfill); } catch {} }
