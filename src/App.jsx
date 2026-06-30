@@ -2564,8 +2564,13 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
         )}
       </div>
       <div className="grid g-market-read">
-        <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
-          <SectorHeatmap sectors={data?.sectors} />
+        <Card icon={Newspaper} title="Wire sentiment" sub="Net tone across pulled headlines">
+          <SentimentDonut headlines={news?.headlines || []} />
+          {news?.mood && (
+            <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px dashed var(--line)", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+              <span className="chip b-brass" style={{ marginRight: 8 }}>MOOD</span>{news.mood}
+            </div>
+          )}
         </Card>
         <Card icon={Shield} title="Volatility regime" sub="VIX zone + structure">
           <VixGauge value={vix?.price ?? null} structure={vixHint} />
@@ -2574,6 +2579,9 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
+      <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
+        <SectorHeatmap sectors={data?.sectors} />
+      </Card>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn" onClick={onGoThesis}>Build today's thesis <ArrowRight size={14} /></button>
@@ -2685,15 +2693,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 86 }}>
-        <Card icon={Sparkles} title="Wire sentiment" sub="Net tone across pulled headlines" tools={<><Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading"} /></>}>
-          <SentimentDonut headlines={heads} />
-          {data?.mood && (
-            <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px dashed var(--line)", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-              <span className="chip b-brass" style={{ marginRight: 8 }}>MOOD</span>{data.mood}
-            </div>
-          )}
-        </Card>
-        <Card icon={Crosshair} title="Catalyst stack" sub="Bar = peak impact · number = headline count · color = net tone">
+        <Card icon={Crosshair} title="Catalyst stack" sub="Bar = peak impact · number = headline count · color = net tone" tools={<><Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading"} /></>}>
           {catalysts.length ? catalysts.map((c) => (
             <div className="cat-row" key={c.category}>
               <span className={`chip ${CAT_TONE[c.category] || ""}`} style={{ width: 92, textAlign: "center" }}>{c.category}</span>
