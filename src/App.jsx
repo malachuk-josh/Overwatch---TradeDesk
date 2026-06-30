@@ -2665,11 +2665,6 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
             <div style={{ color: C.muted, fontSize: 12 }}>No high-priority watch items in this sync.</div>
           )}
         </Card>
-        <Card icon={FileText} title="How to read this" sub="Desk convention">
-          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.7 }}>
-            Impact bars score potential index movement — 4–5 bars can move SPX, NDX, or DJI more than half a percent. Tags show the most relevant instruments; hit <b style={{ color: "var(--text)" }}>note</b> to pin a headline into thesis inputs.
-          </div>
-        </Card>
       </div>
     </div>
   );
