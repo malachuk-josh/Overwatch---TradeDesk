@@ -4641,7 +4641,7 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-char
 };
 
 const ChartsTab = ({ lightMode, compact = false }) => {
-  const isMobileView = (typeof window !== "undefined" && window.innerWidth < 768) || compact;
+  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
   const [selected, setSelected] = useState(() => {
     const valid = new Set(CHART_PRESETS.map((p) => p.symbol));
     try {
@@ -4682,8 +4682,9 @@ const ChartsTab = ({ lightMode, compact = false }) => {
 
   const symbolLabel = (sym) => CHART_PRESETS.find((p) => p.symbol === sym)?.label || sym.split(":").pop();
 
-  const cols = layout === "1" ? 1 : layout === "2" ? 2 : (selected.length <= 2 ? 1 : 2);
-  const chartH = cols === 1 ? 520 : 420;
+  // In a split pane, stack charts in a single column so several stay readable at half width.
+  const cols = compact ? 1 : layout === "1" ? 1 : layout === "2" ? 2 : (selected.length <= 2 ? 1 : 2);
+  const chartH = compact ? 360 : cols === 1 ? 520 : 420;
 
   const fsOverlay = fsSymbol ? (
     <div className="chart-fs-overlay">
@@ -4760,11 +4761,13 @@ const ChartsTab = ({ lightMode, compact = false }) => {
                 <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
               ))}
             </div>
-            <div className="seg" title="Chart columns">
-              {[["auto", "Auto"], ["1", "1"], ["2", "2"]].map(([m, lbl]) => (
-                <button key={m} className={layout === m ? "on" : ""} onClick={() => setLayout(m)}>{lbl}</button>
-              ))}
-            </div>
+            {!compact && (
+              <div className="seg" title="Chart columns">
+                {[["auto", "Auto"], ["1", "1"], ["2", "2"]].map(([m, lbl]) => (
+                  <button key={m} className={layout === m ? "on" : ""} onClick={() => setLayout(m)}>{lbl}</button>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
             {selected.map((sym) => (
@@ -5181,7 +5184,7 @@ export default function Overwatch() {
         ))}
         {splitEligible && (
           <button className={`bd-tab split-toggle${splitOn ? " on" : ""}`} onClick={toggleSplit} title={splitOn ? "Exit split view" : "Split view — show two tabs side by side"}>
-            <Columns2 size={15} /> <span className="split-label">{splitOn ? "Exit split" : "Split"}</span>
+            <Columns2 size={15} /> <span className="split-label">{splitOn ? "Exit split view" : "Split view"}</span>
           </button>
         )}
       </nav>
