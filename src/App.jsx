@@ -2600,9 +2600,6 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
-  const [expanded, setExpanded] = useState(false);
-  // Mobile shows a tighter top-3 before the "show more" dropdown; desktop stays at 5.
-  const PAGE = (typeof window !== "undefined" && window.innerWidth < 768) ? 3 : 5;
 
   if (status === "idle")
     return (
@@ -2628,33 +2625,33 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
     (cat === "all" || h.category === cat) &&
     (tone === "all" || h.sentiment === tone)
   ).sort((a, b) => (b.providerPublishTime || 0) - (a.providerPublishTime || 0));
-  const shown = expanded ? filtered : filtered.slice(0, PAGE);
-  const hiddenCount = filtered.length - shown.length;
-  const catalysts = data?.catalysts || [];
-  const maxCatImpact = Math.max(1, ...catalysts.map((c) => c.maxImpact || 0));
 
   return (
-    <div className="grid g-2" style={{ alignItems: "start" }}>
+    <div>
       <div>
         <div className="intel-brief">
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <span className="chip b-brass">WIRE BRIEF</span>
             <span className="mono" style={{ color: C.faint || C.muted, fontSize: 10 }}>{data?.lastUpdated || at?.label || "latest"}</span>
-            <span className="mono" style={{ color: C.faint || C.muted, fontSize: 10, marginLeft: "auto" }}>{data?.sourceCount ? `${data.sourceCount} raw items screened` : `${heads.length} headlines`}</span>
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="mono" style={{ color: C.faint || C.muted, fontSize: 10 }}>{data?.sourceCount ? `${data.sourceCount} raw items screened` : `${heads.length} headlines`}</span>
+              <Freshness at={at} />
+              <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
+            </span>
           </div>
           <p>{data?.brief || data?.mood || "No desk brief in the last sync."}</p>
         </div>
         <div className="filter-row">
           {cats.map((c) => (
-            <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => { setCat(c); setExpanded(false); }}>{c}</button>
+            <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>
           ))}
           <span style={{ flex: 1 }} />
           {["all", "bullish", "bearish", "neutral"].map((t) => (
-            <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => { setTone(t); setExpanded(false); }} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
+            <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => setTone(t)} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
           ))}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {shown.map((h, i) => (
+          {filtered.map((h, i) => (
             <div className="news-card" key={i} style={{ borderLeftColor: sentColor(h.sentiment) }}>
               <div className="news-top">
                 {h.rank && <span className="chip b-info">#{h.rank}</span>}
@@ -2678,41 +2675,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
             </div>
           ))}
           {!filtered.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
-          {filtered.length > PAGE && (
-            <button
-              className="btn btn-ghost"
-              style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6 }}
-              onClick={() => setExpanded((e) => !e)}
-            >
-              {expanded
-                ? <><ChevronUp size={14} /> Show less</>
-                : <><ChevronDown size={14} /> Show {hiddenCount} more article{hiddenCount !== 1 ? "s" : ""}</>
-              }
-            </button>
-          )}
         </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 86 }}>
-        <Card icon={Crosshair} title="Catalyst stack" sub="Bar = peak impact · number = headline count · color = net tone" tools={<><Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading"} /></>}>
-          {catalysts.length ? catalysts.map((c) => (
-            <div className="cat-row" key={c.category}>
-              <span className={`chip ${CAT_TONE[c.category] || ""}`} style={{ width: 92, textAlign: "center" }}>{c.category}</span>
-              <div className="cat-meter" title={`Impact ${c.maxImpact}/5 · ${c.count} headline${c.count === 1 ? "" : "s"}`}>
-                <div className="cat-fill" style={{ width: `${clamp(((c.maxImpact || 0) / maxCatImpact) * 100, 8, 100)}%`, background: sentColor(c.sentiment) }} />
-              </div>
-              <span className="mono" style={{ fontSize: 10, color: sentColor(c.sentiment), minWidth: 58, textAlign: "right" }}>{c.count} · {c.sentiment}</span>
-            </div>
-          )) : <div style={{ color: C.muted, fontSize: 12 }}>No catalyst stack in last sync.</div>}
-        </Card>
-        <Card icon={AlertTriangle} title="Desk watchlist" sub="What can move the next candle">
-          {(data?.watchlist || []).length ? (
-            <div className="watch-list">
-              {(data.watchlist || []).slice(0, 5).map((item, i) => <div className="watch-item" key={i}>{item}</div>)}
-            </div>
-          ) : (
-            <div style={{ color: C.muted, fontSize: 12 }}>No high-priority watch items in this sync.</div>
-          )}
-        </Card>
       </div>
     </div>
   );
