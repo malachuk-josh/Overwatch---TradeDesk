@@ -1245,6 +1245,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .calendar-summary-tile span{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .calendar-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start}
 .cal-embed-card{grid-column:span 2;display:flex;flex-direction:column}
+.cal-right-col{display:flex;flex-direction:column;gap:14px;min-width:0}
 .cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
 .cal-embed-card-body .tradingview-widget-container{height:100%}
 @media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.cal-embed-card{grid-column:auto}.calendar-summary{min-width:0;width:100%}}
@@ -2873,9 +2874,16 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
         >
           <div className="cal-embed-card-body"><TradingViewCalendarWidget /></div>
         </Card>
-        <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
-          <CalendarGroup label="Major Upcoming" items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
-        </Card>
+        <div className="cal-right-col">
+          <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
+            <CalendarGroup label="Major Upcoming" items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
+          </Card>
+          <Card icon={CalendarDays} title="On deck" sub="Today & tomorrow · U.S. releases">
+            <CalendarGroup label={`Today · ${calendarDateLabel(data?.calendarRange?.today) || "—"}`} items={groups.today || []} empty="No U.S. releases today." />
+            <div style={{ height: 10 }} />
+            <CalendarGroup label={`Tomorrow · ${calendarDateLabel(data?.calendarRange?.tomorrow) || "—"}`} items={groups.tomorrow || []} empty="No U.S. releases tomorrow." />
+          </Card>
+        </div>
       </div>
 
       {!!(groups.recent || []).length && (
