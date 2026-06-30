@@ -2571,7 +2571,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const filtered = heads.filter((h) =>
     (cat === "all" || h.category === cat) &&
     (tone === "all" || h.sentiment === tone)
-  );
+  ).sort((a, b) => (b.providerPublishTime || 0) - (a.providerPublishTime || 0));
   const shown = expanded ? filtered : filtered.slice(0, PAGE);
   const hiddenCount = filtered.length - shown.length;
   const catalysts = data?.catalysts || [];
