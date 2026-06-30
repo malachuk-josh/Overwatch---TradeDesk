@@ -4447,12 +4447,15 @@ const fmtVideoDuration = (seconds) => {
 
 const AcademyCard = () => {
   const [active, setActive] = useState(null);
-  // Show only published lessons: drop the "On the Desk" capstone section, hide coming-soon
-  // (no embedId) videos, and drop any module left with nothing to play.
-  const modules = ACADEMY_MODULES
-    .filter((mod) => mod.id !== "on-the-desk")
-    .map((mod) => ({ ...mod, videos: (mod.videos || []).filter((v) => v.embedId) }))
-    .filter((mod) => mod.videos.length > 0);
+  // Only the "On the Desk" capstone has its coming-soon (unpublished) videos stripped; every other
+  // section keeps its roadmap tiles.
+  const modules = ACADEMY_MODULES.map((mod) =>
+    mod.id === "on-the-desk" ? { ...mod, videos: (mod.videos || []).filter((v) => v.embedId) } : mod
+  );
+  const allVideos = modules.flatMap((mod) => mod.videos || []);
+  const readyCount = allVideos.filter((v) => v.embedId).length;
+  const totalCount = allVideos.length || 1;
+  const pctReady = Math.round((readyCount / totalCount) * 100);
 
   useEffect(() => {
     if (!active) return;
@@ -4466,10 +4469,14 @@ const AcademyCard = () => {
       icon={GraduationCap}
       title="Academy"
       sub="Educational trading videos — produced in-house"
+      tools={<span className="chip b-brass" style={{ fontSize: 10 }} title="Lessons published so far">{readyCount}/{totalCount} live</span>}
     >
-      {!modules.length && (
-        <div style={{ color: C.muted, fontSize: 12.5 }}>No lessons published yet — check back soon.</div>
-      )}
+      <div style={{ marginBottom: 14 }}>
+        <div className="academy-progress"><span style={{ width: `${pctReady}%` }} /></div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
+          {readyCount} of {totalCount} lessons published — the curriculum below fills in as new videos drop.
+        </div>
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {modules.map((mod) => (
           <div key={mod.id}>
