@@ -925,6 +925,20 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .academy-modal{position:fixed;inset:0;z-index:300;background:rgba(2,6,23,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px}
 .academy-modal-inner{width:min(900px,100%);max-height:90vh;overflow:auto;background:var(--glass-strong);-webkit-backdrop-filter:blur(28px) saturate(140%);backdrop-filter:blur(28px) saturate(140%);border:1px solid var(--glass-border);border-radius:16px;box-shadow:0 24px 60px rgba(2,6,23,.6)}
 .academy-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid var(--glass-border)}
+/* newsletter reader: pops the letter into a large modal (desktop) / full screen (mobile) */
+.nl-reader-overlay{position:fixed;inset:0;z-index:300;background:rgba(2,6,23,.74);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:24px}
+.nl-reader{display:flex;flex-direction:column;width:min(980px,100%);height:min(94vh,100%);background:var(--panel);border:1px solid var(--glass-border);border-radius:14px;overflow:hidden;box-shadow:0 24px 64px rgba(2,6,23,.62)}
+.nl-reader-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--panel2);border-bottom:1px solid var(--line);flex:none}
+.nl-reader-title{display:flex;flex-direction:column;min-width:0;margin-right:auto}
+.nl-reader-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nl-reader-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nl-reader-nav{display:flex;gap:4px;flex:none}
+.nl-reader-frame{flex:1;width:100%;border:none;background:#fff}
+@media(max-width:760px){
+  .nl-reader-overlay{padding:0}
+  .nl-reader{width:100%;height:100%;max-height:100%;border:none;border-radius:0}
+  .nl-reader-head{padding-top:calc(11px + env(safe-area-inset-top,0px))}
+}
 .academy-player{aspect-ratio:16/9;background:#000}
 .academy-player iframe{width:100%;height:100%;border:none;display:block}
 @media(max-width:760px){.academy-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}}
@@ -4371,6 +4385,22 @@ const CloudNewsletterList = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Reader overlay: Esc closes, ← / → move between letters; lock background scroll while open.
+  useEffect(() => {
+    if (!previewId) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") { setPreviewId(null); return; }
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const i = items.findIndex((x) => x.id === previewId);
+        const n = items[i + (e.key === "ArrowRight" ? 1 : -1)];
+        if (n) setPreviewId(n.id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [previewId, items]);
+
   if (loading) return <div style={{ color: C.muted, fontSize: 12.5, padding: "8px 0" }}>Loading cloud newsletters…</div>;
   if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
 
@@ -4381,6 +4411,11 @@ const CloudNewsletterList = () => {
     [item.type, item.bias, item.instrument, item.title, rowDate(item.sentAt)].filter(Boolean).join(" ").toLowerCase().includes(query));
   const effectiveExpanded = expanded || !!query;
   const shown = effectiveExpanded ? filtered : filtered.slice(0, 3);
+
+  // Reader navigation runs over the full archive (newest first).
+  const current = previewId ? items.find((i) => i.id === previewId) : null;
+  const idx = current ? items.findIndex((i) => i.id === previewId) : -1;
+  const go = (delta) => { const n = items[idx + delta]; if (n) setPreviewId(n.id); };
 
   return (
     <>
@@ -4412,13 +4447,24 @@ const CloudNewsletterList = () => {
           {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - 3} more</>}
         </button>
       )}
-      {previewId && (
-        <div style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
-          <iframe
-            src={`/api/archive/${previewId}`}
-            title="Newsletter preview"
-            style={{ width: "100%", height: 600, border: "none" }}
-          />
+      {current && (
+        <div className="nl-reader-overlay" onClick={() => setPreviewId(null)}>
+          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>
+            <div className="nl-reader-head">
+              <Mail size={15} style={{ opacity: 0.6, flex: "none" }} />
+              <div className="nl-reader-title">
+                <span className="nl-reader-name">{current.title || "Newsletter"}</span>
+                <span className="nl-reader-date">{rowDate(current.sentAt)}{current.instrument ? ` · ${current.instrument}` : ""}</span>
+              </div>
+              <div className="nl-reader-nav">
+                <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={15} /></button>
+                <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={15} /></button>
+              </div>
+              <a href={current.url || `/api/archive/${current.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" title="Open in new tab"><ExternalLink size={13} /></a>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
+            </div>
+            <iframe key={current.id} src={`/api/archive/${current.id}`} title="Newsletter" className="nl-reader-frame" />
+          </div>
         </div>
       )}
     </>
