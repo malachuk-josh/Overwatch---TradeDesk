@@ -1225,11 +1225,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .struct-hero h3{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.3;margin-bottom:4px}
 .struct-hero p{font-size:12px;line-height:1.55;color:var(--muted)}
 .struct-hero .struct-date{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brass);margin-top:6px}
-.tv-cal-embed{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden;display:flex;flex-direction:column}
-.tv-cal-embed-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 8px 14px;border-bottom:1px solid var(--line)}
-.tv-cal-embed-title{display:inline-flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}
-.tv-cal-embed .tradingview-widget-container{height:560px}
-@media(max-width:680px){.tv-cal-embed .tradingview-widget-container{height:420px}}
+.cal-reader-body{flex:1;min-height:0;background:var(--panel)}
+.cal-reader-body .tradingview-widget-container{height:100%}
 .calendar-heroes{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:stretch}
 .recent-row{display:flex;align-items:center;gap:11px;padding:8px 4px;border-bottom:1px dashed var(--line);opacity:.85}
 .recent-row:last-child{border-bottom:none}
@@ -2759,9 +2756,18 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   </div>
 );
 
-const CalendarTab = ({ points, onRefresh, lightMode }) => {
+const CalendarTab = ({ points, onRefresh, lightMode, inSplit = false }) => {
   const { status, data, error, at } = points;
   const [tvOpen, setTvOpen] = useState(false);
+
+  // Calendar reader: Esc closes; lock background scroll for the full-screen overlay (not in-pane).
+  useEffect(() => {
+    if (!tvOpen) return;
+    const onKey = (e) => { if (e.key === "Escape") setTvOpen(false); };
+    window.addEventListener("keydown", onKey);
+    if (!inSplit) document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [tvOpen, inSplit]);
   if (status === "idle")
     return (
       <EmptyState
@@ -2788,6 +2794,26 @@ const CalendarTab = ({ points, onRefresh, lightMode }) => {
   );
   const nextStruct = data?.nextStructural || null;
 
+  // Pop-out calendar reader: full-screen on mobile, large modal on desktop, in-pane in split view.
+  const calReader = (
+    <>
+      <div className="nl-reader-head">
+        <CalendarDays size={15} style={{ opacity: 0.6, flex: "none" }} />
+        <div className="nl-reader-title">
+          <span className="nl-reader-name">TradingView Economic Calendar</span>
+          <span className="nl-reader-date">Live global macro calendar</span>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setTvOpen(false)} title="Close (Esc)"><X size={16} /></button>
+      </div>
+      <div className="cal-reader-body"><TradingViewCalendarWidget lightMode={lightMode} /></div>
+    </>
+  );
+
+  // In split view, take over just this pane (inline) so the other pane stays visible.
+  if (inSplit && tvOpen) {
+    return <div className="nl-reader nl-reader-inpane">{calReader}</div>;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
@@ -2804,16 +2830,6 @@ const CalendarTab = ({ points, onRefresh, lightMode }) => {
         <Freshness at={at} />
         <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
-
-      {tvOpen && (
-        <div className="tv-cal-embed">
-          <div className="tv-cal-embed-head">
-            <span className="tv-cal-embed-title"><CalendarDays size={13} /> TradingView Economic Calendar</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setTvOpen(false)} title="Close"><X size={15} /></button>
-          </div>
-          <TradingViewCalendarWidget lightMode={lightMode} />
-        </div>
-      )}
 
       <div className="calendar-heroes">
       {nextStruct && (
@@ -2892,6 +2908,13 @@ const CalendarTab = ({ points, onRefresh, lightMode }) => {
         <div style={{ color: C.muted, fontSize: 12.5, textAlign: "center" }}>
           No calendar events came back in the latest sync. The data service may be quiet or temporarily unavailable.
         </div>
+      )}
+
+      {tvOpen && createPortal(
+        <div className="nl-reader-overlay" onClick={() => setTvOpen(false)}>
+          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{calReader}</div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -5223,7 +5246,7 @@ export default function Overwatch() {
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />;
       case "calendar":
-        return <CalendarTab points={points} onRefresh={refreshPoints} lightMode={lightMode} />;
+        return <CalendarTab points={points} onRefresh={refreshPoints} lightMode={lightMode} inSplit={splitOn} />;
       case "thesis":
         return (
           <ThesisTab
