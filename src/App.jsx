@@ -23,7 +23,6 @@ import TrendingDown from "lucide-react/dist/esm/icons/trending-down.mjs";
 import AlertTriangle from "lucide-react/dist/esm/icons/triangle-alert.mjs";
 import Shield from "lucide-react/dist/esm/icons/shield.mjs";
 import History from "lucide-react/dist/esm/icons/history.mjs";
-import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import FileText from "lucide-react/dist/esm/icons/file-text.mjs";
 import Sparkles from "lucide-react/dist/esm/icons/sparkles.mjs";
 import ArrowRight from "lucide-react/dist/esm/icons/arrow-right.mjs";
@@ -5078,11 +5077,6 @@ export default function Overwatch() {
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
 
-  const steps = [
-    { n: 1, label: "Sync live data", desc: "Pull live prices, internals, news and the calendar so the desk has fresh data to read.", done: anyData, now: !anyData, go: () => setTab("pulse") },
-    { n: 2, label: "Build the thesis", desc: "Weight the pillars and set your stance, then generate today's directional call and game plan.", done: !!thesis.data, now: anyData && !thesis.data, go: () => setTab("thesis") },
-  ];
-
   // Render a tab's content by id so it can be placed in either the single view or a split pane.
   const renderTab = (id) => {
     switch (id) {
@@ -5176,18 +5170,6 @@ export default function Overwatch() {
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
         </div>
       </header>
-
-      <div className="bd-flow">
-        {steps.map((s, i) => (
-          <React.Fragment key={s.n}>
-            <div className={`flow-step ${s.done ? "done" : ""} ${s.now ? "now" : ""}`} onClick={s.go} title={s.desc}>
-              <span className="flow-num">{s.done ? "✓" : s.n}</span>
-              <span className="flow-label">{s.label}</span>
-            </div>
-            {i < steps.length - 1 && <ChevronRight size={13} className="flow-arrow" />}
-          </React.Fragment>
-        ))}
-      </div>
 
       <nav className="bd-tabs">
         {TABS.map((t) => (
