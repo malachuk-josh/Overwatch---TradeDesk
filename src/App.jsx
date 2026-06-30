@@ -788,6 +788,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .btn:hover{border-color:#3a4d66;background:#1B2533;transform:translateY(-1px)}
 .btn:active{transform:translateY(0)}
 .btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+/* keyboard-only focus ring for power users tabbing through the desk (mouse clicks stay clean) */
+*:focus-visible{outline:2px solid #3B82F6;outline-offset:2px;border-radius:6px}
+.btn:focus-visible,.bd-tab:focus-visible,.fchip:focus-visible,.seg button:focus-visible{outline:2px solid #6BA6FF;outline-offset:2px}
+.bd-in:focus-visible,.bd-ta:focus-visible,.mono-in:focus-visible{outline:2px solid #3B82F6;outline-offset:1px}
 .btn-brass{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
 .btn-brass:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
 .btn-ghost{background:transparent;border-color:transparent;color:var(--muted);padding:7px 10px}
@@ -797,6 +801,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .btn-danger:hover{background:var(--bear-dim);border-color:var(--bear)}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+/* "inputs changed" Generate button — amber tint + soft pulse so a stale output reads as actionable */
+.btn-dirty{background:linear-gradient(135deg,#D4A048,#B8842F);border-color:#9A6E26;animation:dirtyPulse 1.8s ease-in-out infinite}
+.btn-dirty:hover{background:linear-gradient(135deg,#E0AE56,#C28F36);border-color:#B8842F}
+@keyframes dirtyPulse{0%,100%{box-shadow:0 0 0 0 rgba(212,160,72,.0)}50%{box-shadow:0 0 0 4px rgba(212,160,72,.22)}}
 
 /* ---------- workflow strip ---------- */
 .bd-flow{display:flex;align-items:center;gap:0;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--panel2);overflow-x:auto}
@@ -1254,6 +1262,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .hedge-warn{margin-top:10px;padding:9px 11px;border:1px solid var(--brass);border-radius:8px;background:linear-gradient(90deg,rgba(212,160,72,.1),transparent);font-size:11.5px;line-height:1.55;color:var(--muted)}
 .cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
 .cal-embed-card-body .tradingview-widget-container{height:100%}
+.tv-skeleton{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);background:var(--panel);background-image:linear-gradient(100deg,transparent 30%,rgba(148,163,184,.07) 50%,transparent 70%);background-size:200% 100%;animation:tvShimmer 1.3s ease-in-out infinite}
+.academy-progress{height:5px;border-radius:5px;background:var(--line2);overflow:hidden}
+.academy-progress span{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#3B82F6,#6BA6FF)}
+@keyframes tvShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @media(max-width:1100px){.calendar-grid{grid-template-columns:1fr}.cal-left-col{grid-column:auto}.calendar-summary{min-width:0;width:100%}}
 .flow-summary{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(56,189,248,.035)),var(--panel2);font-size:12.5px;line-height:1.6;color:var(--text)}
 .flow-row{display:grid;grid-template-columns:54px 1fr auto;gap:9px;align-items:start;padding:9px 0;border-bottom:1px dashed var(--line)}
@@ -3070,8 +3082,15 @@ const InternalsRegime = ({ data }) => {
           <p>{internals.summary || trend.read || "The internal regime is still resolving from the latest market sync."}</p>
         </div>
         <div className="internals-scorecard">
-          <span>Trend score</span>
-          <b style={{ color: scoreTone(trend.score) }}>{fmtSigned(trend.score, 0)}</b>
+          <span>Regime components</span>
+          <div style={{ display: "flex", gap: 16, marginTop: 5 }}>
+            {[["Trend", trend.score], ["Breadth", breadth.score], ["Vol", vol.score]].map(([lbl, sc]) => (
+              <div key={lbl} style={{ textAlign: "center" }}>
+                <b style={{ display: "block", color: scoreTone(sc), fontSize: 18, lineHeight: 1.05 }}>{Number.isFinite(Number(sc)) ? fmtSigned(sc, 0) : "—"}</b>
+                <span style={{ fontSize: 9, color: C.muted, letterSpacing: ".08em", textTransform: "uppercase" }}>{lbl}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -3973,6 +3992,17 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
 const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
+  // "Inputs changed — regenerate": compare the live controls against the inputs the displayed
+  // thesis was actually generated from, so a stale output after tweaking a control is signalled.
+  const inputSig = (o) => JSON.stringify({
+    instrument: o.instrument, secondary: o.secondary || "",
+    weights: o.weights, lean: o.lean, risk: o.risk, notes: (o.notes || "").trim(),
+  });
+  const currentSig = inputSig({ instrument, secondary, weights, lean, risk, notes });
+  const thesisSig = thesis.data
+    ? inputSig({ instrument: thesis.data._instrument, secondary: thesis.data.secondary, weights: thesis.data._weights, lean: thesis.data._lean, risk: thesis.data._risk, notes: thesis.data._notes })
+    : null;
+  const inputsDirty = !viewing && thesis.status === "ready" && !!thesis.data && currentSig !== thesisSig;
   const activeInstrument = thesisInstrumentConfig(instrument);
   const [toolView, setToolView] = useState("synthesis");
   const [copied, setCopied] = useState(false);
@@ -4068,6 +4098,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             <span className="lab-label" style={{ margin: 0 }}>Allocated</span>
             <span className="mono" style={{ fontSize: 12, color: weightSum === WEIGHT_TOTAL ? C.brass : C.bear }}>{weightSum} / {WEIGHT_TOTAL}</span>
           </div>
+          <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px dashed var(--line)", fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+            Pillars read the <b style={{ color: "var(--text)" }}>broad-market regime</b> (tape, breadth, VIX, flows, calendar) — the focus instrument sets the levels and execution proxy, not the pillar scores.
+          </div>
         </Card>
         <Card icon={NotebookPen} title="Instrument focus" sub="Choose which instrument the thesis is built for">
           <InstrumentSelect value={instrument} onChange={setInstrument} />
@@ -4114,8 +4147,12 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             <span className="lab-label">Desk notes — fed into the synthesis</span>
             <textarea className="bd-ta" placeholder="e.g. TD Sequential 9 printed on the daily. Respecting 2-hr max hold today." value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
-          <button className="btn btn-brass" style={{ width: "100%", justifyContent: "center", marginTop: 15, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData} title={!anyData ? "Sync data first" : ""}>
-            {thesis.status === "loading" ? <><RefreshCw size={15} className="spin" /> Synthesizing…</> : <><Sparkles size={15} /> Generate today's thesis</>}
+          <button className={`btn btn-brass${inputsDirty ? " btn-dirty" : ""}`} style={{ width: "100%", justifyContent: "center", marginTop: 15, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData} title={!anyData ? "Sync data first" : inputsDirty ? "Inputs changed since the last run" : ""}>
+            {thesis.status === "loading"
+              ? <><RefreshCw size={15} className="spin" /> Synthesizing…</>
+              : inputsDirty
+                ? <><RefreshCw size={15} /> Regenerate — inputs changed</>
+                : t ? <><Sparkles size={15} /> Regenerate thesis</> : <><Sparkles size={15} /> Generate today's thesis</>}
           </button>
           {!anyData && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, textAlign: "center" }}>Sync at least one data module first — the desk won't call a bias blind.</div>}
         </Card>
@@ -4437,7 +4474,10 @@ const fmtVideoDuration = (seconds) => {
 const AcademyCard = () => {
   const [active, setActive] = useState(null);
   const modules = ACADEMY_MODULES;
-  const hasAny = modules.some((mod) => (mod.videos || []).some((v) => v.embedId));
+  const allVideos = modules.flatMap((mod) => mod.videos || []);
+  const readyCount = allVideos.filter((v) => v.embedId).length;
+  const totalCount = allVideos.length || 1;
+  const pctReady = Math.round((readyCount / totalCount) * 100);
 
   useEffect(() => {
     if (!active) return;
@@ -4447,12 +4487,18 @@ const AcademyCard = () => {
   }, [active]);
 
   return (
-    <Card icon={GraduationCap} title="Academy" sub="Educational trading videos — produced in-house">
-      {!hasAny && (
-        <div style={{ color: C.muted, fontSize: 12.5, marginBottom: 12 }}>
-          Lessons are in production — the structure below fills in as videos are published.
+    <Card
+      icon={GraduationCap}
+      title="Academy"
+      sub="Educational trading videos — produced in-house"
+      tools={<span className="chip b-brass" style={{ fontSize: 10 }} title="Lessons published so far">{readyCount}/{totalCount} live</span>}
+    >
+      <div style={{ marginBottom: 14 }}>
+        <div className="academy-progress"><span style={{ width: `${pctReady}%` }} /></div>
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
+          {readyCount} of {totalCount} lessons published — the curriculum below fills in as new videos drop.
         </div>
-      )}
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {modules.map((mod) => (
           <div key={mod.id}>
@@ -4826,10 +4872,16 @@ const loadTvScript = () => {
 const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-chart" }) => {
   const containerRef = useRef(null);
   const widgetRef = useRef(null);
+  // Mask the widget while it (re)initializes — a theme/symbol/interval change tears the iframe down
+  // and rebuilds it, during which TradingView briefly paints "O0 H0 L0 C0" before its data loads.
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
     let cancelled = false;
+    let revealTimer = null;
+    let pollTimer = null;
+    setLoading(true);
     containerRef.current.innerHTML = "";
     loadTvScript().then(() => {
       if (cancelled || !containerRef.current || !window.TradingView) return;
@@ -4849,14 +4901,34 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-char
         studies: ["MASimple@tv-basicstudies"],
       });
     });
+    // Drop the skeleton once the widget iframe exists plus a short beat for its first real paint;
+    // a hard fallback guarantees it never sticks if detection misses.
+    const start = Date.now();
+    const poll = () => {
+      if (cancelled) return;
+      if (containerRef.current?.querySelector("iframe")) {
+        revealTimer = setTimeout(() => !cancelled && setLoading(false), 700);
+        return;
+      }
+      if (Date.now() - start > 12000) { setLoading(false); return; }
+      pollTimer = setTimeout(poll, 150);
+    };
+    poll();
     return () => {
       cancelled = true;
+      clearTimeout(revealTimer);
+      clearTimeout(pollTimer);
       widgetRef.current = null;
     };
   }, [symbol, lightMode, interval]);
 
   const id = `${prefix}-${symbol.replace(/[^a-zA-Z0-9]/g, "-")}`;
-  return <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />;
+  return (
+    <div style={{ position: "relative", height: "100%", width: "100%" }}>
+      <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />
+      {loading && <div className="tv-skeleton" aria-hidden="true"><RefreshCw size={16} className="spin" /> Loading chart…</div>}
+    </div>
+  );
 };
 
 const ChartsTab = ({ lightMode, compact = false }) => {
@@ -5264,8 +5336,14 @@ export default function Overwatch() {
           : null,
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
-      setArchiveHistory((h) => [{ ...entry, _type: "thesis" }, ...h].slice(0, 60));
-      notify("Thesis locked + saved to the archive", "ok");
+      const newEntry = { ...entry, _type: "thesis" };
+      const entrySig = (e) => JSON.stringify({ i: e._instrument, s: e.secondary || "", w: e._weights, l: e._lean, r: e._risk, n: (e._notes || "").trim() });
+      // Rapid regenerations with identical inputs replace the previous thesis instead of flooding
+      // the archive with near-duplicates; a genuine input change still creates a fresh entry.
+      const top = archiveHistory[0];
+      const willReplace = !!(top && top._type === "thesis" && entrySig(top) === entrySig(newEntry));
+      setArchiveHistory((h) => (willReplace ? [newEntry, ...h.slice(1)] : [newEntry, ...h]).slice(0, 60));
+      notify(willReplace ? "Thesis refreshed in the archive" : "Thesis locked + saved to the archive", "ok");
     } catch (e) {
       setThesis((s) => ({ ...s, status: "error", error: e.message }));
       notify("Synthesis failed — retry", "err");
