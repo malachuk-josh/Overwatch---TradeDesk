@@ -1271,6 +1271,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .news-title-btn{background:none;border:none;padding:0;margin:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .news-title-btn:hover{color:var(--brass)}
 .news-reader-summary{flex:none;display:flex;flex-direction:column;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.news-reader-fallback{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:15px;padding:24px;background:var(--panel)}
 .news-feed-scroll{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .news-feed-scroll::-webkit-scrollbar{width:9px}
 .news-feed-scroll::-webkit-scrollbar-track{background:transparent}
@@ -2691,11 +2692,14 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
           {!!(current.tickers || []).length && (current.tickers || []).map((tk) => <span className="ticker-tag" key={tk}>{tk}</span>)}
         </div>
         {current.note && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{current.note}</div>}
-        {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ marginTop: 4 }}>Open original <ExternalLink size={13} /></a>}
       </div>
-      {current.url
-        ? <iframe key={current.url} src={current.url} title="Article" className="nl-reader-frame" referrerPolicy="no-referrer" />
-        : <div style={{ flex: 1, display: "grid", placeItems: "center", color: C.muted, fontSize: 12.5 }}>No source link for this headline.</div>}
+      <div className="news-reader-fallback">
+        <Newspaper size={30} style={{ opacity: 0.35 }} />
+        <div style={{ fontSize: 13, color: C.muted, textAlign: "center", maxWidth: 380, lineHeight: 1.65 }}>
+          {current.source ? `${current.source} — ` : ""}the full article opens on the publisher's site (most block in-app embedding).
+        </div>
+        {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-brass">Open original article <ExternalLink size={14} /></a>}
+      </div>
     </>
   ) : null;
 
