@@ -2441,6 +2441,23 @@ const LevelMapPanel = ({ points, tickers }) => {
 
 const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
   const { status, data, error, at } = market;
+  // Section-collapse state. These hooks must run before any early return so the hook order stays
+  // stable across the idle/loading/error → ready transitions (Rules of Hooks).
+  const [tickersOpen, setTickersOpen] = useState(false); // Market snapshot — collapsed by default
+  const [liveOnly, setLiveOnly] = useState(false);       // "Live markets" filter (expanded only)
+  const [levelsOpen, setLevelsOpen] = useState(true);    // Level maps — open by default (core read)
+  const [readOpen, setReadOpen] = useState(false);       // Session read — collapsed by default
+
+  // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
+  // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
+  // filter/sort and the session synthesis only recompute when their inputs actually change.
+  const hideSet = hiddenSymbols || THESIS_STOCK_SET;
+  const tickers = useMemo(() => (data?.tickers || []).filter((t) => !hideSet.has(t.symbol)), [data, hideSet]);
+  const orderedTickers = useMemo(() => orderAssetCards(tickers), [tickers]);
+  // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
+  const anyMarketOpen = useMemo(() => orderedTickers.some((t) => symbolMarketOpen(t.symbol)), [orderedTickers]);
+  const session = useMemo(() => buildSessionRead({ market: data, points, news, recap: recap?.data }), [data, points, news, recap?.data]);
+
   if (status === "idle")
     return (
       <EmptyState
@@ -2460,25 +2477,8 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
     );
   if (status === "error" && !data) return <ErrBlock msg={error} onRetry={onRefresh} />;
 
-  // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single
-  // stock are fetched for pricing but kept off the Pulse grid until toggled on in Settings.
-  const hideSet = hiddenSymbols || THESIS_STOCK_SET;
-  const tickers = (data?.tickers || []).filter((t) => !hideSet.has(t.symbol));
-  const orderedTickers = orderAssetCards(tickers);
-  // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
-  const anyMarketOpen = orderedTickers.some((t) => symbolMarketOpen(t.symbol));
   const vix = tickers.find((t) => t.symbol === "VIX");
   const recapBusy = recap?.status === "loading";
-  const session = buildSessionRead({ market: data, points, news, recap: recap?.data });
-  // Market snapshot defaults collapsed on every viewport — open it from the header toggle.
-  const [tickersOpen, setTickersOpen] = useState(false);
-  // "Live markets" filter (only shown while the snapshot is expanded) — narrows the grid to the
-  // instruments whose market is trading right now.
-  const [liveOnly, setLiveOnly] = useState(false);
-  // Level maps section is collapsible (open by default — it's a core read).
-  const [levelsOpen, setLevelsOpen] = useState(true);
-  // Session read defaults collapsed on every viewport — headline stays visible, the rest folds away.
-  const [readOpen, setReadOpen] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
@@ -5529,14 +5529,22 @@ export default function Overwatch() {
     syncAll();
   }, [storageReady]);
 
+  // Keep the latest live state in a ref so the auto-refresh loop below can read it without listing
+  // every field as an effect dependency (which used to tear down and rebuild the interval + listeners
+  // on every sync and every watchlist edit, and could fire an extra fetch when the watchlist changed).
+  const refreshStateRef = useRef(null);
+  refreshStateRef.current = { market, news, points, recap, syncAll };
+
   useEffect(() => {
     if (!storageReady || tab !== "pulse") return;
     const maybeRefresh = () => {
+      const { market: m, news: n, points: p, recap: rc, syncAll: run } = refreshStateRef.current;
       if (document.visibilityState !== "visible") return;
-      if ([market, news, points, recap].some((m) => m.status === "loading")) return;
-      syncAll({ silent: true });
+      if ([m, n, p, rc].some((s) => s.status === "loading")) return;
+      run({ silent: true });
     };
-    const stale = !market.at?.ts || Date.now() - market.at.ts > 2 * 60 * 1000;
+    const cur = refreshStateRef.current.market;
+    const stale = !cur.at?.ts || Date.now() - cur.at.ts > 2 * 60 * 1000;
     if (stale) maybeRefresh();
     const id = setInterval(maybeRefresh, 2 * 60 * 1000);
     const handleActivity = () => maybeRefresh();
@@ -5547,7 +5555,8 @@ export default function Overwatch() {
       window.removeEventListener("focus", handleActivity);
       document.removeEventListener("visibilitychange", handleActivity);
     };
-  }, [storageReady, tab, watchlist, market.at?.ts, market.status, news.status, points.status, recap.status]);
+    // Set up once per Pulse entry; latest state is read from the ref inside maybeRefresh.
+  }, [storageReady, tab]);
 
   const generateThesis = async () => {
     setViewing(null);
