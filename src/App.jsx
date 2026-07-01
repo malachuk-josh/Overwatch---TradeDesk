@@ -1640,7 +1640,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
+const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onAiRecap, onGoThesis }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -1695,6 +1695,29 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         tools={<Freshness at={at} />}
       >
         <div className="session-summary">{session.summary}</div>
+        {session.recapText && (
+          <div className="session-ai">
+            {session.recapHeadline && <div className="session-ai-headline">{session.recapHeadline}</div>}
+            <div className="session-ai-text">{session.recapText}</div>
+            {!!session.recapTakeaways.length && (
+              <ul className="session-ai-list">
+                {session.recapTakeaways.map((t, i) => <li key={i}>{t}</li>)}
+              </ul>
+            )}
+            {session.recapRisk && <div className="session-ai-risk"><span>Risk</span> {session.recapRisk}</div>}
+          </div>
+        )}
+        <div className="session-ai-actions">
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onAiRecap}
+            disabled={recap?.status === "loading" || status !== "ready"}
+            title="Generate a Claude-written recap on demand (uses one API call)"
+          >
+            <Sparkles size={12} /> {recap?.status === "loading" ? "Generating…" : session.recapText ? "Refresh AI recap" : "AI recap"}
+          </button>
+          {recap?.status === "error" && <span className="session-ai-err">Recap failed — try again</span>}
+        </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
@@ -4609,7 +4632,11 @@ export default function Overwatch() {
   };
   const refreshNews = () => runFetch(setNews, "news", newsPrompt());
   const refreshPoints = () => runFetch(setPoints, "points", pointsPrompt());
-  const refreshRecap = (payload = {}) => runFetch(setRecap, "recap", sessionPrompt(payload), payload);
+  // Session recap defaults to the free local read; the "AI recap" button passes { ai: true } to
+  // spend a single Claude call on demand. Sync/auto-refresh never trigger it.
+  const refreshRecap = (payload = {}, { ai = false } = {}) =>
+    runFetch(setRecap, "recap", ai ? sessionPrompt(payload) : "", { ...payload, ai });
+  const aiRecap = () => refreshRecap({ market: market.data, news: news.data, points: points.data }, { ai: true });
 
   const anyLoading = [market, news, points, recap].some((m) => m.status === "loading");
   const anyData = !!(market.data || news.data || points.data);
@@ -4617,12 +4644,7 @@ export default function Overwatch() {
   const syncAll = async ({ silent = false } = {}) => {
     if (!silent) notify("Syncing the desk — four live feeds in flight", "ok");
     const [marketData, newsData, pointsData] = await Promise.all([refreshMarket(), refreshNews(), refreshPoints()]);
-    const recapData = await refreshRecap({
-      market: marketData || market.data,
-      news: newsData || news.data,
-      points: pointsData || points.data,
-    });
-    const r = [marketData, newsData, pointsData, recapData];
+    const r = [marketData, newsData, pointsData];
     if (!silent) {
       if (r.every(Boolean)) notify("Desk synced — all feeds live", "ok");
       else if (r.some(Boolean)) notify("Partial sync — retry the failed module from its tab", "err");
@@ -4775,7 +4797,7 @@ export default function Overwatch() {
   const renderTab = (id) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onAiRecap={aiRecap} onGoThesis={() => setTab("thesis")} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
