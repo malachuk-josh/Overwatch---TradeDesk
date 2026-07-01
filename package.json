@@ -12,9 +12,9 @@
     "@clerk/backend": "^3.9.0",
     "@clerk/clerk-react": "^5.61.3",
     "@vitejs/plugin-react": "5.1.1",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "vite": "7.2.4"
   }
 }
