@@ -34,6 +34,8 @@ import Moon from "lucide-react/dist/esm/icons/moon.mjs";
 import CandlestickChart from "lucide-react/dist/esm/icons/chart-candlestick.mjs";
 import ChevronUp from "lucide-react/dist/esm/icons/chevron-up.mjs";
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
+import ArrowUp from "lucide-react/dist/esm/icons/arrow-up.mjs";
+import ArrowDown from "lucide-react/dist/esm/icons/arrow-down.mjs";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
@@ -2605,7 +2607,8 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
-  const [sortBy, setSortBy] = useState("time"); // time (newest first) | impact (most significant first)
+  const [sortBy, setSortBy] = useState("time"); // time | impact
+  const [sortDir, setSortDir] = useState("desc"); // desc (newest / highest first) | asc
 
   if (status === "idle")
     return (
@@ -2627,12 +2630,13 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
 
   const heads = data?.headlines || [];
   const cats = ["all", ...Array.from(new Set(heads.map((h) => h.category).filter(Boolean)))];
+  const sortSign = sortDir === "asc" ? -1 : 1;
   const filtered = heads.filter((h) =>
     (cat === "all" || h.category === cat) &&
     (tone === "all" || h.sentiment === tone)
-  ).sort((a, b) => sortBy === "impact"
+  ).sort((a, b) => sortSign * (sortBy === "impact"
     ? (b.impact - a.impact) || ((b.providerPublishTime || 0) - (a.providerPublishTime || 0))
-    : (b.providerPublishTime || 0) - (a.providerPublishTime || 0));
+    : (b.providerPublishTime || 0) - (a.providerPublishTime || 0)));
 
   return (
     <div>
@@ -2663,6 +2667,8 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
           {[["time", "Time"], ["impact", "Impact"]].map(([v, lbl]) => (
             <button key={v} className={`fchip ${sortBy === v ? "on" : ""}`} onClick={() => setSortBy(v)} title={v === "time" ? "Newest first" : "Most significant first"}>{lbl}</button>
           ))}
+          <button className={`fchip ${sortDir === "desc" ? "on" : ""}`} onClick={() => setSortDir("desc")} title={sortBy === "impact" ? "Highest impact first" : "Newest first"} style={{ padding: "5px 7px" }}><ArrowDown size={13} /></button>
+          <button className={`fchip ${sortDir === "asc" ? "on" : ""}`} onClick={() => setSortDir("asc")} title={sortBy === "impact" ? "Lowest impact first" : "Oldest first"} style={{ padding: "5px 7px" }}><ArrowUp size={13} /></button>
         </div>
         <div className="news-feed-scroll" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 1090, overflowY: "auto", paddingRight: 6 }}>
           {filtered.map((h, i) => (
