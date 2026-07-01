@@ -90,7 +90,6 @@ const DEFAULT_WATCHLIST = [
   { symbol: "META", name: "Meta Platforms", off: true },
   { symbol: "TSLA", name: "Tesla", off: true },
 ];
-const DEFAULT_SYMBOLS_SET = new Set(DEFAULT_WATCHLIST.map((item) => item.symbol));
 const WATCHLIST_CAP = 30;
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
@@ -98,13 +97,18 @@ const watchlistHiddenSet = (items) =>
 
 const reconcileWatchlist = (items) => {
   if (!Array.isArray(items) || !items.length) return DEFAULT_WATCHLIST;
+  // Preserve the saved list's order AND per-item visibility (off) — canonical default names are
+  // refreshed for known symbols, but we never discard the user's toggles/order. (Previously an
+  // all-default list was replaced wholesale with DEFAULT_WATCHLIST, which silently reset every
+  // show/hide toggle on reload since toggling a default doesn't add a "custom" symbol.)
   const cleaned = items
     .filter((item) => item && item.symbol)
-    .map((item) => ({ symbol: String(item.symbol).toUpperCase(), name: item.name || item.symbol, ...(item.off ? { off: true } : {}) }));
-  // If saved list contains only default symbols (no custom additions), restore canonical order.
-  const hasCustom = cleaned.some((item) => !DEFAULT_SYMBOLS_SET.has(item.symbol));
-  if (!hasCustom) return DEFAULT_WATCHLIST;
-  // Custom watchlist: append any missing required symbols at the end (preserving their off flag).
+    .map((item) => {
+      const symbol = String(item.symbol).toUpperCase();
+      const def = DEFAULT_WATCHLIST.find((d) => d.symbol === symbol);
+      return { symbol, name: def?.name || item.name || symbol, ...(item.off ? { off: true } : {}) };
+    });
+  // Append any default symbols the saved list is missing (e.g. newly-shipped defaults), capped.
   const merged = [...cleaned];
   for (const item of DEFAULT_WATCHLIST) {
     if (!merged.some((existing) => existing.symbol === item.symbol) && merged.length < WATCHLIST_CAP) {
