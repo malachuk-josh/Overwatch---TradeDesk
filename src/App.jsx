@@ -2664,7 +2664,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
             <button key={v} className={`fchip ${sortBy === v ? "on" : ""}`} onClick={() => setSortBy(v)} title={v === "time" ? "Newest first" : "Most significant first"}>{lbl}</button>
           ))}
         </div>
-        <div className="news-feed-scroll" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 870, overflowY: "auto", paddingRight: 6 }}>
+        <div className="news-feed-scroll" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 1090, overflowY: "auto", paddingRight: 6 }}>
           {filtered.map((h, i) => (
             <div className="news-card" key={i} style={{ borderLeftColor: sentColor(h.sentiment) }}>
               <div className="news-top">
