@@ -2901,8 +2901,15 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, live, feedOn = false }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
+  // Have any calculator inputs been changed from their defaults? Drives the Reset control.
+  const DEF = DEFAULT_DESK_TOOLS;
+  const inputsDirty =
+    env.spot !== DEF.env.spot || env.sigmaPct !== DEF.env.sigmaPct || env.ratePct !== DEF.env.ratePct ||
+    env.divPct !== DEF.env.divPct || env.days !== DEF.env.days ||
+    opt.strike !== DEF.options.strike || opt.type !== DEF.options.type ||
+    opt.marketPrice !== DEF.options.marketPrice || opt.feed !== DEF.options.feed;
   const K = numOr(opt.strike, roundStrike(S));
   const bs = blackScholes({ S, K, T, r, q, sigma, type: opt.type });
   const iv = impliedVol({ S, K, T, r, q, type: opt.type, marketPrice: opt.marketPrice });
@@ -2912,7 +2919,12 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, live, feedOn = false }) =
 
   return (
     <div className="grid g-2" style={{ alignItems: "start" }}>
-      <Card icon={Calculator} title="Inputs" sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}>
+      <Card
+        icon={Calculator}
+        title="Inputs"
+        sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}
+        tools={inputsDirty ? <button className="btn btn-ghost btn-sm" title="Reset all calculator inputs to defaults" onClick={onReset}><RotateCcw size={12} /> Reset</button> : null}
+      >
         <div className="seg" style={{ marginBottom: 14 }}>
           {["call", "put"].map((ty) => (
             <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
@@ -3257,6 +3269,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   }, [instrument, setDeskTools]);
   const setEnv = (k, val) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: val } }));
   const setOpt = (k, val) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: val } }));
+  // Reset the options calculator's inputs (shared pricing environment + option fields) to defaults,
+  // which also restores the auto-fill-from-live-feed behavior for spot/IV/rate.
+  const resetOptionsCalc = () => setDeskTools((d) => ({ ...d, env: { ...DEFAULT_DESK_TOOLS.env }, options: { ...DEFAULT_DESK_TOOLS.options } }));
   const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
   const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
@@ -3279,7 +3294,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
         </div>
         <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />
-        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} live={live} feedOn={deskTools.feedToThesis} />}
+        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} />}
         {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
       </div>
     );
