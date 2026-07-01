@@ -2644,6 +2644,10 @@ const DEFAULT_DESK_TOOLS = {
   feedToThesis: false,
   env: { spot: "", sigmaPct: "", ratePct: "", divPct: "1.3", days: "30" },
   options: { strike: "", type: "call", marketPrice: "", feed: false },
+  // Second options-calculator leg, used only when a secondary instrument is in focus. Independent
+  // pricing environment + option fields so both legs can be priced side by side.
+  env2: { spot: "", sigmaPct: "", ratePct: "", divPct: "1.3", days: "30" },
+  options2: { strike: "", type: "call", marketPrice: "", feed: false },
   hedge: {
     beta: { on: true, portfolioValue: "100000", beta: "1.00", mode: "futures", putOtmPct: "5" },
     vertical: { on: false, type: "call", longStrike: "", shortStrike: "", contracts: "1" },
@@ -2663,6 +2667,8 @@ const mergeSavedDeskTools = (base, saved) => {
     ...saved,
     env: { ...base.env, ...(saved.env || {}) },
     options: { ...base.options, ...(saved.options || {}) },
+    env2: { ...base.env2, ...(saved.env2 || {}) },
+    options2: { ...base.options2, ...(saved.options2 || {}) },
     hedge: {
       beta: { ...base.hedge.beta, ...(saved.hedge?.beta || {}) },
       vertical: { ...base.hedge.vertical, ...(saved.hedge?.vertical || {}) },
@@ -2901,7 +2907,7 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
   // Have any calculator inputs been changed from their defaults? Drives the Reset control.
   const DEF = DEFAULT_DESK_TOOLS;
@@ -2918,7 +2924,9 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
   const itm = K < S ? (opt.type === "call" ? "in" : "out of") : K > S ? (opt.type === "call" ? "out of" : "in") : "at";
 
   return (
-    <div className="grid g-2" style={{ alignItems: "start" }}>
+    <div>
+      {heading && <div className="opt-leg-heading">{heading}</div>}
+      <div className="grid g-2" style={{ alignItems: "start" }}>
       <Card
         icon={Calculator}
         title="Inputs"
@@ -2957,21 +2965,23 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
               : "Enter a quoted price to back out its implied volatility."}
           </div>
         </div>
-        <div className="lab-field" style={{ display: "flex", alignItems: "center", gap: 11 }}>
-          <button
-            onClick={() => setOpt("feed", !opt.feed)}
-            style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: opt.feed ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
-            title="Include this options scenario when feeding the thesis"
-          >
-            <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
-          </button>
-          <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
-            <b style={{ color: "var(--text)" }}>Add this scenario to the thesis</b> — includes this specific options scenario in the desk-tools bundle.
-            {opt.feed && !feedOn && (
-              <span style={{ color: C.brass }}> Turn on “Send desk tools to the thesis” above for this to apply.</span>
-            )}
-          </span>
-        </div>
+        {showFeed && (
+          <div className="lab-field" style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <button
+              onClick={() => setOpt("feed", !opt.feed)}
+              style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: opt.feed ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+              title="Include this options scenario when feeding the thesis"
+            >
+              <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+            </button>
+            <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
+              <b style={{ color: "var(--text)" }}>Add this scenario to the thesis</b> — includes this specific options scenario in the desk-tools bundle.
+              {opt.feed && !feedOn && (
+                <span style={{ color: C.brass }}> Turn on “Send desk tools to the thesis” above for this to apply.</span>
+              )}
+            </span>
+          </div>
+        )}
       </Card>
 
       <Card icon={Sigma} title="Theoretical value & Greeks" sub={`${opt.type.toUpperCase()} ${fmtNum(K, 0)} · ${days}d · IV ${fmtNum(sigma * 100, 1)}%`}>
@@ -2994,6 +3004,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
           </>
         )}
       </Card>
+      </div>
     </div>
   );
 };
@@ -3262,16 +3273,25 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   };
 
   const live = deskLiveContext(market, points, instrument);
+  const hasSecondary = !!(secondary && secondary !== instrument);
+  const live2 = hasSecondary ? deskLiveContext(market, points, secondary) : null;
   // Spot and IV are instrument-specific — clear any prior overrides when the focus changes so the
   // Options/Hedge tools re-derive from the new instrument's live feed instead of carrying a stale value.
   useEffect(() => {
     setDeskTools((d) => (d.env.spot === "" && d.env.sigmaPct === "") ? d : ({ ...d, env: { ...d.env, spot: "", sigmaPct: "" } }));
   }, [instrument, setDeskTools]);
+  // Same for the secondary leg's calculator environment.
+  useEffect(() => {
+    setDeskTools((d) => (d.env2.spot === "" && d.env2.sigmaPct === "") ? d : ({ ...d, env2: { ...d.env2, spot: "", sigmaPct: "" } }));
+  }, [secondary, setDeskTools]);
   const setEnv = (k, val) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: val } }));
   const setOpt = (k, val) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: val } }));
+  const setEnv2 = (k, val) => setDeskTools((d) => ({ ...d, env2: { ...d.env2, [k]: val } }));
+  const setOpt2 = (k, val) => setDeskTools((d) => ({ ...d, options2: { ...d.options2, [k]: val } }));
   // Reset the options calculator's inputs (shared pricing environment + option fields) to defaults,
   // which also restores the auto-fill-from-live-feed behavior for spot/IV/rate.
   const resetOptionsCalc = () => setDeskTools((d) => ({ ...d, env: { ...DEFAULT_DESK_TOOLS.env }, options: { ...DEFAULT_DESK_TOOLS.options } }));
+  const resetOptionsCalc2 = () => setDeskTools((d) => ({ ...d, env2: { ...DEFAULT_DESK_TOOLS.env2 }, options2: { ...DEFAULT_DESK_TOOLS.options2 } }));
   const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
   const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
@@ -3294,7 +3314,16 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
         </div>
         <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />
-        {toolView === "options" && <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} />}
+        {toolView === "options" && (
+          hasSecondary ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} />
+              <OptionsCalculator env={deskTools.env2} setEnv={setEnv2} opt={deskTools.options2} setOpt={setOpt2} onReset={resetOptionsCalc2} live={live2} heading={`Secondary · ${live2.cfg?.label || secondary}`} showFeed={false} />
+            </div>
+          ) : (
+            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} />
+          )
+        )}
         {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
       </div>
     );
