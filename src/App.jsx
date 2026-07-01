@@ -46,6 +46,7 @@ import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
+import { CLERK_ENABLED, AuthControl } from "./auth.jsx";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -5658,6 +5659,7 @@ export default function Overwatch() {
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
           <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
+          {CLERK_ENABLED && <AuthControl />}
         </div>
       </header>
 
