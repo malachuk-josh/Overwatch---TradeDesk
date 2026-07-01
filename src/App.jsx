@@ -3778,11 +3778,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                   )}
                 </div>
               )}
-              {(t.drivers || []).length > 0 && (
-                <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 14 }}>
-                  {t.drivers.map((d, i) => <span className="chip b-brass" key={i} style={{ textTransform: "none", letterSpacing: 0, fontSize: 10.5 }}>{d}</span>)}
-                </div>
-              )}
               {(t._deskStructures || []).length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div className="lab-label" style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 7 }}>
