@@ -2184,10 +2184,15 @@ export default async function handler(req, res) {
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol);
     else if (operation === "recap") {
-      try {
-        data = await callAnthropic(prompt);
-      } catch {
-        data = null;
+      // Only spend on Claude when the client explicitly asks for an AI recap (the "AI recap"
+      // button). Default syncs never set payload.ai, so they cost nothing — the Session read
+      // card already renders a locally-computed template read.
+      if (payload.ai) {
+        try {
+          data = await callAnthropic(prompt);
+        } catch {
+          data = null;
+        }
       }
       data ||= makeSessionRecap(payload);
     }

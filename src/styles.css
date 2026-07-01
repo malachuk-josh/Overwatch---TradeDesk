@@ -371,6 +371,14 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 
 /* ---------- session read ---------- */
 .session-summary{font-size:14px;line-height:1.6;color:var(--text);font-weight:500}
+.session-ai{margin-top:12px;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);display:flex;flex-direction:column;gap:8px}
+.session-ai-headline{font-size:13px;font-weight:700;color:var(--brass);letter-spacing:.01em}
+.session-ai-text{font-size:13px;line-height:1.6;color:var(--text)}
+.session-ai-list{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.5;color:var(--muted)}
+.session-ai-risk{font-size:11.5px;line-height:1.5;color:var(--muted)}
+.session-ai-risk span{color:var(--bear);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:10.5px}
+.session-ai-actions{margin-top:11px;display:flex;align-items:center;gap:10px}
+.session-ai-err{font-size:11px;color:var(--bear)}
 
 /* ---------- heatmap ---------- */
 .hm{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px}
