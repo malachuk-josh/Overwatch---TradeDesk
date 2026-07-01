@@ -1622,65 +1622,6 @@ const callAnthropic = async (prompt) => {
   return cleanModelJson(text);
 };
 
-// Claude with the web-search tool enabled — used to ground an article brief in the actual coverage
-// rather than the model's memory. Returns the parsed JSON from the final text block.
-const callAnthropicSearch = async (prompt) => {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
-      max_tokens: 1200,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
-      messages: [{ role: "user", content: prompt }],
-    }),
-    signal: AbortSignal.timeout(30000),
-  });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(`search ${response.status}: ${body.slice(0, 400)}`);
-  }
-  const payload = await response.json();
-  const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
-  return cleanModelJson(text);
-};
-
-// Grounded, in-app brief of a specific news story (publishers block scraping/embedding, so we
-// summarize the coverage instead of loading the page). Never fabricates — reports found:false if
-// the story can't be located.
-const fetchArticleBrief = async ({ title, source, url } = {}) => {
-  if (!process.env.ANTHROPIC_API_KEY) return { brief: "", points: [], found: false, unconfigured: true };
-  if (!title) return { brief: "", points: [], found: false };
-  const meta = `Headline: "${title}"\nSource: ${source || "unknown"}${url ? `\nURL: ${url}` : ""}`;
-  const schema = `Respond with ONLY a raw JSON object — no markdown fences, no commentary:\n{"brief":"<2-3 tight paragraphs, plain text, no markdown>","points":["<key takeaway>","<key takeaway>","<key takeaway>"]}`;
-  const shape = (out, grounded) => ({
-    brief: typeof out.brief === "string" ? out.brief : "",
-    points: Array.isArray(out.points) ? out.points.filter((p) => typeof p === "string").slice(0, 5) : [],
-    found: Boolean(out.brief),
-    grounded,
-  });
-
-  // 1) Grounded via web search.
-  try {
-    const out = await callAnthropicSearch(`You are a markets news desk assistant. A trader wants to read this specific story without leaving the app.\n\n${meta}\n\nUse web search to find THIS story (or the closest current coverage of the same event) and write a grounded brief. Report ONLY what the coverage actually says — do not speculate or invent details. Focus on what happened and why it matters for markets.\n\n${schema}`);
-    if (out && typeof out === "object" && out.brief) return shape(out, true);
-  } catch {}
-
-  // 2) Fallback: an interpretive context brief from the headline (no live search), for when web
-  // search is unavailable on the account. Clearly flagged as context, not the original article.
-  try {
-    const out = await callAnthropic(`You are a markets news desk assistant. A trader is reading this headline in-app and wants a quick, useful read on it.\n\n${meta}\n\nWrite a concise brief that (a) explains what the headline is most likely reporting and (b) why it matters for markets and how a trader might read it. Do NOT invent specific figures, quotes, or facts that aren't implied by the headline — keep it to interpretation and market context. This is context, not the original article.\n\n${schema}`);
-    if (out && typeof out === "object" && out.brief) return shape(out, false);
-  } catch {}
-
-  return { brief: "", points: [], found: false };
-};
-
 const avgChangeForSymbols = (tickers, symbols) => {
   const values = symbols
     .map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct)
@@ -2292,8 +2233,6 @@ export default async function handler(req, res) {
           stance: data.stance || { ...fallback.stance, finalScore: data.score ?? fallback.stance.finalScore },
         }
         : fallback;
-    } else if (operation === "articlebrief") {
-      data = await fetchArticleBrief(payload);
     } else if (operation === "getarchive") {
       data = await getArchiveKV();
     } else if (operation === "savearchive") {
