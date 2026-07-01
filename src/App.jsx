@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
 import Newspaper from "lucide-react/dist/esm/icons/newspaper.mjs";
@@ -39,6 +39,8 @@ import ArrowDown from "lucide-react/dist/esm/icons/arrow-down.mjs";
 import Maximize2 from "lucide-react/dist/esm/icons/maximize-2.mjs";
 import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
+import Eye from "lucide-react/dist/esm/icons/eye.mjs";
+import EyeOff from "lucide-react/dist/esm/icons/eye-off.mjs";
 import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
 import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
@@ -70,22 +72,35 @@ const DEFAULT_WATCHLIST = [
   { symbol: "GC", name: "Gold Futures" },
   { symbol: "CL", name: "WTI Crude Oil" },
   { symbol: "BTC", name: "Bitcoin" },
+  // Magnificent Seven mega-caps ship on the board but start hidden (off) — flip them on from
+  // Settings to render their ticker cards on Market Pulse. Their live prices are fetched either way.
+  { symbol: "AAPL", name: "Apple", off: true },
+  { symbol: "MSFT", name: "Microsoft", off: true },
+  { symbol: "NVDA", name: "Nvidia", off: true },
+  { symbol: "AMZN", name: "Amazon", off: true },
+  { symbol: "GOOGL", name: "Alphabet", off: true },
+  { symbol: "META", name: "Meta Platforms", off: true },
+  { symbol: "TSLA", name: "Tesla", off: true },
 ];
 const DEFAULT_SYMBOLS_SET = new Set(DEFAULT_WATCHLIST.map((item) => item.symbol));
+const WATCHLIST_CAP = 30;
+// Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
+const watchlistHiddenSet = (items) =>
+  new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
 
 const reconcileWatchlist = (items) => {
   if (!Array.isArray(items) || !items.length) return DEFAULT_WATCHLIST;
   const cleaned = items
     .filter((item) => item && item.symbol)
-    .map((item) => ({ symbol: String(item.symbol).toUpperCase(), name: item.name || item.symbol }));
+    .map((item) => ({ symbol: String(item.symbol).toUpperCase(), name: item.name || item.symbol, ...(item.off ? { off: true } : {}) }));
   // If saved list contains only default symbols (no custom additions), restore canonical order.
   const hasCustom = cleaned.some((item) => !DEFAULT_SYMBOLS_SET.has(item.symbol));
   if (!hasCustom) return DEFAULT_WATCHLIST;
-  // Custom watchlist: append any missing required symbols at the end.
+  // Custom watchlist: append any missing required symbols at the end (preserving their off flag).
   const merged = [...cleaned];
   for (const item of DEFAULT_WATCHLIST) {
-    if (!merged.some((existing) => existing.symbol === item.symbol) && merged.length < 21) {
-      merged.push(item);
+    if (!merged.some((existing) => existing.symbol === item.symbol) && merged.length < WATCHLIST_CAP) {
+      merged.push({ ...item });
     }
   }
   return merged;
@@ -1401,6 +1416,10 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .wl-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 8px 6px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);margin:0 7px 7px 0}
 .wl-x{cursor:pointer;color:var(--faint);display:grid;place-items:center;border-radius:5px;padding:2px}
 .wl-x:hover{color:var(--bear);background:var(--bear-dim)}
+.wl-eye{cursor:pointer;color:var(--faint);display:grid;place-items:center;border-radius:5px;padding:2px;margin-right:1px}
+.wl-eye:hover{color:var(--brass);background:var(--brass-dim)}
+.wl-chip-off{opacity:.5}
+.wl-chip-off .wl-eye{color:var(--brass)}
 input.bd-in{
   background:var(--panel2);border:1px solid var(--line2);border-radius:8px;color:var(--text);
   font-family:'Inter',sans-serif;font-size:13px;padding:9px 12px;outline:none;width:100%;
@@ -2398,7 +2417,7 @@ const LevelMapPanel = ({ points, tickers }) => {
    TAB — MARKET PULSE
    ================================================================ */
 
-const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh, onGoThesis }) => {
+const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
   const { status, data, error, at } = market;
   if (status === "idle")
     return (
@@ -2419,8 +2438,10 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
     );
   if (status === "error" && !data) return <ErrBlock msg={error} onRetry={onRefresh} />;
 
-  // Thesis-Lab-only single stocks are fetched for the lab tools but kept off the Pulse grid.
-  const tickers = (data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol));
+  // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single
+  // stock are fetched for pricing but kept off the Pulse grid until toggled on in Settings.
+  const hideSet = hiddenSymbols || THESIS_STOCK_SET;
+  const tickers = (data?.tickers || []).filter((t) => !hideSet.has(t.symbol));
   const orderedTickers = orderAssetCards(tickers);
   // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
   const anyMarketOpen = orderedTickers.some((t) => symbolMarketOpen(t.symbol));
@@ -2640,14 +2661,14 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
       <EmptyState
         icon={Newspaper}
         title="No headlines pulled yet"
-        body="Scan the last 18 hours of market-moving news — tagged by category, sentiment and SPX impact."
+        body="Scan the last 24 hours of market-moving news — tagged by category, sentiment and SPX impact."
         action={<button className="btn btn-brass" onClick={onRefresh}><Newspaper size={15} /> Scan the wire</button>}
       />
     );
   if (status === "loading" && !data)
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-        <LoadingBlock lines={1} msg="Scanning the last 18 hours of headlines…" />
+        <LoadingBlock lines={1} msg="Scanning the last 24 hours of headlines…" />
         {Array.from({ length: 5 }).map((_, i) => <div className="card" key={i}><LoadingBlock lines={2} /></div>)}
       </div>
     );
@@ -4851,11 +4872,18 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
     const s = sym.trim().toUpperCase();
     if (!s) return;
     if (watchlist.some((w) => w.symbol === s)) { notify(`${s} is already on the board`, "err"); return; }
-    if (watchlist.length >= 21) { notify("Watchlist is capped at 21 — drop one first", "err"); return; }
+    if (watchlist.length >= WATCHLIST_CAP) { notify(`Watchlist is capped at ${WATCHLIST_CAP} — drop one first`, "err"); return; }
     setWatchlist([...watchlist, { symbol: s, name: name.trim() || s }]);
     setSym(""); setName("");
     notify(`${s} added — resync prices to pull it in`, "ok");
   };
+
+  // Flip a symbol's visibility on the Pulse grid without dropping it from the board.
+  const toggleTicker = (symbol) => setWatchlist(watchlist.map((x) => {
+    if (x.symbol !== symbol) return x;
+    if (x.off) { const { off, ...rest } = x; return rest; }
+    return { ...x, off: true };
+  }));
 
   return (
     <>
@@ -4867,10 +4895,16 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
         </div>
 
-        <span className="lab-label">Watchlist · {watchlist.length}/21</span>
+        <span className="lab-label">Watchlist · {watchlist.length}/{WATCHLIST_CAP}</span>
+        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 8px" }}>Tap the eye to show/hide a ticker card on Market Pulse. Hidden names still price for the Thesis Lab.</div>
         <div style={{ marginBottom: 10 }}>
           {watchlist.map((w) => (
-            <span className="wl-chip" key={w.symbol}>
+            <span className={`wl-chip${w.off ? " wl-chip-off" : ""}`} key={w.symbol}>
+              <span
+                className="wl-eye"
+                onClick={() => toggleTicker(w.symbol)}
+                title={w.off ? "Hidden — show card on Market Pulse" : "Shown — hide card on Market Pulse"}
+              >{w.off ? <EyeOff size={12} /> : <Eye size={12} />}</span>
               <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{w.symbol}</span>
               <span style={{ fontSize: 11, color: C.muted, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
               <span className="wl-x" onClick={() => setWatchlist(watchlist.filter((x) => x.symbol !== w.symbol))} title="Remove"><X size={12} /></span>
@@ -5460,8 +5494,16 @@ export default function Overwatch() {
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
   const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
   const archiveBadge = archiveHistory.length || null;
+  // Symbols kept off the Pulse grid: anything toggled off in the watchlist (Mag 7 start off), plus
+  // any single-stock focus that isn't on the visible board at all.
+  const hiddenSymbols = useMemo(() => {
+    const hidden = watchlistHiddenSet(watchlist);
+    const visible = new Set(watchlist.filter((w) => !w.off).map((w) => w.symbol));
+    THESIS_STOCK_SET.forEach((s) => { if (!visible.has(s)) hidden.add(s); });
+    return hidden;
+  }, [watchlist]);
   const TABS = [
-    { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !THESIS_STOCK_SET.has(t.symbol)).length || null },
+    { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !hiddenSymbols.has(t.symbol)).length || null },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
@@ -5473,7 +5515,7 @@ export default function Overwatch() {
   const renderTab = (id) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":

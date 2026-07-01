@@ -1146,7 +1146,7 @@ const fetchNews = async () => {
         return true;
       });
     const nowSec = Math.floor(Date.now() / 1000);
-    const maxAgeHours = 48;
+    const maxAgeHours = 24;
     const enriched = sourceItems.map((item) => {
       const read = classifyHeadline(item.title || "");
       const tickers = headlineTickers(item.title || "");
@@ -1165,8 +1165,9 @@ const fetchNews = async () => {
         note: headlineNote({ ...read, tickers }),
       };
     });
+    // Keep strictly to the last 24h; only fall back to the wider set if nothing at all is that fresh.
     const recent = enriched.filter((item) => item.ageHours <= maxAgeHours);
-    const pool = recent.length >= 5 ? recent : enriched;
+    const pool = recent.length ? recent : enriched;
     // Rank by a recency-weighted score with a 24h half-life. Recency dominates (0.7) so fresh,
     // lower-impact stories are no longer crowded out of the top 100 by the standing macro/rate
     // items; impact only gets a light thumb (0.3) on the scale and breaks near-ties.
