@@ -1268,6 +1268,9 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .cal-embed-card-body{margin-top:10px;height:520px;border-radius:10px;overflow:hidden;background:#0b0f14}
 .cal-embed-card-body .tradingview-widget-container{height:100%}
 .tv-skeleton{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);background:var(--panel);background-image:linear-gradient(100deg,transparent 30%,rgba(148,163,184,.07) 50%,transparent 70%);background-size:200% 100%;animation:tvShimmer 1.3s ease-in-out infinite}
+.news-title-btn{background:none;border:none;padding:0;margin:0;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.news-title-btn:hover{color:var(--brass)}
+.news-reader-summary{flex:none;display:flex;flex-direction:column;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--panel2)}
 .news-feed-scroll{scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .news-feed-scroll::-webkit-scrollbar{width:9px}
 .news-feed-scroll::-webkit-scrollbar-track{background:transparent}
@@ -2603,12 +2606,33 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, onRefresh
 
 const CAT_TONE = { macro: "b-info", fed: "b-brass", earnings: "b-bull", geopolitical: "b-bear", technical: "", flows: "b-info", volatility: "b-brass" };
 
-const NewsTab = ({ news, onRefresh, onAddNote }) => {
+const newsKey = (h) => h?.url || h?.title || "";
+
+const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = useState("all");
   const [tone, setTone] = useState("all");
   const [sortBy, setSortBy] = useState("time"); // time | impact
   const [sortDir, setSortDir] = useState("desc"); // desc (newest / highest first) | asc
+  const [previewKey, setPreviewKey] = useState(null);
+  // Reader nav needs the live filtered list, but hooks must run before the early returns, so read
+  // it through a ref that each render keeps current.
+  const filteredRef = useRef([]);
+  useEffect(() => {
+    if (!previewKey) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") { setPreviewKey(null); return; }
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        const list = filteredRef.current;
+        const i = list.findIndex((x) => newsKey(x) === previewKey);
+        const n = list[i + (e.key === "ArrowRight" ? 1 : -1)];
+        if (n) setPreviewKey(newsKey(n));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    if (!inSplit) document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [previewKey, inSplit]);
 
   if (status === "idle")
     return (
@@ -2637,6 +2661,47 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
   ).sort((a, b) => sortSign * (sortBy === "impact"
     ? (b.impact - a.impact) || ((b.providerPublishTime || 0) - (a.providerPublishTime || 0))
     : (b.providerPublishTime || 0) - (a.providerPublishTime || 0)));
+  filteredRef.current = filtered;
+
+  // In-app article reader — embeds the source page (falls back to the desk summary + an "open
+  // original" link when a publisher blocks framing), with prev/next over the filtered feed.
+  const current = previewKey ? filtered.find((h) => newsKey(h) === previewKey) : null;
+  const idx = current ? filtered.findIndex((h) => newsKey(h) === previewKey) : -1;
+  const go = (delta) => { const n = filtered[idx + delta]; if (n) setPreviewKey(newsKey(n)); };
+  const reader = current ? (
+    <>
+      <div className="nl-reader-head">
+        <Newspaper size={15} style={{ opacity: 0.6, flex: "none" }} />
+        <div className="nl-reader-title">
+          <span className="nl-reader-name">{current.title}</span>
+          <span className="nl-reader-date">{current.source}{current.timeAgo ? ` · ${current.timeAgo}` : ""}</span>
+        </div>
+        <div className="nl-reader-nav">
+          <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Previous (←)"><ChevronUp size={15} /></button>
+          <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= filtered.length - 1} onClick={() => go(1)} title="Next (→)"><ChevronDown size={15} /></button>
+        </div>
+        {current.url && <a className="btn btn-ghost btn-sm" href={current.url} target="_blank" rel="noreferrer" title="Open original"><ExternalLink size={15} /></a>}
+        <button className="btn btn-ghost btn-sm" onClick={() => setPreviewKey(null)} title="Close (Esc)"><X size={16} /></button>
+      </div>
+      <div className="news-reader-summary">
+        <div className="news-top" style={{ marginBottom: 6 }}>
+          <span className={`chip ${CAT_TONE[current.category] || ""}`}>{current.category}</span>
+          <span className="chip" style={{ color: sentColor(current.sentiment), borderColor: sentColor(current.sentiment) + "66" }}>{current.sentiment}</span>
+          <ImpactBars n={current.impact} />
+          {!!(current.tickers || []).length && (current.tickers || []).map((tk) => <span className="ticker-tag" key={tk}>{tk}</span>)}
+        </div>
+        {current.note && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{current.note}</div>}
+        {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ marginTop: 4 }}>Open original <ExternalLink size={13} /></a>}
+      </div>
+      {current.url
+        ? <iframe key={current.url} src={current.url} title="Article" className="nl-reader-frame" referrerPolicy="no-referrer" />
+        : <div style={{ flex: 1, display: "grid", placeItems: "center", color: C.muted, fontSize: 12.5 }}>No source link for this headline.</div>}
+    </>
+  ) : null;
+
+  if (inSplit && current) {
+    return <div className="nl-reader nl-reader-inpane">{reader}</div>;
+  }
 
   return (
     <div>
@@ -2681,7 +2746,7 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
                 <span className="news-meta">{h.source}{h.timeAgo ? ` · ${h.timeAgo}` : ""}</span>
               </div>
               <div className="news-title">
-                {h.url ? <a href={h.url} target="_blank" rel="noreferrer">{h.title}</a> : h.title}
+                <button type="button" className="news-title-btn" onClick={() => setPreviewKey(newsKey(h))} title="Open in reader">{h.title}</button>
               </div>
               {h.note && <div className="news-note">{h.note}</div>}
               {!!(h.tickers || []).length && (
@@ -2697,6 +2762,12 @@ const NewsTab = ({ news, onRefresh, onAddNote }) => {
           {!filtered.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
         </div>
       </div>
+      {current && createPortal(
+        <div className="nl-reader-overlay" onClick={() => setPreviewKey(null)}>
+          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{reader}</div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
@@ -5400,7 +5471,7 @@ export default function Overwatch() {
       case "pulse":
         return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
       case "news":
-        return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} />;
+        return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
         return <CalendarTab points={points} onRefresh={refreshPoints} inSplit={splitOn} />;
       case "thesis":
