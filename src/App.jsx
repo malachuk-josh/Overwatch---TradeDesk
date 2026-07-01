@@ -4115,12 +4115,27 @@ const JOURNAL_TYPE_META = {
 const journalTypeMeta = (type) =>
   JOURNAL_TYPE_META[String(type || "wrap").toLowerCase()] || { Icon: Mail, color: "var(--muted)" };
 
+// Reactive desktop check (matchMedia) — drives how many library rows show collapsed.
+const useIsDesktop = (bp = 768) => {
+  const [desk, setDesk] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= bp));
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(`(min-width: ${bp}px)`);
+    const on = () => setDesk(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [bp]);
+  return desk;
+};
+
 const CloudNewsletterList = ({ inSplit = false }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [previewId, setPreviewId] = useState(null);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const collapsedCount = useIsDesktop() ? 5 : 3;
 
   useEffect(() => {
     fetch("/api/archive?limit=50")
@@ -4156,7 +4171,7 @@ const CloudNewsletterList = ({ inSplit = false }) => {
   const filtered = !query ? items : items.filter((item) =>
     [item.type, item.bias, item.instrument, item.title, rowDate(item.sentAt)].filter(Boolean).join(" ").toLowerCase().includes(query));
   const effectiveExpanded = expanded || !!query;
-  const shown = effectiveExpanded ? filtered : filtered.slice(0, 3);
+  const shown = effectiveExpanded ? filtered : filtered.slice(0, collapsedCount);
 
   // Reader navigation runs over the full archive (newest first).
   const current = previewId ? items.find((i) => i.id === previewId) : null;
@@ -4219,9 +4234,9 @@ const CloudNewsletterList = ({ inSplit = false }) => {
           </div>
         ))}
       </div>
-      {!query && filtered.length > 3 && (
+      {!query && filtered.length > collapsedCount && (
         <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
-          {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - 3} more</>}
+          {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - collapsedCount} more</>}
         </button>
       )}
       {current && createPortal(
@@ -4246,6 +4261,7 @@ const ArchiveTab = ({
   const [expanded, setExpanded] = useState(false);
   const [journalOpen, setJournalOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(true);
+  const collapsedCount = useIsDesktop() ? 5 : 3;
   const query = q.trim().toLowerCase();
   const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
     const t = entry._type === "newsletter" ? entry._thesis : entry;
@@ -4253,7 +4269,7 @@ const ArchiveTab = ({
       .filter(Boolean).join(" ").toLowerCase().includes(query);
   });
   const effectiveExpanded = expanded || !!query;
-  const shownHistory = effectiveExpanded ? filteredHistory : filteredHistory.slice(0, 3);
+  const shownHistory = effectiveExpanded ? filteredHistory : filteredHistory.slice(0, collapsedCount);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
@@ -4312,9 +4328,9 @@ const ArchiveTab = ({
             );
           })}
         </div>
-        {!query && filteredHistory.length > 3 && (
+        {!query && filteredHistory.length > collapsedCount && (
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
-            {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - 3} more</>}
+            {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - collapsedCount} more</>}
           </button>
         )}
         </>)}
