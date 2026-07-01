@@ -741,12 +741,6 @@ const Freshness = ({ at }) => {
   );
 };
 
-const RefreshBtn = ({ onClick, loading, label = "Refresh" }) => (
-  <button className="btn btn-ghost btn-sm" onClick={onClick} disabled={loading} title={label}>
-    <RefreshCw size={13} className={loading ? "spin" : ""} />
-  </button>
-);
-
 const Skeleton = ({ h = 16, w = "100%", style }) => <div className="skel" style={{ height: h, width: w, ...style }} />;
 
 const LoadingBlock = ({ lines = 3, msg }) => (
@@ -1582,7 +1576,6 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
   if (status === "error" && !data) return <ErrBlock msg={error} onRetry={onRefresh} />;
 
   const vix = tickers.find((t) => t.symbol === "VIX");
-  const recapBusy = recap?.status === "loading";
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
@@ -1592,7 +1585,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         className={readOpen ? "" : "read-clickable"}
         onClick={readOpen ? undefined : () => setReadOpen(true)}
         tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" />
+          <Freshness at={at} />
           <span
             className="session-read-toggle"
             role="button"
@@ -1893,7 +1886,6 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
             <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
               <span className="mono" style={{ color: C.faint || C.muted, fontSize: 10 }}>{data?.sourceCount ? `${data.sourceCount} raw items screened` : `${heads.length} headlines`}</span>
               <Freshness at={at} />
-              <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
             </span>
           </div>
           <p>{data?.brief || data?.mood || "No desk brief in the last sync."}</p>
@@ -2107,7 +2099,6 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
         <Freshness at={at} />
-        <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
 
       <div className="calendar-heroes">
@@ -2461,7 +2452,6 @@ const DataPointSection = ({ points, onRefresh }) => {
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
         <Freshness at={at} />
-        <RefreshBtn onClick={onRefresh} loading={status === "loading"} />
       </div>
       <div className="grid g-2" style={{ alignItems: "start" }}>
         <Card icon={Activity} title="Internals regime" sub="Breadth, trend state, volatility structure">
