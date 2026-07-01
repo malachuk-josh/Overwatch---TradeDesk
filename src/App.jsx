@@ -72,6 +72,13 @@ const DEFAULT_WATCHLIST = [
   { symbol: "GC", name: "Gold Futures" },
   { symbol: "CL", name: "WTI Crude Oil" },
   { symbol: "BTC", name: "Bitcoin" },
+  // Cross-asset context reads — semis leadership, the front end of the curve, credit risk appetite,
+  // the growth-cyclical commodity, and crypto breadth beyond BTC. Shown on the board by default.
+  { symbol: "SMH", name: "VanEck Semiconductor ETF" },
+  { symbol: "US02Y", name: "US 2-Year Treasury Yield" },
+  { symbol: "HYG", name: "iShares High Yield Corporate Bond ETF" },
+  { symbol: "HG", name: "Copper Futures" },
+  { symbol: "ETH", name: "Ethereum" },
   // Magnificent Seven mega-caps ship on the board but start hidden (off) — flip them on from
   // Settings to render their ticker cards on Market Pulse. Their live prices are fetched either way.
   { symbol: "AAPL", name: "Apple", off: true },
