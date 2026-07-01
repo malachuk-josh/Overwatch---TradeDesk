@@ -1844,25 +1844,6 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
   const [tone, setTone] = useState("all");
   const [sortBy, setSortBy] = useState("time"); // time | impact
   const [sortDir, setSortDir] = useState("desc"); // desc (newest / highest first) | asc
-  const [previewKey, setPreviewKey] = useState(null);
-  // Reader nav needs the live filtered list, but hooks must run before the early returns, so read
-  // it through a ref that each render keeps current.
-  const filteredRef = useRef([]);
-  useEffect(() => {
-    if (!previewKey) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") { setPreviewKey(null); return; }
-      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-        const list = filteredRef.current;
-        const i = list.findIndex((x) => newsKey(x) === previewKey);
-        const n = list[i + (e.key === "ArrowRight" ? 1 : -1)];
-        if (n) setPreviewKey(newsKey(n));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    if (!inSplit) document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [previewKey, inSplit]);
 
   if (status === "idle")
     return (
@@ -1891,50 +1872,6 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
   ).sort((a, b) => sortSign * (sortBy === "impact"
     ? (b.impact - a.impact) || ((b.providerPublishTime || 0) - (a.providerPublishTime || 0))
     : (b.providerPublishTime || 0) - (a.providerPublishTime || 0)));
-  filteredRef.current = filtered;
-
-  // In-app article reader — embeds the source page (falls back to the desk summary + an "open
-  // original" link when a publisher blocks framing), with prev/next over the filtered feed.
-  const current = previewKey ? filtered.find((h) => newsKey(h) === previewKey) : null;
-  const idx = current ? filtered.findIndex((h) => newsKey(h) === previewKey) : -1;
-  const go = (delta) => { const n = filtered[idx + delta]; if (n) setPreviewKey(newsKey(n)); };
-  const reader = current ? (
-    <>
-      <div className="nl-reader-head">
-        <Newspaper size={15} style={{ opacity: 0.6, flex: "none" }} />
-        <div className="nl-reader-title">
-          <span className="nl-reader-name">{current.title}</span>
-          <span className="nl-reader-date">{current.source}{current.timeAgo ? ` · ${current.timeAgo}` : ""}</span>
-        </div>
-        <div className="nl-reader-nav">
-          <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Previous (←)"><ChevronUp size={15} /></button>
-          <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= filtered.length - 1} onClick={() => go(1)} title="Next (→)"><ChevronDown size={15} /></button>
-        </div>
-        {current.url && <a className="btn btn-ghost btn-sm" href={current.url} target="_blank" rel="noreferrer" title="Open original"><ExternalLink size={15} /></a>}
-        <button className="btn btn-ghost btn-sm" onClick={() => setPreviewKey(null)} title="Close (Esc)"><X size={16} /></button>
-      </div>
-      <div className="news-reader-summary">
-        <div className="news-top" style={{ marginBottom: 6 }}>
-          <span className={`chip ${CAT_TONE[current.category] || ""}`}>{current.category}</span>
-          <span className="chip" style={{ color: sentColor(current.sentiment), borderColor: sentColor(current.sentiment) + "66" }}>{current.sentiment}</span>
-          <ImpactBars n={current.impact} />
-          {!!(current.tickers || []).length && (current.tickers || []).map((tk) => <span className="ticker-tag" key={tk}>{tk}</span>)}
-        </div>
-        {current.note && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{current.note}</div>}
-      </div>
-      <div className="news-reader-fallback">
-        <Newspaper size={30} style={{ opacity: 0.35 }} />
-        <div style={{ fontSize: 13, color: C.muted, textAlign: "center", maxWidth: 380, lineHeight: 1.65 }}>
-          {current.source ? `${current.source} — ` : ""}the full article opens on the publisher's site (most block in-app embedding).
-        </div>
-        {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-brass">Open original article <ExternalLink size={14} /></a>}
-      </div>
-    </>
-  ) : null;
-
-  if (inSplit && current) {
-    return <div className="nl-reader nl-reader-inpane">{reader}</div>;
-  }
 
   return (
     <div>
@@ -1978,7 +1915,9 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
                 <span className="news-meta">{h.source}{h.timeAgo ? ` · ${h.timeAgo}` : ""}</span>
               </div>
               <div className="news-title">
-                <button type="button" className="news-title-btn" onClick={() => setPreviewKey(newsKey(h))} title="Open in reader">{h.title}</button>
+                {h.url
+                  ? <a href={h.url} target="_blank" rel="noreferrer" className="news-title-link" title="Open article in a new tab">{h.title}</a>
+                  : <span>{h.title}</span>}
               </div>
               {h.note && <div className="news-note">{h.note}</div>}
               {!!(h.tickers || []).length && (
@@ -1994,12 +1933,6 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
           {!filtered.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
         </div>
       </div>
-      {current && createPortal(
-        <div className="nl-reader-overlay" onClick={() => setPreviewKey(null)}>
-          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{reader}</div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 };
