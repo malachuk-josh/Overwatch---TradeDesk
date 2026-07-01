@@ -935,7 +935,7 @@ const classifyHeadline = (title) => {
           : "flows";
   const impact = /fed|fomc|powell|inflation|cpi|ppi|jobs|payroll|war|iran|tariff|treasury|yield|vix/.test(text)
     ? 5
-    : /earnings|nasdaq|s&p|dow|futures|nvidia|apple|microsoft|oil|crude|dollar/.test(text)
+    : /earnings|nasdaq|s&p|dow|futures|nvidia|apple|microsoft|amazon|alphabet|google|meta|tesla|oil|crude|opec|energy|wti|dollar/.test(text)
       ? 4
       : 3;
   return {
@@ -948,12 +948,20 @@ const classifyHeadline = (title) => {
 const headlineTickers = (title) => {
   const text = title.toLowerCase();
   const tags = [];
-  if (/s&p|spx|es\b|stock market|futures/.test(text)) tags.push("SPX", "ES");
-  if (/nasdaq|ndx|nq\b|tech|nvidia|apple|microsoft|meta|amazon|tesla|semiconductor|chip/.test(text)) tags.push("NDX", "NQ");
-  if (/dow|dji|ym\b|industrial/.test(text)) tags.push("DJI", "YM");
+  // Single-stock tags first so a Mag 7 name survives the 5-tag cap ahead of the broad index tags.
+  if (/\bnvidia\b|\bnvda\b/.test(text)) tags.push("NVDA");
+  if (/\bapple\b|\baapl\b|\biphone\b/.test(text)) tags.push("AAPL");
+  if (/\bmicrosoft\b|\bmsft\b/.test(text)) tags.push("MSFT");
+  if (/\balphabet\b|\bgoogle\b|\bgoogl\b|\bgoog\b/.test(text)) tags.push("GOOGL");
+  if (/\bamazon\b|\bamzn\b/.test(text)) tags.push("AMZN");
+  if (/\bmeta\b|\bfacebook\b/.test(text)) tags.push("META");
+  if (/\btesla\b|\btsla\b/.test(text)) tags.push("TSLA");
+  if (/s&p|spx|\bes\b|stock market|futures/.test(text)) tags.push("SPX", "ES");
+  if (/nasdaq|ndx|\bnq\b|tech|nvidia|apple|microsoft|meta|amazon|tesla|semiconductor|chip/.test(text)) tags.push("NDX", "NQ");
+  if (/dow|dji|\bym\b|industrial/.test(text)) tags.push("DJI", "YM");
   if (/vix|volatility|options|put\/call/.test(text)) tags.push("VIX");
   if (/treasury|yield|fed|rate|cpi|ppi|inflation|jobs|payroll/.test(text)) tags.push("US10Y");
-  if (/oil|crude|energy|opec/.test(text)) tags.push("CL");
+  if (/oil|crude|energy|opec|\bwti\b/.test(text)) tags.push("CL");
   if (/dollar|greenback|currency/.test(text)) tags.push("DXY");
   if (/gold|safe haven/.test(text)) tags.push("GC");
   if (/bitcoin|crypto/.test(text)) tags.push("BTC");
@@ -1105,17 +1113,17 @@ const fetchNews = async () => {
   try {
     const yahooQueries = [
       "^GSPC", "^NDX", "^DJI", "^VIX", "^TNX", "ES=F", "NQ=F", "YM=F",
+      "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "CL=F",
       "Fed rates inflation CPI jobs Treasury",
       "stock market futures Nasdaq Dow S&P 500",
-      "Nvidia Apple Microsoft earnings Nasdaq",
       "oil dollar gold market geopolitics tariffs",
     ];
     const googleQueries = [
       "S&P 500 Nasdaq Dow stock market",
       "Federal Reserve interest rates inflation CPI",
       "stock market futures today",
-      "Nvidia Apple Microsoft tech stocks earnings",
-      "oil prices US dollar treasury yields",
+      "Nvidia Apple Microsoft Amazon Alphabet Meta Tesla stock",
+      "crude oil WTI OPEC energy prices",
     ];
     // Merge multiple free feeds for breadth + recency; any feed that fails contributes nothing.
     const [yahooItems, googleItems, finnhubItems] = await Promise.all([
@@ -1125,8 +1133,8 @@ const fetchNews = async () => {
     ]);
     const rawItems = [...yahooItems, ...googleItems, ...finnhubItems];
     const seen = new Set();
-    const relevant = /market|stocks|s&p|spx|nasdaq|ndx|dow|dji|fed|inflation|cpi|ppi|rates|treasury|yield|futures|vix|volatility|iran|oil|crude|trump|tariff|economy|jobs|dollar|bitcoin|gold|nvidia|apple|microsoft|earnings|chips|semiconductor/i;
-    const falsePositive = /tire inflation|roadside|jump start|jump-start|charging station|fast charging|power bank|portable charger|battery pack|electric vehicle charging/i;
+    const relevant = /market|stocks|s&p|spx|nasdaq|ndx|dow|dji|fed|inflation|cpi|ppi|rates|treasury|yield|futures|vix|volatility|iran|oil|crude|opec|energy|wti|trump|tariff|economy|jobs|dollar|bitcoin|gold|nvidia|nvda|apple|aapl|microsoft|msft|amazon|amzn|alphabet|google|googl|meta|facebook|tesla|tsla|earnings|chips|semiconductor/i;
+    const falsePositive = /tire inflation|roadside|jump start|jump-start|charging station|fast charging|power bank|portable charger|battery pack|electric vehicle charging|cooking oil|olive oil|essential oil|oil change|motor oil|palm oil|snake oil/i;
     const sourceItems = rawItems
       .filter((item) => {
         const title = String(item.title || "").trim();
