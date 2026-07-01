@@ -743,15 +743,17 @@ const Freshness = ({ at }) => {
 
 // Dark-yellow "as of" pill: shows the effective quote time (~15 min behind the last sync, since the
 // free feed is delayed) with a staleness tier. Shared by the global header and the Session read card.
-const AsOfLabel = ({ ts, prefix = "prices as of" }) => {
+const AsOfLabel = ({ ts, prefix = "prices as of", compact = false }) => {
   if (!ts) return null;
   const ageMin = Math.floor((Date.now() - ts) / 60000);
   const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
   const quoteLabel = new Date(ts - 15 * 60 * 1000)
     .toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+  // Compact form ("~15 min delay") is used where space is tight (Market snapshot header); the full
+  // form shows the effective quote time. The tooltip carries the specifics either way.
   return (
     <span className={`bd-asof ${tier}`} title={`Quotes are on a ~15-minute delay from a free public feed — not real-time. Displayed price time ≈ ${quoteLabel} ET; desk last synced ${ageMin}m ago.`}>
-      {tier === "stale" ? "STALE · " : ""}{prefix} {quoteLabel} ET
+      {tier === "stale" ? "STALE · " : ""}{compact ? "~15 min delay" : `${prefix} ${quoteLabel} ET`}
     </span>
   );
 };
@@ -1669,7 +1671,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {tickersOpen && at?.ts && (
               <span className="snap-asof" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
-                <AsOfLabel ts={at.ts} />
+                <AsOfLabel ts={at.ts} compact />
               </span>
             )}
             {tickersOpen && (
