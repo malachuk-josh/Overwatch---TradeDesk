@@ -1593,14 +1593,17 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         onClick={readOpen ? undefined : () => setReadOpen(true)}
         tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" />
-          <button
-            className="btn btn-ghost btn-sm session-read-toggle"
+          <span
+            className="session-read-toggle"
+            role="button"
+            tabIndex={0}
             aria-expanded={readOpen}
             title={readOpen ? "Collapse" : "Expand"}
             onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReadOpen((o) => !o); } }}
           >
-            {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
+            {readOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </span>
         </span>}
       >
         <div className="session-summary">{session.summary}</div>
