@@ -645,22 +645,7 @@ FUTURES VS CASH: ${timing.futuresCashSpread == null ? "unknown" : fmtSigned(timi
 TIMING NOTE: ${timing.timingNote || ""}`;
 };
 
-const sessionPrompt = ({ market, news, points }) => `You are the strategist on Overwatch Intelligence's live desk. Write a concise AI market recap for the Session read card. Today is ${dateLine()}.
-
-=== LIVE DESK DATA ===
-${condenseMarket(market)}
-
-${condenseNews(news)}
-
-${condensePoints(points)}
-
-Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
-{"headline":"<6-10 word plain-English market read>","recap":"<60-85 words; plain English; translate desk data into what it means for a trader>","takeaways":["<3 short watch items, each 5-10 words>"],"risk":"<1 short sentence on what could upset the read>"}
-
-Tone: calm, useful, and concrete. Use actual numbers from the data, but avoid jargon such as contango, backwardation, proxy, dispersion, or ETF internals unless you immediately translate it into plain English. Focus on what matters to an index trader right now.
-If FOMC, a Fed decision, economic projections, or a Fed press conference appears in today's calendar, explicitly address it as a primary catalyst.`;
-
-const thesisPrompt = ({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair }) => {
+const thesisPrompt =({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair }) => {
   const focus = thesisInstrumentConfig(instrument);
   const isStock = focus.group === "stock";
   const stockLevelsLine = focusLevels
@@ -1090,7 +1075,7 @@ const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, li
   );
 };
 
-const buildSessionRead = ({ market, points, news, recap }) => {
+const buildSessionRead = ({ market, points, news }) => {
   const tickers = Array.isArray(market?.tickers) ? market.tickers : [];
   const bySymbol = (symbol) => tickers.find((t) => t.symbol === symbol);
   const spx = bySymbol("SPX");
@@ -1166,15 +1151,7 @@ const buildSessionRead = ({ market, points, news, recap }) => {
     },
   ];
   const note = [positioning ? `Flow color: ${positioning}` : null, newsLine ? `News context: ${newsLine}` : null].filter(Boolean).join(" · ");
-  return {
-    summary,
-    cards,
-    note,
-    recapHeadline: recap?.headline || "",
-    recapText: recap?.recap || "",
-    recapTakeaways: Array.isArray(recap?.takeaways) ? recap.takeaways.filter(Boolean).slice(0, 3) : [],
-    recapRisk: recap?.risk || "",
-  };
+  return { summary, cards, note };
 };
 
 const ETF_INSTRUMENTS = new Set(["SPY", "QQQ", "DIA"]);
@@ -1640,7 +1617,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onAiRecap, onGoThesis }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -1656,7 +1633,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
   const orderedTickers = useMemo(() => orderAssetCards(tickers), [tickers]);
   // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
   const anyMarketOpen = useMemo(() => orderedTickers.some((t) => symbolMarketOpen(t.symbol)), [orderedTickers]);
-  const session = useMemo(() => buildSessionRead({ market: data, points, news, recap: recap?.data }), [data, points, news, recap?.data]);
+  const session = useMemo(() => buildSessionRead({ market: data, points, news }), [data, points, news]);
 
   // The snapshot grid after the "Markets" filter. Mag 7 pulls from the full fetched set so it can be
   // seen even though those tickers are hidden from the default board; other filters stay on the board.
@@ -1695,29 +1672,6 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         tools={<Freshness at={at} />}
       >
         <div className="session-summary">{session.summary}</div>
-        {session.recapText && (
-          <div className="session-ai">
-            {session.recapHeadline && <div className="session-ai-headline">{session.recapHeadline}</div>}
-            <div className="session-ai-text">{session.recapText}</div>
-            {!!session.recapTakeaways.length && (
-              <ul className="session-ai-list">
-                {session.recapTakeaways.map((t, i) => <li key={i}>{t}</li>)}
-              </ul>
-            )}
-            {session.recapRisk && <div className="session-ai-risk"><span>Risk</span> {session.recapRisk}</div>}
-          </div>
-        )}
-        <div className="session-ai-actions">
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={onAiRecap}
-            disabled={recap?.status === "loading" || status !== "ready"}
-            title="Generate a Claude-written recap on demand (uses one API call)"
-          >
-            <Sparkles size={12} /> {recap?.status === "loading" ? "Generating…" : session.recapText ? "Refresh AI recap" : "AI recap"}
-          </button>
-          {recap?.status === "error" && <span className="session-ai-err">Recap failed — try again</span>}
-        </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
@@ -4442,7 +4396,6 @@ export default function Overwatch() {
   const [market, setMarket] = useState(IDLE);
   const [news, setNews] = useState(IDLE);
   const [points, setPoints] = useState(IDLE);
-  const [recap, setRecap] = useState(IDLE);
   const [thesis, setThesis] = useState(IDLE);
   const [archiveHistory, setArchiveHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
@@ -4632,13 +4585,8 @@ export default function Overwatch() {
   };
   const refreshNews = () => runFetch(setNews, "news", newsPrompt());
   const refreshPoints = () => runFetch(setPoints, "points", pointsPrompt());
-  // Session recap defaults to the free local read; the "AI recap" button passes { ai: true } to
-  // spend a single Claude call on demand. Sync/auto-refresh never trigger it.
-  const refreshRecap = (payload = {}, { ai = false } = {}) =>
-    runFetch(setRecap, "recap", ai ? sessionPrompt(payload) : "", { ...payload, ai });
-  const aiRecap = () => refreshRecap({ market: market.data, news: news.data, points: points.data }, { ai: true });
 
-  const anyLoading = [market, news, points, recap].some((m) => m.status === "loading");
+  const anyLoading = [market, news, points].some((m) => m.status === "loading");
   const anyData = !!(market.data || news.data || points.data);
 
   const syncAll = async ({ silent = false } = {}) => {
@@ -4663,14 +4611,14 @@ export default function Overwatch() {
   // every field as an effect dependency (which used to tear down and rebuild the interval + listeners
   // on every sync and every watchlist edit, and could fire an extra fetch when the watchlist changed).
   const refreshStateRef = useRef(null);
-  refreshStateRef.current = { market, news, points, recap, syncAll };
+  refreshStateRef.current = { market, news, points, syncAll };
 
   useEffect(() => {
     if (!storageReady || tab !== "pulse") return;
     const maybeRefresh = () => {
-      const { market: m, news: n, points: p, recap: rc, syncAll: run } = refreshStateRef.current;
+      const { market: m, news: n, points: p, syncAll: run } = refreshStateRef.current;
       if (document.visibilityState !== "visible") return;
-      if ([m, n, p, rc].some((s) => s.status === "loading")) return;
+      if ([m, n, p].some((s) => s.status === "loading")) return;
       run({ silent: true });
     };
     const cur = refreshStateRef.current.market;
@@ -4797,7 +4745,7 @@ export default function Overwatch() {
   const renderTab = (id) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} recap={recap} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onAiRecap={aiRecap} onGoThesis={() => setTab("thesis")} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":

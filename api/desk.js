@@ -2049,84 +2049,6 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   };
 };
 
-
-const makeSessionRecap = ({ market, news, points }) => {
-  const tickers = market?.tickers || [];
-  const bySymbol = (symbol) => tickers.find((item) => item.symbol === symbol);
-  const spx = bySymbol("SPX");
-  const ndx = bySymbol("NDX");
-  const dji = bySymbol("DJI");
-  const vix = bySymbol("VIX");
-  const indexMoves = [spx, ndx, dji].filter(Boolean);
-  const avgMove = indexMoves.length
-    ? indexMoves.reduce((sum, item) => sum + (Number(item.changePct) || 0), 0) / indexMoves.length
-    : 0;
-  const tone = avgMove > 0.35 ? "constructive" : avgMove < -0.35 ? "cautious" : "mixed";
-  const sectors = [...(market?.sectors || [])]
-    .filter((s) => s && Number.isFinite(Number(s.changePct)))
-    .sort((a, b) => b.changePct - a.changePct);
-  const greenCount = sectors.filter((s) => s.changePct > 0).length;
-  const totalCount = sectors.length || 11;
-  const breadth = sectors.length
-    ? `${greenCount}/${totalCount} major sectors are higher`
-    : String(points?.internals?.breadth || "Breadth is still loading").replace(/[.\s]+$/, "");
-  const breadthLine = sectors.length
-    ? greenCount >= 7
-      ? "Market participation is broad enough to support the move."
-      : greenCount <= 3
-        ? "Participation is thin, so any bounce needs confirmation."
-        : "Sector participation is mixed."
-    : breadth;
-  const structure = points?.vix?.structure || (Number(vix?.price) > 25 ? "backwardation" : Number(vix?.price) < 16 ? "contango" : "flat");
-  const vixPrice = Number(vix?.price);
-  const volLine = Number.isFinite(vixPrice)
-    ? vixPrice >= 25
-      ? `Volatility is elevated at VIX ${round(vixPrice, 1)}, so intraday swings can stay sharp.`
-      : vixPrice <= 16
-        ? `Volatility is calm at VIX ${round(vixPrice, 1)}.`
-        : `Volatility is manageable at VIX ${round(vixPrice, 1)}.`
-    : "Volatility is still loading.";
-  const calendarGroups = points?.calendarGroups || {};
-  const calendarPool = [
-    ...(calendarGroups.today || []),
-    ...(calendarGroups.tomorrow || []),
-    ...(calendarGroups.upcoming || []),
-    ...(Array.isArray(points?.calendar) ? points.calendar : []),
-  ];
-  const catalystItem = pickCalendarCatalyst(calendarPool);
-  const catalyst = catalystItem
-    ? `${catalystItem.event}${catalystItem.time ? ` at ${catalystItem.time}` : ""}`
-    : "no major catalyst on deck";
-  const newsLine = news?.mood || "";
-  const posture = typeof points?.positioning === "string" ? null : points?.positioning?.posture;
-  const flowLine = posture === "risk-on"
-    ? "Flows are leaning supportive."
-    : posture === "defensive"
-      ? "Flows are leaning cautious."
-      : posture === "mixed"
-        ? "Flows are not giving a clean signal yet."
-        : "";
-  const indexLine = [spx, ndx, dji].filter(Boolean).map((item) => `${item.symbol} ${signed(item.changePct, 2, "%")}`).join(", ");
-  const recap = `${tone[0].toUpperCase()}${tone.slice(1)} market read: ${indexLine || "major indexes are still loading"}. ${volLine} ${breadthLine} ${flowLine ? `${flowLine} ` : ""}${newsLine ? `${newsLine} ` : ""}Next event to watch: ${catalyst}.`;
-  const headline = tone === "constructive"
-    ? "Buyers have the edge for now"
-    : tone === "cautious"
-      ? "Caution stays in control"
-      : "Mixed market, wait for proof";
-  return {
-    headline,
-    recap,
-    takeaways: [
-      spx && ndx && dji ? `Indexes: ${indexLine}` : "Indexes still need confirmation",
-      Number.isFinite(vixPrice) ? `Volatility: VIX ${round(vixPrice, 1)} (${structure === "backwardation" ? "elevated stress" : structure === "contango" ? "no panic signal" : "balanced"})` : "Volatility still loading",
-      `Next: ${catalyst}`,
-    ],
-    risk: catalystItem
-      ? `${catalystItem.event} can change the tone quickly if it surprises.`
-      : "A fresh headline or volatility expansion can still flip the read quickly.",
-  };
-};
-
 const _kvUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const _kvToken = () => process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -2183,19 +2105,6 @@ export default async function handler(req, res) {
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol);
-    else if (operation === "recap") {
-      // Only spend on Claude when the client explicitly asks for an AI recap (the "AI recap"
-      // button). Default syncs never set payload.ai, so they cost nothing — the Session read
-      // card already renders a locally-computed template read.
-      if (payload.ai) {
-        try {
-          data = await callAnthropic(prompt);
-        } catch {
-          data = null;
-        }
-      }
-      data ||= makeSessionRecap(payload);
-    }
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {
