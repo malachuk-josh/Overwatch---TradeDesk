@@ -1579,7 +1579,25 @@ const cleanModelJson = (text) => {
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("Model did not return JSON");
-  return JSON.parse(cleaned.slice(start, end + 1));
+  const slice = cleaned.slice(start, end + 1);
+  try {
+    return JSON.parse(slice);
+  } catch {
+    // Models sometimes emit raw newlines/tabs inside string values, which is invalid JSON
+    // ("Bad control character in string literal"). Escape control chars that fall inside strings.
+    let out = "", inStr = false, esc = false;
+    for (const ch of slice) {
+      if (esc) { out += ch; esc = false; continue; }
+      if (ch === "\\") { out += ch; esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; out += ch; continue; }
+      if (inStr && (ch === "\n" || ch === "\r" || ch === "\t")) {
+        out += ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : "\\t";
+        continue;
+      }
+      out += ch;
+    }
+    return JSON.parse(out);
+  }
 };
 
 const callAnthropic = async (prompt) => {
@@ -1640,32 +1658,27 @@ const fetchArticleBrief = async ({ title, source, url } = {}) => {
   if (!title) return { brief: "", points: [], found: false };
   const meta = `Headline: "${title}"\nSource: ${source || "unknown"}${url ? `\nURL: ${url}` : ""}`;
   const schema = `Respond with ONLY a raw JSON object — no markdown fences, no commentary:\n{"brief":"<2-3 tight paragraphs, plain text, no markdown>","points":["<key takeaway>","<key takeaway>","<key takeaway>"]}`;
-  const shape = (out, grounded, extra = {}) => ({
+  const shape = (out, grounded) => ({
     brief: typeof out.brief === "string" ? out.brief : "",
     points: Array.isArray(out.points) ? out.points.filter((p) => typeof p === "string").slice(0, 5) : [],
     found: Boolean(out.brief),
     grounded,
-    ...extra,
   });
 
   // 1) Grounded via web search.
-  let errSearch = null;
   try {
     const out = await callAnthropicSearch(`You are a markets news desk assistant. A trader wants to read this specific story without leaving the app.\n\n${meta}\n\nUse web search to find THIS story (or the closest current coverage of the same event) and write a grounded brief. Report ONLY what the coverage actually says — do not speculate or invent details. Focus on what happened and why it matters for markets.\n\n${schema}`);
     if (out && typeof out === "object" && out.brief) return shape(out, true);
-  } catch (e) {
-    errSearch = String((e && e.message) || e).slice(0, 300);
-  }
+  } catch {}
 
   // 2) Fallback: an interpretive context brief from the headline (no live search), for when web
   // search is unavailable on the account. Clearly flagged as context, not the original article.
   try {
     const out = await callAnthropic(`You are a markets news desk assistant. A trader is reading this headline in-app and wants a quick, useful read on it.\n\n${meta}\n\nWrite a concise brief that (a) explains what the headline is most likely reporting and (b) why it matters for markets and how a trader might read it. Do NOT invent specific figures, quotes, or facts that aren't implied by the headline — keep it to interpretation and market context. This is context, not the original article.\n\n${schema}`);
-    if (out && typeof out === "object" && out.brief) return shape(out, false, errSearch ? { _err: errSearch } : {});
-  } catch (e) {
-    return { brief: "", points: [], found: false, _err: errSearch || String((e && e.message) || e).slice(0, 300) };
-  }
-  return { brief: "", points: [], found: false, _err: errSearch };
+    if (out && typeof out === "object" && out.brief) return shape(out, false);
+  } catch {}
+
+  return { brief: "", points: [], found: false };
 };
 
 const avgChangeForSymbols = (tickers, symbols) => {
