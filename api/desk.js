@@ -1074,29 +1074,6 @@ const fetchFinnhubNews = async () => {
   }
 };
 
-// Best-effort Claude pass that re-scores each headline's sentiment for US index direction; returns
-// the headlines untouched if there's no key or the call fails (the keyword classifier stands in).
-const scoreHeadlineSentiment = async (headlines) => {
-  if (!process.env.ANTHROPIC_API_KEY || !headlines.length) return headlines;
-  try {
-    const list = headlines.map((h, i) => `${i}. ${h.title}`).join("\n");
-    const out = await callAnthropic(
-      `You are a markets desk classifying news for US equity index direction (S&P 500, Nasdaq, Dow). ` +
-      `For each numbered headline, decide whether it is bullish, bearish, or neutral for US stock indices over the next 1-3 sessions. ` +
-      `Reply with ONLY JSON in the form {"sentiments":[{"i":0,"s":"bullish"}, ...]} and include every headline index.\n\n${list}`
-    );
-    const arr = out?.sentiments;
-    if (Array.isArray(arr)) {
-      const map = new Map(arr.map((x) => [Number(x.i), String(x.s || "").toLowerCase()]));
-      headlines.forEach((h, i) => {
-        const s = map.get(i);
-        if (s === "bullish" || s === "bearish" || s === "neutral") h.sentiment = s;
-      });
-    }
-  } catch { /* keep keyword sentiment */ }
-  return headlines;
-};
-
 // Recency-weighted net tone over the headline set (newest news dominates via a 24h half-life).
 const recencyWeightedSentiment = (headlines, nowSec) => {
   const HALF_LIFE_H = 24;
@@ -1186,9 +1163,9 @@ const fetchNews = async () => {
       // Keep providerPublishTime so the UI can order chronologically; rank reflects the blended score.
       .map(({ ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
-    // Upgrade each headline's sentiment with a single Claude pass (keyword read is the fallback),
-    // then derive the aggregates from the improved labels.
-    await scoreHeadlineSentiment(headlines);
+    // Sentiment comes from the keyword classifier (zero-cost). We deliberately do NOT run a
+    // per-refresh Claude pass here — that fired on every auto-refresh and quietly billed the
+    // Anthropic key. Aggregates derive straight from the keyword labels.
     const sentimentScore = recencyWeightedSentiment(headlines, nowSec);
     const bullish = headlines.filter((item) => item.sentiment === "bullish").length;
     const bearish = headlines.filter((item) => item.sentiment === "bearish").length;
