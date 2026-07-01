@@ -1623,7 +1623,10 @@ const callAnthropicSearch = async (prompt) => {
     }),
     signal: AbortSignal.timeout(30000),
   });
-  if (!response.ok) throw new Error(`Anthropic (search) returned ${response.status}`);
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`search ${response.status}: ${body.slice(0, 400)}`);
+  }
   const payload = await response.json();
   const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
   return cleanModelJson(text);
@@ -1635,26 +1638,34 @@ const callAnthropicSearch = async (prompt) => {
 const fetchArticleBrief = async ({ title, source, url } = {}) => {
   if (!process.env.ANTHROPIC_API_KEY) return { brief: "", points: [], found: false, unconfigured: true };
   if (!title) return { brief: "", points: [], found: false };
-  const prompt = `You are a markets news desk assistant. A trader wants to read this specific story without leaving the app.
+  const meta = `Headline: "${title}"\nSource: ${source || "unknown"}${url ? `\nURL: ${url}` : ""}`;
+  const schema = `Respond with ONLY a raw JSON object — no markdown fences, no commentary:\n{"brief":"<2-3 tight paragraphs, plain text, no markdown>","points":["<key takeaway>","<key takeaway>","<key takeaway>"]}`;
+  const shape = (out, grounded, extra = {}) => ({
+    brief: typeof out.brief === "string" ? out.brief : "",
+    points: Array.isArray(out.points) ? out.points.filter((p) => typeof p === "string").slice(0, 5) : [],
+    found: Boolean(out.brief),
+    grounded,
+    ...extra,
+  });
 
-Headline: "${title}"
-Source: ${source || "unknown"}${url ? `\nURL: ${url}` : ""}
-
-Use web search to find THIS story (or the closest current coverage of the same event) and write a grounded brief. Report ONLY what the coverage actually says — do not speculate, invent quotes, or add details that aren't in the sources. Focus on what happened and why it matters for markets. If you cannot find the story, set found to false and leave brief empty.
-
-Respond with ONLY a raw JSON object — no markdown fences, no commentary:
-{"brief":"<2-3 tight paragraphs, plain text, no markdown>","points":["<key takeaway>","<key takeaway>","<key takeaway>"],"found":<true|false>}`;
+  // 1) Grounded via web search.
+  let errSearch = null;
   try {
-    const out = await callAnthropicSearch(prompt);
-    if (!out || typeof out !== "object") return { brief: "", points: [], found: false };
-    return {
-      brief: typeof out.brief === "string" ? out.brief : "",
-      points: Array.isArray(out.points) ? out.points.filter((p) => typeof p === "string").slice(0, 5) : [],
-      found: out.found !== false && Boolean(out.brief),
-    };
-  } catch {
-    return { brief: "", points: [], found: false };
+    const out = await callAnthropicSearch(`You are a markets news desk assistant. A trader wants to read this specific story without leaving the app.\n\n${meta}\n\nUse web search to find THIS story (or the closest current coverage of the same event) and write a grounded brief. Report ONLY what the coverage actually says — do not speculate or invent details. Focus on what happened and why it matters for markets.\n\n${schema}`);
+    if (out && typeof out === "object" && out.brief) return shape(out, true);
+  } catch (e) {
+    errSearch = String((e && e.message) || e).slice(0, 300);
   }
+
+  // 2) Fallback: an interpretive context brief from the headline (no live search), for when web
+  // search is unavailable on the account. Clearly flagged as context, not the original article.
+  try {
+    const out = await callAnthropic(`You are a markets news desk assistant. A trader is reading this headline in-app and wants a quick, useful read on it.\n\n${meta}\n\nWrite a concise brief that (a) explains what the headline is most likely reporting and (b) why it matters for markets and how a trader might read it. Do NOT invent specific figures, quotes, or facts that aren't implied by the headline — keep it to interpretation and market context. This is context, not the original article.\n\n${schema}`);
+    if (out && typeof out === "object" && out.brief) return shape(out, false, errSearch ? { _err: errSearch } : {});
+  } catch (e) {
+    return { brief: "", points: [], found: false, _err: errSearch || String((e && e.message) || e).slice(0, 300) };
+  }
+  return { brief: "", points: [], found: false, _err: errSearch };
 };
 
 const avgChangeForSymbols = (tickers, symbols) => {

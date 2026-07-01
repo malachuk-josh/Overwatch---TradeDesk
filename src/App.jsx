@@ -1876,7 +1876,7 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
     setBriefs((b) => ({ ...b, [previewKey]: { status: "loading" } }));
     let cancelled = false;
     callDesk("articlebrief", undefined, { title: art.title, source: art.source, url: art.url })
-      .then((d) => { if (!cancelled) setBriefs((b) => ({ ...b, [previewKey]: { status: "ready", brief: d?.brief || "", points: d?.points || [], found: !!d?.found, unconfigured: !!d?.unconfigured } })); })
+      .then((d) => { if (!cancelled) setBriefs((b) => ({ ...b, [previewKey]: { status: "ready", brief: d?.brief || "", points: d?.points || [], found: !!d?.found, grounded: d?.grounded === true, unconfigured: !!d?.unconfigured } })); })
       .catch(() => { if (!cancelled) setBriefs((b) => ({ ...b, [previewKey]: { status: "error" } })); });
     return () => { cancelled = true; };
   }, [previewKey]);
@@ -1954,7 +1954,7 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
         if (brief.status === "ready" && brief.found && brief.brief) {
           return (
             <div className="news-brief">
-              <div className="news-brief-label"><Sparkles size={12} /> AI brief · grounded via web search — verify at the source</div>
+              <div className="news-brief-label"><Sparkles size={12} /> {brief.grounded ? "AI brief · grounded via web search — verify at the source" : "AI context brief · interpretation, not the original — verify at the source"}</div>
               {brief.brief.split(/\n\n+/).filter(Boolean).map((p, i) => <p className="news-brief-p" key={i}>{p}</p>)}
               {!!(brief.points || []).length && (
                 <ul className="news-brief-points">
