@@ -1696,6 +1696,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         className={readOpen ? "" : "read-clickable"}
         onClick={readOpen ? undefined : () => setReadOpen(true)}
         tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <Freshness at={at} />
           <span
             className="session-read-toggle"
             role="button"
