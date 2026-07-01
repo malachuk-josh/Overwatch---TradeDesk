@@ -1668,6 +1668,11 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
             {tickersOpen && liveOnly ? `${orderedTickers.filter((t) => symbolMarketOpen(t.symbol)).length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
           </small>
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            {tickersOpen && at?.ts && (
+              <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
+                <AsOfLabel ts={at.ts} />
+              </span>
+            )}
             {tickersOpen && (
               <button
                 className={`fchip snap-live${liveOnly ? " on" : ""}`}
