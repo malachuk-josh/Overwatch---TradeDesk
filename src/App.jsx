@@ -46,7 +46,8 @@ import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
-import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings } from "./auth.jsx";
+import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
+import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive } from "./auth.jsx";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -1433,6 +1434,10 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .wl-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 8px 6px 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel2);margin:0 7px 7px 0}
 .wl-x{cursor:pointer;color:var(--faint);display:grid;place-items:center;border-radius:5px;padding:2px}
 .wl-x:hover{color:var(--bear);background:var(--bear-dim)}
+.sync-status{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.5;color:var(--muted);background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;margin-bottom:18px}
+.sync-status svg{flex:none;margin-top:1px;color:var(--faint)}
+.sync-status.on{border-color:var(--brass);background:var(--brass-dim);color:var(--text)}
+.sync-status.on svg{color:var(--brass)}
 .wl-eye{cursor:pointer;color:var(--faint);display:grid;place-items:center;border-radius:5px;padding:2px;margin-right:1px}
 .wl-eye:hover{color:var(--brass);background:var(--brass-dim)}
 .wl-chip-off{opacity:.5}
@@ -4932,7 +4937,7 @@ const ArchiveTab = ({
    SETTINGS DRAWER + TOASTS
    ================================================================ */
 
-const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, storageOk, notify }) => {
+const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, storageOk, notify, auth }) => {
   const [sym, setSym] = useState("");
   const [name, setName] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -4964,6 +4969,14 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           <span className="disp" style={{ fontWeight: 600, fontSize: 15, marginLeft: 9, letterSpacing: ".04em" }}>DESK SETTINGS</span>
           <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
         </div>
+
+        {CLERK_ENABLED && (
+          <div className={`sync-status${auth?.signedIn ? " on" : ""}`}>
+            {auth?.signedIn
+              ? <><Check size={13} /> <span>Synced to your account{auth.email ? ` · ${auth.email}` : ""}. Your watchlist, weights and library follow you across devices.</span></>
+              : <><LogIn size={13} /> <span>Sign in (top bar) to sync your watchlist, weights and thesis library across devices. Not signed in, everything stays in this browser.</span></>}
+          </div>
+        )}
 
         <span className="lab-label">Watchlist · {watchlist.length}/{WATCHLIST_CAP}</span>
         <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 8px" }}>Tap the eye to show/hide a ticker card on Market Pulse. Hidden names still price for the Thesis Lab.</div>
@@ -5337,6 +5350,7 @@ export default function Overwatch() {
   const auth = useAuthSync();
   const cloudHydrated = useRef(false); // true once this session has loaded the account's settings
   const cloudSaveTimer = useRef(null);
+  const prevSignedIn = useRef(false); // to detect a sign-out transition (Phase 4 cache clear)
 
   // Apply a settings blob (from local storage or the cloud) through the state setters.
   const applyLoadedSettings = useCallback((s) => {
@@ -5367,14 +5381,17 @@ export default function Overwatch() {
         if (s.risk) setRisk(s.risk);
         if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
       }
-      // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
+      // Load archive. When auth is enabled the library is per-user (hydrated by the sign-in effect
+      // below) or local-only when signed out — so we never touch the shared global archive here.
+      // When auth is disabled, keep the legacy shared archive (Upstash first, local fallback).
       let ah = null;
-      let fromKV = false;
-      try {
-        ah = await callDesk("getarchive");
-        fromKV = Array.isArray(ah);
-      } catch {}
-      if (!fromKV) {
+      if (!CLERK_ENABLED) {
+        try {
+          const kv = await callDesk("getarchive");
+          if (Array.isArray(kv)) ah = kv;
+        } catch {}
+      }
+      if (!Array.isArray(ah)) {
         ah = await loadStored(ARCHIVE_KEY, null);
       }
       if (Array.isArray(ah) && ah.length) {
@@ -5399,14 +5416,17 @@ export default function Overwatch() {
     if (!storageReady || !auth.signedIn) { cloudHydrated.current = false; return; }
     let cancelled = false;
     (async () => {
-      const cloud = await loadUserSettings(auth.getToken).catch(() => null);
+      const [cloudSettings, cloudArchive] = await Promise.all([
+        loadUserSettings(auth.getToken).catch(() => null),
+        loadUserArchive(auth.getToken).catch(() => null),
+      ]);
       if (cancelled) return;
-      if (cloud) {
-        applyLoadedSettings(cloud);
-      } else {
-        // No account record yet — push the current (local) settings up as the initial snapshot.
-        await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
-      }
+      // Settings: account is source of truth; seed it from this browser the first time.
+      if (cloudSettings) applyLoadedSettings(cloudSettings);
+      else await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
+      // Thesis library: same — adopt the account's library, or seed it with the current one.
+      if (Array.isArray(cloudArchive)) setArchiveHistory(cloudArchive);
+      else await saveUserArchive(auth.getToken, archiveHistory).catch(() => {});
       cloudHydrated.current = true;
     })();
     return () => { cancelled = true; };
@@ -5425,12 +5445,36 @@ export default function Overwatch() {
   }, [storageReady, auth.signedIn, watchlist, instrument, weights, lean, risk, deskTools]);
   useEffect(() => {
     if (!storageReady) return;
-    saveStored(ARCHIVE_KEY, archiveHistory);
+    saveStored(ARCHIVE_KEY, archiveHistory); // local cache always
     if (archiveSaveTimer.current) clearTimeout(archiveSaveTimer.current);
     archiveSaveTimer.current = setTimeout(() => {
-      callDesk("savearchive", undefined, { archive: archiveHistory }).catch(() => {});
+      if (auth.signedIn) {
+        // Per-user library — but not until the sign-in hydrate has run, so we never overwrite the
+        // account with pre-hydration defaults.
+        if (cloudHydrated.current) saveUserArchive(auth.getToken, archiveHistory).catch(() => {});
+      } else if (!CLERK_ENABLED) {
+        // Legacy shared archive, only when auth is disabled. (Signed-out with auth on = local only.)
+        callDesk("savearchive", undefined, { archive: archiveHistory }).catch(() => {});
+      }
     }, 1500);
-  }, [storageReady, archiveHistory]);
+  }, [storageReady, archiveHistory, auth.signedIn]);
+
+  /* on sign-out, wipe synced data from memory so a shared browser doesn't expose the last account
+     (Phase 4). The reset writes defaults to the local cache too; signing back in re-hydrates. */
+  useEffect(() => {
+    if (!CLERK_ENABLED || !auth.ready) return;
+    if (prevSignedIn.current && !auth.signedIn) {
+      cloudHydrated.current = false;
+      setWatchlist(DEFAULT_WATCHLIST);
+      setInstrument(DEFAULT_THESIS_INSTRUMENT);
+      setWeights(DEFAULT_WEIGHTS);
+      setLean("auto");
+      setRisk("balanced");
+      setDeskTools(DEFAULT_DESK_TOOLS);
+      setArchiveHistory([]);
+    }
+    prevSignedIn.current = auth.signedIn;
+  }, [auth.ready, auth.signedIn]);
 
   const notify = useCallback((msg, kind = "ok") => {
     const id = uid();
@@ -5777,6 +5821,7 @@ export default function Overwatch() {
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
         watchlist={watchlist} setWatchlist={setWatchlist}
         onClearHistory={clearHistory} storageOk={storageOk} notify={notify}
+        auth={auth}
       />
       <Toasts items={toasts} />
     </div>

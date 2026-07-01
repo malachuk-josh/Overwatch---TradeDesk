@@ -56,6 +56,28 @@ export async function saveUserSettings(getToken, settings) {
   return res.ok;
 }
 
+// Per-user thesis library / archive (Phase 3). loadUserArchive returns an array, or null when the
+// account has no record yet (so the caller knows to seed it from this browser's library).
+export async function loadUserArchive(getToken) {
+  const token = await getToken?.();
+  if (!token) return null;
+  const res = await fetch("/api/user/archive", { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const { data } = await res.json();
+  return Array.isArray(data) ? data : null;
+}
+
+export async function saveUserArchive(getToken, archive) {
+  const token = await getToken?.();
+  if (!token) return false;
+  const res = await fetch("/api/user/archive", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ archive }),
+  });
+  return res.ok;
+}
+
 // Keep Clerk's popovers/modal on-brand with the dark desk (brass-blue accent).
 const clerkAppearance = {
   variables: {
