@@ -249,6 +249,102 @@ const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLab
   </select>
 );
 
+// Toggle-style ticker picker with a search filter and a scrollable, grouped instrument list. Portaled
+// to <body> so a card's overflow can't clip it; closes on outside click / Escape. `exclude` omits a
+// symbol (e.g. the other leg) from the list.
+const TickerPicker = ({ value, onChange, exclude, title = "Change the instrument being priced" }) => {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const inputRef = useRef(null);
+  const cur = thesisInstrumentConfig(value);
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, left: r.left, width: Math.max(r.width, 240) });
+    };
+    place();
+    const onDoc = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    const focusTimer = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+      clearTimeout(focusTimer);
+    };
+  }, [open]);
+  const needle = q.trim().toLowerCase();
+  const match = (it) => !needle || it.symbol.toLowerCase().includes(needle) || it.name.toLowerCase().includes(needle);
+  const anyMatch = THESIS_INSTRUMENTS.some((it) => it.symbol !== exclude && match(it));
+  return (
+    <span className="tkr-picker">
+      <button
+        ref={btnRef}
+        type="button"
+        className="bd-in tkr-picker-btn"
+        onClick={() => { setOpen((o) => !o); setQ(""); }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title={title}
+      >
+        <span className="tkr-picker-sym">{cur.symbol}</span>
+        <span className="tkr-picker-name">{cur.name}</span>
+        <ChevronDown size={13} style={{ opacity: 0.7, marginLeft: "auto", flex: "none" }} />
+      </button>
+      {open && pos && createPortal(
+        <div ref={menuRef} className="tkr-picker-menu" style={{ top: pos.top, left: pos.left, width: pos.width }} role="listbox" onClick={(e) => e.stopPropagation()}>
+          <input
+            ref={inputRef}
+            className="tkr-picker-search"
+            placeholder="Filter tickers…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <div className="tkr-picker-scroll">
+            {INSTRUMENT_GROUPS.map((g) => {
+              const items = THESIS_INSTRUMENTS.filter((it) => it.group === g.group && it.symbol !== exclude && match(it));
+              if (!items.length) return null;
+              return (
+                <div className="tkr-picker-group" key={g.group}>
+                  <div className="tkr-picker-glabel">{g.label}</div>
+                  {items.map((it) => (
+                    <button
+                      key={it.symbol}
+                      type="button"
+                      role="option"
+                      aria-selected={it.symbol === value}
+                      className={`tkr-picker-item${it.symbol === value ? " on" : ""}`}
+                      onClick={() => { onChange(it.symbol); setOpen(false); }}
+                    >
+                      <span className="tkr-picker-isym">{it.symbol}</span>
+                      <span className="tkr-picker-iname">{it.name}</span>
+                      {it.symbol === value && <Check size={13} style={{ marginLeft: "auto", flex: "none" }} />}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+            {!anyMatch && <div className="tkr-picker-empty">No tickers match “{q}”.</div>}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
+};
+
 const C = {
   bull: "#22C55E",
   bear: "#EF4444",
@@ -2907,7 +3003,7 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true, symbol = null, onPickTicker = null, pickExclude = null }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
   // Have any calculator inputs been changed from their defaults? Drives the Reset control.
   const DEF = DEFAULT_DESK_TOOLS;
@@ -2933,6 +3029,12 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
         sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}
         tools={inputsDirty ? <button className="btn btn-ghost btn-sm" title="Reset all calculator inputs to defaults" onClick={onReset}><RotateCcw size={12} /> Reset</button> : null}
       >
+        {onPickTicker && (
+          <div className="lab-field" style={{ marginBottom: 14 }}>
+            <span className="lab-label">Ticker</span>
+            <TickerPicker value={symbol} onChange={onPickTicker} exclude={pickExclude} />
+          </div>
+        )}
         <div className="seg" style={{ marginBottom: 14 }}>
           {["call", "put"].map((ty) => (
             <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
@@ -3317,11 +3419,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         {toolView === "options" && (
           hasSecondary ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} />
-              <OptionsCalculator env={deskTools.env2} setEnv={setEnv2} opt={deskTools.options2} setOpt={setOpt2} onReset={resetOptionsCalc2} live={live2} heading={`Secondary · ${live2.cfg?.label || secondary}`} showFeed={false} />
+              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} />
+              <OptionsCalculator env={deskTools.env2} setEnv={setEnv2} opt={deskTools.options2} setOpt={setOpt2} onReset={resetOptionsCalc2} live={live2} heading={`Secondary · ${live2.cfg?.label || secondary}`} showFeed={false} symbol={secondary} onPickTicker={setSecondary} pickExclude={instrument} />
             </div>
           ) : (
-            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} />
+            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} onPickTicker={setInstrument} />
           )
         )}
         {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
