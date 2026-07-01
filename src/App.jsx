@@ -741,6 +741,21 @@ const Freshness = ({ at }) => {
   );
 };
 
+// Dark-yellow "as of" pill: shows the effective quote time (~15 min behind the last sync, since the
+// free feed is delayed) with a staleness tier. Shared by the global header and the Session read card.
+const AsOfLabel = ({ ts, prefix = "prices as of" }) => {
+  if (!ts) return null;
+  const ageMin = Math.floor((Date.now() - ts) / 60000);
+  const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+  const quoteLabel = new Date(ts - 15 * 60 * 1000)
+    .toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+  return (
+    <span className={`bd-asof ${tier}`} title={`Quotes are on a ~15-minute delay from a free public feed — not real-time. Displayed price time ≈ ${quoteLabel} ET; desk last synced ${ageMin}m ago.`}>
+      {tier === "stale" ? "STALE · " : ""}{prefix} {quoteLabel} ET
+    </span>
+  );
+};
+
 const Skeleton = ({ h = 16, w = "100%", style }) => <div className="skel" style={{ height: h, width: w, ...style }} />;
 
 const LoadingBlock = ({ lines = 3, msg }) => (
@@ -1585,7 +1600,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         className={readOpen ? "" : "read-clickable"}
         onClick={readOpen ? undefined : () => setReadOpen(true)}
         tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Freshness at={at} />
+          <AsOfLabel ts={at?.ts} />
           <span
             className="session-read-toggle"
             role="button"
@@ -4838,18 +4853,7 @@ export default function Overwatch() {
         </div>
         <div className="bd-hright">
           <span className="bd-clock">{clock}<span>ET</span></span>
-          {market.at && (() => {
-            const ageMin = Math.floor((Date.now() - market.at.ts) / 60000);
-            const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
-            // Show the effective quote time (~15 min behind the sync) since the free feed is delayed.
-            const quoteLabel = new Date(market.at.ts - 15 * 60 * 1000)
-              .toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-            return (
-              <span className={`bd-asof ${tier}`} title={`Quotes are on a ~15-minute delay from a free public feed — not real-time. Displayed price time ≈ ${quoteLabel} ET; desk last synced ${ageMin}m ago.`}>
-                {tier === "stale" ? "STALE · " : ""}prices as of {quoteLabel} ET
-              </span>
-            );
-          })()}
+          <AsOfLabel ts={market.at?.ts} />
           <span className={`bd-session bd-session-${session.tone}`}>
             <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
             {session.label}
