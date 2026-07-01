@@ -390,6 +390,24 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .tkr-picker-isym{min-width:54px;font-weight:700;font-size:13px}
 .tkr-picker-iname{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tkr-picker-empty{padding:14px;font-size:12px;color:var(--muted);text-align:center}
+.tstruct-list{display:flex;flex-direction:column;gap:14px}
+.tstruct{border:1px solid var(--line);border-radius:10px;padding:13px 14px;background:var(--panel2)}
+.tstruct-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px}
+.tstruct-title{font-weight:700;font-size:13.5px;color:var(--text)}
+.tstruct-flag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px;border:1px solid}
+.tstruct-flag.ok{color:var(--bull);border-color:rgba(34,197,94,.5)}
+.tstruct-flag.warn{color:var(--bear);border-color:rgba(239,68,68,.5)}
+.tstruct-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:11px}
+.tstruct-stat{display:flex;flex-direction:column;gap:2px}
+.tstruct-stat span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.tstruct-stat b{font-size:14px;color:var(--text);font-family:'JetBrains Mono',monospace}
+.tstruct-stat small{font-size:10.5px;color:var(--muted)}
+.tstruct-ladder{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px}
+.tstruct-ladder-row{display:grid;grid-template-columns:1.5fr 1fr .7fr;gap:8px;padding:6px 11px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text)}
+.tstruct-ladder-row+.tstruct-ladder-row{border-top:1px solid var(--line)}
+.tstruct-ladder-head{background:var(--panel3);font-family:inherit;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.tstruct-ladder-row span:nth-child(2),.tstruct-ladder-row span:nth-child(3){text-align:right}
+.tstruct-note{font-size:11.5px;line-height:1.55;color:var(--muted)}
 
 /* ---------- heatmap ---------- */
 .hm{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:7px}
