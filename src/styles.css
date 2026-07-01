@@ -83,6 +83,13 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bd-asof{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;color:#C9A227;padding:5px 9px;border-radius:999px;border:1px solid rgba(201,162,39,.45);background:rgba(201,162,39,.1);white-space:nowrap}
 .bd-asof.stale{color:var(--bear);border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.1)}
 @media(max-width:760px){.bd-asof{display:none}}
+/* On mobile the top-bar as-of pill is hidden for space, but inside an open Market snapshot the
+   delayed-price notice matters more than the instrument count — so surface the pill there and drop
+   the count to make room. */
+@media(max-width:760px){
+  .snap-asof .bd-asof{display:inline-block}
+  .snap-open .snap-count{display:none}
+}
 .bd-session{
   display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;
   font-size:10.5px;letter-spacing:.14em;padding:6px 11px;border-radius:999px;
