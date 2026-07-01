@@ -467,10 +467,14 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .metric-note{font-size:11px;color:var(--muted);line-height:1.45}
 .internals-regime{display:flex;flex-direction:column;gap:11px}
 .internals-hero{
-  display:flex;justify-content:space-between;gap:14px;align-items:flex-start;
+  display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;
   border:1px solid var(--line2);border-radius:11px;padding:14px 15px;
   background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.11),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
 }
+/* Let the scorecard drop below the copy when the card is too narrow (e.g. split view) instead of
+   being crushed against it — viewport media queries don't catch a narrow pane in a wide window. */
+.internals-hero > div:first-child{flex:1 1 240px;min-width:0}
+.internals-scorecard{flex:0 0 auto}
 .internals-kicker{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass)}
 .internals-hero h3{font-family:'Space Grotesk',sans-serif;font-size:20px;line-height:1.15;margin-top:5px;text-transform:capitalize}
 .internals-hero p{font-size:12.5px;line-height:1.58;color:var(--muted);margin-top:7px;max-width:650px}
