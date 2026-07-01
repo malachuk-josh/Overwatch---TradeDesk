@@ -1592,7 +1592,7 @@ const callAnthropic = async (prompt) => {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
       max_tokens: 1600,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -1616,7 +1616,7 @@ const callAnthropicSearch = async (prompt) => {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
       max_tokens: 1200,
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
       messages: [{ role: "user", content: prompt }],
