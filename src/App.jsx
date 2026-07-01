@@ -1647,7 +1647,6 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
   const [tickersOpen, setTickersOpen] = useState(false); // Market snapshot — collapsed by default
   const [marketFilter, setMarketFilter] = useState("all"); // snapshot "Markets" dropdown (expanded only)
   const [levelsOpen, setLevelsOpen] = useState(true);    // Level maps — open by default (core read)
-  const [readOpen, setReadOpen] = useState(false);       // Session read — collapsed by default
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
   // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
@@ -1693,61 +1692,9 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         icon={Activity}
         title="Session read"
         sub="Plain-English market brief"
-        className={readOpen ? "" : "read-clickable"}
-        onClick={readOpen ? undefined : () => setReadOpen(true)}
-        tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Freshness at={at} />
-          <span
-            className="session-read-toggle"
-            role="button"
-            tabIndex={0}
-            aria-expanded={readOpen}
-            title={readOpen ? "Collapse" : "Expand"}
-            onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReadOpen((o) => !o); } }}
-          >
-            {readOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </span>
-        </span>}
+        tools={<Freshness at={at} />}
       >
         <div className="session-summary">{session.summary}</div>
-        <div className={`session-read-body${readOpen ? "" : " read-collapsed"}`}>
-        <div className="session-meta">{data?.asOf ? `quotes ${data.asOf}` : "quotes pending"} · {marketSession().tone === "live" ? "auto-refresh every 2m while Pulse is open" : `market ${marketSession().label.toLowerCase()} — values frozen at the last quote until the next session`}</div>
-        {(session.recapText || recap?.status === "loading") && (
-          <div className="session-recap">
-            <div className="session-recap-head">
-              <span className="session-recap-kicker">Market recap</span>
-              {recap?.status === "loading" && !recap?.data
-                ? <span className="session-recap-state">refreshing</span>
-                : session.recapHeadline
-                  ? <span className="session-recap-state">{session.recapHeadline}</span>
-                  : null}
-            </div>
-            <div className="session-recap-copy">{session.recapText || "Building the recap…"}</div>
-            {session.recapTakeaways.length > 0 && (
-              <>
-                <div className="session-recap-subhead">Watch next</div>
-                <div className="session-recap-points">
-                  {session.recapTakeaways.map((item, idx) => (
-                    <span className="session-recap-pill" key={`${idx}-${item}`}>{item}</span>
-                  ))}
-                </div>
-              </>
-            )}
-            {session.recapRisk && <div className="session-recap-risk">Keep in mind: {session.recapRisk}</div>}
-          </div>
-        )}
-        <div className="session-grid">
-          {session.cards.map((item) => (
-            <div className="session-stat" key={item.key}>
-              <div className="session-stat-key">{item.key}</div>
-              <div className="session-stat-val">{item.value}</div>
-              <div className="session-stat-note" title={item.note}>{item.note}</div>
-            </div>
-          ))}
-        </div>
-        {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
-        </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
