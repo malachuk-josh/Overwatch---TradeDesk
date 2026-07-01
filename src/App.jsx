@@ -1593,6 +1593,14 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         onClick={readOpen ? undefined : () => setReadOpen(true)}
         tools={<span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Freshness at={at} /><RefreshBtn onClick={onRefresh} loading={status === "loading" || recapBusy} label="Refresh full desk" />
+          <button
+            className="btn btn-ghost btn-sm session-read-toggle"
+            aria-expanded={readOpen}
+            title={readOpen ? "Collapse" : "Expand"}
+            onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
+          >
+            {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
         </span>}
       >
         <div className="session-summary">{session.summary}</div>
@@ -1632,16 +1640,6 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
           ))}
         </div>
         {session.note && !session.recapText && <div className="session-note">{session.note}</div>}
-        </div>
-        <div
-          className="session-read-foot"
-          role="button"
-          tabIndex={0}
-          aria-expanded={readOpen}
-          title={readOpen ? "Collapse" : "Expand"}
-          onClick={(e) => { e.stopPropagation(); setReadOpen((o) => !o); }}
-        >
-          {readOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
