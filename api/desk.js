@@ -960,7 +960,9 @@ const headlineTickers = (title) => {
   if (/nasdaq|ndx|\bnq\b|tech|nvidia|apple|microsoft|meta|amazon|tesla|semiconductor|chip/.test(text)) tags.push("NDX", "NQ");
   if (/dow|dji|\bym\b|industrial/.test(text)) tags.push("DJI", "YM");
   if (/vix|volatility|options|put\/call/.test(text)) tags.push("VIX");
-  if (/treasury|yield|fed|rate|cpi|ppi|inflation|jobs|payroll/.test(text)) tags.push("US10Y");
+  // Tag US10Y only for genuinely rates/bond-centric stories — not every fed/CPI/jobs macro
+  // mention — otherwise the whole macro feed collapses onto a single US10Y-tagged pile.
+  if (/treasury|yield|bond|\btnx\b|10-year|10 year|rate cut|rate hike|rate decision|fed funds/.test(text)) tags.push("US10Y");
   if (/oil|crude|energy|opec|\bwti\b/.test(text)) tags.push("CL");
   if (/dollar|greenback|currency/.test(text)) tags.push("DXY");
   if (/gold|safe haven/.test(text)) tags.push("GC");
@@ -1165,10 +1167,19 @@ const fetchNews = async () => {
     });
     const recent = enriched.filter((item) => item.ageHours <= maxAgeHours);
     const pool = recent.length >= 5 ? recent : enriched;
+    // Rank by a recency-weighted score with a 24h half-life. Recency dominates (0.7) so fresh,
+    // lower-impact stories are no longer crowded out of the top 100 by the standing macro/rate
+    // items; impact only gets a light thumb (0.3) on the scale and breaks near-ties.
+    const RANK_HALF_LIFE_H = 24;
+    const rankScore = (item) => {
+      const recency = Math.pow(0.5, (item.ageHours ?? 999) / RANK_HALF_LIFE_H);
+      const impactNorm = Math.min(5, Math.max(0, item.impact || 3)) / 5;
+      return 0.7 * recency + 0.3 * impactNorm;
+    };
     const headlines = pool
-      .sort((a, b) => (b.impact - a.impact) || (b.providerPublishTime - a.providerPublishTime))
+      .sort((a, b) => (rankScore(b) - rankScore(a)) || (b.providerPublishTime - a.providerPublishTime))
       .slice(0, 100)
-      // Keep providerPublishTime so the UI can order chronologically; rank still reflects significance.
+      // Keep providerPublishTime so the UI can order chronologically; rank reflects the blended score.
       .map(({ ageHours: _ah, ...item }, index) => ({ ...item, rank: index + 1 }));
     if (!headlines.length) throw new Error("No headlines");
     // Upgrade each headline's sentiment with a single Claude pass (keyword read is the fallback),
