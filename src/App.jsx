@@ -1554,12 +1554,98 @@ const LevelMapPanel = ({ points, tickers }) => {
    TAB — MARKET PULSE
    ================================================================ */
 
+// Market snapshot grid filters. "all" shows the visible board; "mag7" reveals the Mag 7 even though
+// they're hidden by default. Sets are matched against ticker symbols.
+const SNAP_FUTURES_SET = new Set(["ES", "NQ", "YM", "RTY"]);
+const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG"]);
+const SNAP_FILTER_OPTIONS = [
+  { key: "all", label: "All markets", short: "Markets" },
+  { key: "live", label: "Live now", short: "Live" },
+  { key: "futures", label: "Futures", short: "Futures" },
+  { key: "etfs", label: "ETFs", short: "ETFs" },
+  { key: "mag7", label: "Mag 7", short: "Mag 7" },
+];
+const SNAP_FILTER_TEST = {
+  live: (t) => symbolMarketOpen(t.symbol),
+  futures: (t) => SNAP_FUTURES_SET.has(t.symbol),
+  etfs: (t) => SNAP_ETF_SET.has(t.symbol),
+  mag7: (t) => THESIS_STOCK_SET.has(t.symbol),
+};
+
+// "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header.
+const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const current = SNAP_FILTER_OPTIONS.find((o) => o.key === value) || SNAP_FILTER_OPTIONS[0];
+  // The menu is portaled to <body> so the snapshot card's overflow:hidden can't clip it; position it
+  // under the button and keep it there on scroll/resize. Close on outside click or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    place();
+    const onDoc = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+  return (
+    <span className="snap-filter" onClick={(e) => e.stopPropagation()}>
+      <button
+        ref={btnRef}
+        className={`fchip snap-filter-btn${value !== "all" ? " on" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Filter the snapshot by market group"
+      >
+        {value === "live" && <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />}
+        {current.short}
+        <ChevronDown size={12} style={{ opacity: 0.7 }} />
+      </button>
+      {open && pos && createPortal(
+        <div ref={menuRef} className="snap-filter-menu" style={{ top: pos.top, right: pos.right }} role="listbox" onClick={(e) => e.stopPropagation()}>
+          {SNAP_FILTER_OPTIONS.map((o) => (
+            <button
+              key={o.key}
+              role="option"
+              aria-selected={o.key === value}
+              className={`snap-filter-item${o.key === value ? " on" : ""}`}
+              onClick={() => { onChange(o.key); setOpen(false); }}
+            >
+              {o.key === "live" && <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />}
+              <span>{o.label}</span>
+              {o.key === value && <Check size={13} style={{ marginLeft: "auto" }} />}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
+};
+
 const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
   const [tickersOpen, setTickersOpen] = useState(false); // Market snapshot — collapsed by default
-  const [liveOnly, setLiveOnly] = useState(false);       // "Live markets" filter (expanded only)
+  const [marketFilter, setMarketFilter] = useState("all"); // snapshot "Markets" dropdown (expanded only)
   const [levelsOpen, setLevelsOpen] = useState(true);    // Level maps — open by default (core read)
   const [readOpen, setReadOpen] = useState(false);       // Session read — collapsed by default
 
@@ -1572,6 +1658,14 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
   // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
   const anyMarketOpen = useMemo(() => orderedTickers.some((t) => symbolMarketOpen(t.symbol)), [orderedTickers]);
   const session = useMemo(() => buildSessionRead({ market: data, points, news, recap: recap?.data }), [data, points, news, recap?.data]);
+
+  // The snapshot grid after the "Markets" filter. Mag 7 pulls from the full fetched set so it can be
+  // seen even though those tickers are hidden from the default board; other filters stay on the board.
+  const displayTickers = useMemo(() => {
+    if (marketFilter === "mag7") return orderAssetCards((data?.tickers || []).filter((t) => THESIS_STOCK_SET.has(t.symbol)));
+    const test = SNAP_FILTER_TEST[marketFilter];
+    return test ? orderedTickers.filter(test) : orderedTickers;
+  }, [marketFilter, orderedTickers, data]);
 
   if (status === "idle")
     return (
@@ -1666,7 +1760,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
           <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
           <span>Market snapshot</span>
           <small className="snap-count" style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
-            {tickersOpen && liveOnly ? `${orderedTickers.filter((t) => symbolMarketOpen(t.symbol)).length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
+            {tickersOpen && marketFilter !== "all" ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
           </small>
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {tickersOpen && at?.ts && (
@@ -1675,21 +1769,12 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
               </span>
             )}
             {tickersOpen && (
-              <button
-                className={`fchip snap-live${liveOnly ? " on" : ""}`}
-                onClick={(e) => { e.stopPropagation(); setLiveOnly((v) => !v); }}
-                aria-pressed={liveOnly}
-                title="Show only markets that are trading right now"
-              >
-                <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />
-                Live markets
-              </button>
+              <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} />
             )}
             {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </span>
         </div>
         {tickersOpen && (() => {
-          const displayTickers = liveOnly ? orderedTickers.filter((t) => symbolMarketOpen(t.symbol)) : orderedTickers;
           return (
           <div style={{ padding: "12px 12px 12px" }}>
             {displayTickers.length ? (
@@ -1732,7 +1817,13 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
             ))}
             </div>
             ) : (
-              <div className="snap-empty">No markets are trading right now. Index futures and crypto run nearly around the clock; cash indexes, ETFs and single stocks reopen at the next session.</div>
+              <div className="snap-empty">
+                {marketFilter === "live"
+                  ? "No markets are trading right now. Index futures and crypto run nearly around the clock; cash indexes, ETFs and single stocks reopen at the next session."
+                  : marketFilter === "mag7"
+                    ? "No Mag 7 prices in the last sync — hit Sync to pull them in."
+                    : "Nothing on the board matches this filter."}
+              </div>
             )}
           </div>
           );
