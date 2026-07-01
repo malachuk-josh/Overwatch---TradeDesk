@@ -967,11 +967,11 @@ const BiasSpectrum = ({ score }) => {
 const ConvictionPips = ({ n, bias }) => {
   const color = bias === "bullish" ? C.bull : bias === "bearish" ? C.bear : C.brass;
   return (
-    <div className="pips" title={`Conviction ${n}/10`}>
+    <div className="pips" title={`Conviction ${n}/10 — how aligned the five weighted pillars are. Separate from Score (Score = direction + strength; Conviction = agreement).`}>
       {Array.from({ length: 10 }).map((_, i) => (
         <span key={i} className="pip" style={i < n ? { background: color, borderColor: color, boxShadow: `0 0 7px ${color}66` } : {}} />
       ))}
-      <span className="mono" style={{ fontSize: 11, color: C.muted, marginLeft: 6 }}>{n}/10</span>
+      <span className="mono" style={{ fontSize: 11, color: C.muted, marginLeft: 6 }}>CONV {n}/10</span>
     </div>
   );
 };
@@ -3488,7 +3488,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 9, alignItems: "flex-end" }}>
                   <span className="chip">{(t.instrument || instrument)} FOCUS</span>
-                  <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66" }}>SCORE {fmtSigned(t.score, 0)}</span>
+                  <span
+                    className="chip"
+                    style={{ color: biasColor, borderColor: biasColor + "66" }}
+                    title="Score — the signed weighted total across the five pillars (sign = direction, magnitude = strength, roughly -100…+100). Separate from Conviction (0–10), which measures how much the pillars agree."
+                  >SCORE {fmtSigned(t.score, 0)}</span>
                   <ConvictionPips n={t.conviction || 0} bias={t.bias} />
                 </div>
               </div>
@@ -4209,6 +4213,15 @@ const CHART_PRESETS = [
   { symbol: "COINBASE:BTCUSD", label: "BTC" },
 ];
 
+// Map a thesis instrument to the chart it should feature. Index futures have no direct preset, so
+// they proxy to their tracking ETF (ES→SPY, NQ→QQQ, …) — the same chart a trader reads them against.
+const THESIS_CHART_SYMBOL = {
+  SPY: "AMEX:SPY", QQQ: "NASDAQ:QQQ", DIA: "AMEX:DIA", IWM: "AMEX:IWM",
+  ES: "AMEX:SPY", NQ: "NASDAQ:QQQ", YM: "AMEX:DIA", RTY: "AMEX:IWM",
+  AAPL: "NASDAQ:AAPL", MSFT: "NASDAQ:MSFT", NVDA: "NASDAQ:NVDA", AMZN: "NASDAQ:AMZN",
+  META: "NASDAQ:META", GOOGL: "NASDAQ:GOOGL", TSLA: "NASDAQ:TSLA",
+};
+
 const TV_INTERVALS = [
   { value: "5",   label: "5m" },
   { value: "15",  label: "15m" },
@@ -4294,7 +4307,7 @@ const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-char
   );
 };
 
-const ChartsTab = ({ lightMode, compact = false }) => {
+const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
   const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
   const [selected, setSelected] = useState(() => {
     const valid = new Set(CHART_PRESETS.map((p) => p.symbol));
@@ -4319,6 +4332,14 @@ const ChartsTab = ({ lightMode, compact = false }) => {
   useEffect(() => {
     if (!selected.includes(activeSymbol)) setActiveSymbol(selected[0]);
   }, [selected, activeSymbol]);
+
+  // Follow the thesis instrument: feature its chart (top of the grid / active pane), adding it if
+  // it isn't already shown. Runs when the focus changes or the Charts tab (re)mounts.
+  useEffect(() => {
+    if (!focusSymbol) return;
+    setSelected((prev) => (prev[0] === focusSymbol ? prev : [focusSymbol, ...prev.filter((s) => s !== focusSymbol)]));
+    setActiveSymbol(focusSymbol);
+  }, [focusSymbol]);
 
   useEffect(() => {
     if (!fsSymbol) return;
@@ -4841,7 +4862,7 @@ export default function Overwatch() {
           />
         );
       case "charts":
-        return <ChartsTab lightMode={lightMode} compact={splitOn} />;
+        return <ChartsTab lightMode={lightMode} compact={splitOn} focusSymbol={THESIS_CHART_SYMBOL[instrument] || null} />;
       case "archives":
         return (
           <ArchiveTab
