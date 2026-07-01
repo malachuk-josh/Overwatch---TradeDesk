@@ -1864,6 +1864,23 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
   }, [previewKey, inSplit]);
 
+  // On open, fetch a grounded AI brief of the story (publishers block scraping, so we summarize the
+  // coverage instead of loading the page). Cached per article; keyed by previewKey (== its newsKey).
+  const [briefs, setBriefs] = useState({});
+  const briefFetched = useRef(new Set());
+  useEffect(() => {
+    if (!previewKey || briefFetched.current.has(previewKey)) return;
+    const art = filteredRef.current.find((x) => newsKey(x) === previewKey);
+    if (!art) return;
+    briefFetched.current.add(previewKey);
+    setBriefs((b) => ({ ...b, [previewKey]: { status: "loading" } }));
+    let cancelled = false;
+    callDesk("articlebrief", undefined, { title: art.title, source: art.source, url: art.url })
+      .then((d) => { if (!cancelled) setBriefs((b) => ({ ...b, [previewKey]: { status: "ready", brief: d?.brief || "", points: d?.points || [], found: !!d?.found, unconfigured: !!d?.unconfigured } })); })
+      .catch(() => { if (!cancelled) setBriefs((b) => ({ ...b, [previewKey]: { status: "error" } })); });
+    return () => { cancelled = true; };
+  }, [previewKey]);
+
   if (status === "idle")
     return (
       <EmptyState
@@ -1922,13 +1939,46 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
         </div>
         {current.note && <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55 }}>{current.note}</div>}
       </div>
-      <div className="news-reader-fallback">
-        <Newspaper size={30} style={{ opacity: 0.35 }} />
-        <div style={{ fontSize: 13, color: C.muted, textAlign: "center", maxWidth: 380, lineHeight: 1.65 }}>
-          {current.source ? `${current.source} — ` : ""}the full article opens on the publisher's site (most block in-app embedding).
-        </div>
-        {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-brass">Open original article <ExternalLink size={14} /></a>}
-      </div>
+      {(() => {
+        const brief = briefs[previewKey];
+        // Loading the grounded brief.
+        if (!brief || brief.status === "loading") {
+          return (
+            <div className="news-brief-loading">
+              <RefreshCw size={15} className="spin" />
+              <span>Reading up on this story…</span>
+            </div>
+          );
+        }
+        // Grounded brief available.
+        if (brief.status === "ready" && brief.found && brief.brief) {
+          return (
+            <div className="news-brief">
+              <div className="news-brief-label"><Sparkles size={12} /> AI brief · grounded via web search — verify at the source</div>
+              {brief.brief.split(/\n\n+/).filter(Boolean).map((p, i) => <p className="news-brief-p" key={i}>{p}</p>)}
+              {!!(brief.points || []).length && (
+                <ul className="news-brief-points">
+                  {brief.points.map((pt, i) => <li key={i}>{pt}</li>)}
+                </ul>
+              )}
+              {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm news-brief-open">Open original article <ExternalLink size={13} /></a>}
+            </div>
+          );
+        }
+        // Couldn't build a brief (no key, story not found, or error) — fall back to the open-original card.
+        return (
+          <div className="news-reader-fallback">
+            <Newspaper size={30} style={{ opacity: 0.35 }} />
+            <div style={{ fontSize: 13, color: C.muted, textAlign: "center", maxWidth: 380, lineHeight: 1.65 }}>
+              {brief?.unconfigured
+                ? "In-app briefs need the AI key configured. "
+                : "Couldn't pull a brief for this one. "}
+              {current.source ? `${current.source} — ` : ""}open it on the publisher's site.
+            </div>
+            {current.url && <a href={current.url} target="_blank" rel="noreferrer" className="btn btn-brass">Open original article <ExternalLink size={14} /></a>}
+          </div>
+        );
+      })()}
     </>
   ) : null;
 

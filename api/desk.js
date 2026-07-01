@@ -1604,6 +1604,59 @@ const callAnthropic = async (prompt) => {
   return cleanModelJson(text);
 };
 
+// Claude with the web-search tool enabled — used to ground an article brief in the actual coverage
+// rather than the model's memory. Returns the parsed JSON from the final text block.
+const callAnthropicSearch = async (prompt) => {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514",
+      max_tokens: 1200,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 4 }],
+      messages: [{ role: "user", content: prompt }],
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error(`Anthropic (search) returned ${response.status}`);
+  const payload = await response.json();
+  const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
+  return cleanModelJson(text);
+};
+
+// Grounded, in-app brief of a specific news story (publishers block scraping/embedding, so we
+// summarize the coverage instead of loading the page). Never fabricates — reports found:false if
+// the story can't be located.
+const fetchArticleBrief = async ({ title, source, url } = {}) => {
+  if (!process.env.ANTHROPIC_API_KEY) return { brief: "", points: [], found: false, unconfigured: true };
+  if (!title) return { brief: "", points: [], found: false };
+  const prompt = `You are a markets news desk assistant. A trader wants to read this specific story without leaving the app.
+
+Headline: "${title}"
+Source: ${source || "unknown"}${url ? `\nURL: ${url}` : ""}
+
+Use web search to find THIS story (or the closest current coverage of the same event) and write a grounded brief. Report ONLY what the coverage actually says — do not speculate, invent quotes, or add details that aren't in the sources. Focus on what happened and why it matters for markets. If you cannot find the story, set found to false and leave brief empty.
+
+Respond with ONLY a raw JSON object — no markdown fences, no commentary:
+{"brief":"<2-3 tight paragraphs, plain text, no markdown>","points":["<key takeaway>","<key takeaway>","<key takeaway>"],"found":<true|false>}`;
+  try {
+    const out = await callAnthropicSearch(prompt);
+    if (!out || typeof out !== "object") return { brief: "", points: [], found: false };
+    return {
+      brief: typeof out.brief === "string" ? out.brief : "",
+      points: Array.isArray(out.points) ? out.points.filter((p) => typeof p === "string").slice(0, 5) : [],
+      found: out.found !== false && Boolean(out.brief),
+    };
+  } catch {
+    return { brief: "", points: [], found: false };
+  }
+};
+
 const avgChangeForSymbols = (tickers, symbols) => {
   const values = symbols
     .map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct)
@@ -2215,6 +2268,8 @@ export default async function handler(req, res) {
           stance: data.stance || { ...fallback.stance, finalScore: data.score ?? fallback.stance.finalScore },
         }
         : fallback;
+    } else if (operation === "articlebrief") {
+      data = await fetchArticleBrief(payload);
     } else if (operation === "getarchive") {
       data = await getArchiveKV();
     } else if (operation === "savearchive") {
