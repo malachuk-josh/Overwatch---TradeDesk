@@ -774,7 +774,7 @@ Trader notes: ${notes ? notes : "none"}.
 ${deskContext ? `
 === DESK HEDGE & OPTIONS STRUCTURES (trader is actively considering these) ===
 ${deskContext}
-Weave these into the game plan: comment on whether the hedge sizing and option structures fit today's bias, conviction, and risk appetite, and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
+Weave these into the game plan with SPECIFICS: state whether each structure fits today's bias, conviction, and risk appetite; give concrete entry, profit-taking and stop/exit guidance for the priced option or hedge (reference the actual strike, premium and the thesis's own upside/downside levels); and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
 ` : ""}${pairBlock}
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
 {"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","pairRead":${pair ? `"<relative-value read: ${focus.symbol} vs ${pair.symbol}, the lean (which leg long/short), correlation/divergence to watch, and the key level on each leg>"` : '""'},"drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
@@ -2888,6 +2888,182 @@ const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
   return out;
 };
 
+// Numeric snapshot of the fed desk structures for the thesis output's Trade structure card. Computed
+// deterministically from the same Black-Scholes math, so it renders concrete entry / risk / exits
+// whether or not the AI narrative mentions the trade. Stored on the thesis entry at generation time.
+const buildTradeStructures = ({ deskTools, market, points, instrument }) => {
+  const live = deskLiveContext(market, points, instrument);
+  const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
+  const out = [];
+  if (S > 0 && deskTools.options.feed) {
+    const type = deskTools.options.type;
+    const K = numOr(deskTools.options.strike, roundStrike(S));
+    const bs = blackScholes({ S, K, T, r, q, sigma, type });
+    const entry = bs.price;
+    const breakeven = type === "call" ? K + entry : K - entry;
+    // Payoff ladder — reprice the contract across a spread of underlying moves at the same DTE.
+    const ladder = [-0.05, -0.025, 0, 0.025, 0.05].map((m) => {
+      const sp = S * (1 + m);
+      const val = blackScholes({ S: sp, K, T, r, q, sigma, type }).price;
+      return { movePct: m * 100, spot: sp, val, pnlPct: entry > 0 ? ((val - entry) / entry) * 100 : 0 };
+    });
+    out.push({
+      kind: "option", symbol: live.cfg.symbol, type, strike: K, days, spot: S, iv: sigma * 100,
+      entry, cost: entry * 100, breakeven, maxRisk: entry * 100,
+      delta: bs.delta, theta: bs.theta, vega: bs.vega, ladder,
+    });
+  }
+  const h = deskTools.hedge;
+  if (h.vertical.on && S > 0) {
+    const kL = numOr(h.vertical.longStrike, roundStrike(S));
+    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
+    const premL = blackScholes({ S, K: kL, T, r, q, sigma, type: h.vertical.type }).price;
+    const premS = blackScholes({ S, K: kS, T, r, q, sigma, type: h.vertical.type }).price;
+    const v = evalVertical({ type: h.vertical.type, kLong: kL, kShort: kS, premLong: premL, premShort: premS, contracts: numOr(h.vertical.contracts, 1) });
+    out.push({ kind: "vertical", type: h.vertical.type, kLong: kL, kShort: kS, isDebit: v.isDebit, maxProfit: v.maxProfit, maxLoss: v.maxLoss, breakeven: v.breakeven, rr: v.rr });
+  }
+  if (h.calendar.on && S > 0) {
+    const kNear = numOr(h.calendar.strike, roundStrike(S));
+    const kFar = numOr(h.calendar.farStrike, kNear);
+    const nearDays = numOr(h.calendar.nearDays, 7);
+    const farDays = numOr(h.calendar.farDays, 37);
+    const premNear = blackScholes({ S, K: kNear, T: nearDays / 365, r, q, sigma, type: h.calendar.type }).price;
+    const premFar = blackScholes({ S, K: kFar, T: farDays / 365, r, q, sigma, type: h.calendar.type }).price;
+    const c = evalCalendar({ type: h.calendar.type, kNear, kFar, premNear, premFar, contracts: numOr(h.calendar.contracts, 1), S, sigma, r, q, nearDays, farDays });
+    out.push({ kind: "calendar", diagonal: kNear !== kFar, type: h.calendar.type, kNear, kFar, nearDays, farDays, debit: c.debit, estPnl: c.estPnl });
+  }
+  if (h.beta.on && S > 0) {
+    const pv = numOr(h.beta.portfolioValue, 0);
+    const beta = numOr(h.beta.beta, 1);
+    const notional = pv * beta;
+    if (h.beta.mode === "puts") {
+      const k = roundStrike(S * (1 - numOr(h.beta.putOtmPct, 5) / 100));
+      const pb = blackScholes({ S, K: k, T, r, q, sigma, type: "put" });
+      const contracts = pb.delta !== 0 ? notional / (S * 100 * Math.abs(pb.delta)) : 0;
+      out.push({ kind: "beta", mode: "puts", symbol: live.cfg.symbol, strike: k, contracts, cost: pb.price * 100 * contracts, notional });
+    } else {
+      const futPrice = live.priceOf(live.futSym) ?? live.spot;
+      const contracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
+      out.push({ kind: "beta", mode: "futures", futSym: live.futSym, futMult: live.futMult, contracts, notional });
+    }
+  }
+  if (h.pairs.on) {
+    const p = evalPairs({ priceLong: live.priceOf(h.pairs.longSym), priceShort: live.priceOf(h.pairs.shortSym), betaLong: numOr(h.pairs.betaLong, 1), betaShort: numOr(h.pairs.betaShort, 1), notional: numOr(h.pairs.notional, 0) });
+    if (p) out.push({ kind: "pairs", longSym: h.pairs.longSym, shortSym: h.pairs.shortSym, ratio: p.ratio, shortNotional: p.shortNotional });
+  }
+  return out;
+};
+
+// Directional alignment of a structure vs the thesis bias, for the alignment flag.
+const structAlignment = (type, bias) => {
+  if (bias === "bullish") return type === "call" ? "aligned" : "counter";
+  if (bias === "bearish") return type === "put" ? "aligned" : "counter";
+  return "neutral";
+};
+
+// Renders the fed desk structures as concrete trade plans (entry / risk / exits), computed
+// deterministically — independent of the AI narrative.
+const TradeStructureCard = ({ structures, bias }) => {
+  if (!structures?.length) return null;
+  return (
+    <Card icon={Scale} title="Trade structure" sub="Priced from your desk tools — entry, risk & exits">
+      <div className="tstruct-list">
+        {structures.map((s, i) => {
+          if (s.kind === "option") {
+            const align = structAlignment(s.type, bias);
+            return (
+              <div className="tstruct" key={i}>
+                <div className="tstruct-head">
+                  <span className="tstruct-title">{s.symbol} {s.type.toUpperCase()} {fmtNum(s.strike, 0)} · {s.days}d</span>
+                  {align !== "neutral" && (
+                    <span className={`tstruct-flag ${align === "aligned" ? "ok" : "warn"}`}>
+                      {align === "aligned" ? "Aligned with bias" : `Counter to ${bias} bias`}
+                    </span>
+                  )}
+                </div>
+                <div className="tstruct-stats">
+                  <div className="tstruct-stat"><span>Entry</span><b>${fmtNum(s.entry, 2)}</b><small>{fmtUsd(s.cost, 0)}/contract</small></div>
+                  <div className="tstruct-stat"><span>Breakeven</span><b>{fmtNum(s.breakeven, 2)}</b><small>at expiry</small></div>
+                  <div className="tstruct-stat"><span>Max risk</span><b>{fmtUsd(s.maxRisk, 0)}</b><small>premium (long)</small></div>
+                  <div className="tstruct-stat"><span>Theta</span><b>${fmtNum(s.theta, 2)}</b><small>decay/day</small></div>
+                </div>
+                <div className="tstruct-ladder">
+                  <div className="tstruct-ladder-row tstruct-ladder-head"><span>{s.symbol} move</span><span>Contract</span><span>P/L</span></div>
+                  {s.ladder.map((row, j) => (
+                    <div className="tstruct-ladder-row" key={j}>
+                      <span>{fmtSigned(row.movePct, 1, "%")} → {fmtNum(row.spot, 2)}</span>
+                      <span>${fmtNum(row.val, 2)}</span>
+                      <span style={{ color: row.pnlPct >= 0 ? C.bull : C.bear, fontWeight: 600 }}>{fmtSigned(row.pnlPct, 0, "%")}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="tstruct-note">Manage against the ladder: scale out toward the upside rows as the thesis target fills; full premium ({fmtUsd(s.maxRisk, 0)}) is the hard cap if it expires worthless. Theta bleeds ~${fmtNum(Math.abs(s.theta), 2)}/day while you wait.</div>
+              </div>
+            );
+          }
+          if (s.kind === "vertical") {
+            return (
+              <div className="tstruct" key={i}>
+                <div className="tstruct-head"><span className="tstruct-title">{s.type.toUpperCase()} vertical {fmtNum(s.kLong, 0)}/{fmtNum(s.kShort, 0)} · {s.isDebit ? "debit" : "credit"}</span></div>
+                <div className="tstruct-stats">
+                  <div className="tstruct-stat"><span>Max profit</span><b style={{ color: C.bull }}>{fmtUsd(s.maxProfit, 0)}</b></div>
+                  <div className="tstruct-stat"><span>Max loss</span><b style={{ color: C.bear }}>{fmtUsd(s.maxLoss, 0)}</b></div>
+                  <div className="tstruct-stat"><span>Breakeven</span><b>{s.breakeven != null ? fmtNum(s.breakeven, 0) : "—"}</b></div>
+                  <div className="tstruct-stat"><span>Risk / reward</span><b>{s.rr != null ? fmtNum(s.rr, 2) : "—"}</b></div>
+                </div>
+              </div>
+            );
+          }
+          if (s.kind === "calendar") {
+            return (
+              <div className="tstruct" key={i}>
+                <div className="tstruct-head"><span className="tstruct-title">{s.type.toUpperCase()} {s.diagonal ? "diagonal" : "calendar"} {fmtNum(s.kNear, 0)}{s.diagonal ? `/${fmtNum(s.kFar, 0)}` : ""} · {s.nearDays}d/{s.farDays}d</span></div>
+                <div className="tstruct-stats">
+                  <div className="tstruct-stat"><span>Net debit</span><b>{fmtUsd(s.debit, 0)}</b></div>
+                  <div className="tstruct-stat"><span>Est. P/L</span><b style={{ color: s.estPnl >= 0 ? C.bull : C.bear }}>{fmtUsd(s.estPnl, 0)}</b><small>near expiry, spot flat</small></div>
+                </div>
+              </div>
+            );
+          }
+          if (s.kind === "beta") {
+            return (
+              <div className="tstruct" key={i}>
+                <div className="tstruct-head"><span className="tstruct-title">Beta hedge · {s.mode === "puts" ? `${s.symbol} puts` : `${s.futSym} futures`}</span></div>
+                <div className="tstruct-stats">
+                  {s.mode === "puts" ? (
+                    <>
+                      <div className="tstruct-stat"><span>Buy</span><b>~{fmtNum(s.contracts, 1)}</b><small>{fmtNum(s.strike, 0)} puts</small></div>
+                      <div className="tstruct-stat"><span>Cost</span><b>{fmtUsd(s.cost, 0)}</b></div>
+                      <div className="tstruct-stat"><span>Covers</span><b>{fmtUsd(s.notional, 0)}</b><small>of delta</small></div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="tstruct-stat"><span>Short</span><b>~{fmtNum(s.contracts, 2)}</b><small>{s.futSym} (×{s.futMult})</small></div>
+                      <div className="tstruct-stat"><span>Offsets</span><b>{fmtUsd(s.notional, 0)}</b><small>exposure</small></div>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          if (s.kind === "pairs") {
+            return (
+              <div className="tstruct" key={i}>
+                <div className="tstruct-head"><span className="tstruct-title">Pairs · long {s.longSym} / short {s.shortSym}</span></div>
+                <div className="tstruct-stats">
+                  <div className="tstruct-stat"><span>Hedge ratio</span><b>{fmtNum(s.ratio, 3)}</b><small>short per long</small></div>
+                  <div className="tstruct-stat"><span>Short notional</span><b>{fmtUsd(s.shortNotional, 0)}</b></div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    </Card>
+  );
+};
+
 /* ---------- small shared tool UI primitives ---------- */
 
 const NumField = ({ label, hint, value, onChange, step = "any", suffix, placeholder }) => (
@@ -3638,6 +3814,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                 <span className="chip b-info" style={{ marginRight: 9 }}>GAME PLAN</span>{t.gamePlan}
               </div>
             </Card>
+            {(t._tradeStructures || []).length > 0 && <TradeStructureCard structures={t._tradeStructures} bias={t.bias} />}
             <div className="grid g-2">
               <div className="guard g-red"><b><AlertTriangle size={12} /> Thesis invalidation</b>{t.invalidation}</div>
               <div className="guard g-amber"><b><Shield size={12} /> Stand-aside conditions</b>{t.standAside}</div>
@@ -4833,6 +5010,9 @@ export default function Overwatch() {
         _notes: notes,
         _deskStructures: deskContext
           ? deskStructureLabels({ deskTools, market: market.data, points: points.data, instrument })
+          : null,
+        _tradeStructures: deskContext
+          ? buildTradeStructures({ deskTools, market: market.data, points: points.data, instrument })
           : null,
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
