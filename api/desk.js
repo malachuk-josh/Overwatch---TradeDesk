@@ -14,9 +14,12 @@ const SYMBOLS = {
   VIX: "CBOE:VIX",
   DXY: "TVC:DXY",
   US10Y: "TVC:US10Y",
+  US02Y: "TVC:US02Y",
   GC: "COMEX:GC1!",
   CL: "NYMEX:CL1!",
+  HG: "COMEX:HG1!",
   BTC: "COINBASE:BTCUSD",
+  ETH: "COINBASE:ETHUSD",
 };
 
 const SECTORS = [
@@ -848,7 +851,7 @@ const fetchMarket = async (watchlist = []) => {
       const result = scanSymbol && scan.get(scanSymbol)
         ? scan.get(scanSymbol)
         : await quote(item.symbol);
-      const precision = item.symbol === "US10Y" ? 3 : 2;
+      const precision = item.symbol === "US10Y" || item.symbol === "US02Y" ? 3 : 2;
       const dayOpen = Number.isFinite(Number(result.dayOpen))
         ? Number(result.dayOpen)
         : Number.isFinite(Number(result.previousClose))
