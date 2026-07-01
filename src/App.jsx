@@ -3674,14 +3674,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             </div>
           )}
           <div className="lab-field">
-            <span className="lab-label">Risk appetite</span>
-            <div className="seg">
-              {["defensive", "balanced", "aggressive"].map((r) => (
-                <button key={r} className={risk === r ? "on" : ""} onClick={() => setRisk(r)}>{r}</button>
-              ))}
-            </div>
-          </div>
-          <div className="lab-field">
             <span className="lab-label">Desk notes — fed into the synthesis</span>
             <textarea className="bd-ta" placeholder="e.g. TD Sequential 9 printed on the daily. Respecting 2-hr max hold today." value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
