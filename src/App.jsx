@@ -46,7 +46,7 @@ import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
-import { CLERK_ENABLED, AuthControl } from "./auth.jsx";
+import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings } from "./auth.jsx";
 
 /* ================================================================
    OVERWATCH // DAILY BIAS DESK
@@ -3578,6 +3578,31 @@ const DEFAULT_DESK_TOOLS = {
   },
 };
 
+// Deep-merge a saved deskTools blob (from local storage or the cloud) onto the defaults, keeping
+// only known sub-objects and validating the pairs symbols against the current instrument table.
+const mergeSavedDeskTools = (base, saved) => {
+  if (!saved || typeof saved !== "object") return base;
+  const savedPairs = saved.hedge?.pairs || {};
+  const validSym = (sym, fallback) => THESIS_INSTRUMENTS.some((it) => it.symbol === sym) ? sym : fallback;
+  return {
+    ...base,
+    ...saved,
+    env: { ...base.env, ...(saved.env || {}) },
+    options: { ...base.options, ...(saved.options || {}) },
+    hedge: {
+      beta: { ...base.hedge.beta, ...(saved.hedge?.beta || {}) },
+      vertical: { ...base.hedge.vertical, ...(saved.hedge?.vertical || {}) },
+      calendar: { ...base.hedge.calendar, ...(saved.hedge?.calendar || {}) },
+      pairs: {
+        ...base.hedge.pairs,
+        ...savedPairs,
+        longSym: validSym(savedPairs.longSym, base.hedge.pairs.longSym),
+        shortSym: validSym(savedPairs.shortSym, base.hedge.pairs.shortSym),
+      },
+    },
+  };
+};
+
 // Resolves the shared pricing environment (auto-fill + overrides) into numeric values.
 const resolveEnv = (env, live) => ({
   S: numOr(env.spot, live.spot ?? 0),
@@ -5304,6 +5329,22 @@ export default function Overwatch() {
   const archiveSaveTimer = useRef(null);
   const storageOk = storageAvailable();
 
+  // Auth + per-user cloud sync (Phase 2). Signed-out (or Clerk-disabled) → local storage only.
+  const auth = useAuthSync();
+  const cloudHydrated = useRef(false); // true once this session has loaded the account's settings
+  const cloudSaveTimer = useRef(null);
+
+  // Apply a settings blob (from local storage or the cloud) through the state setters.
+  const applyLoadedSettings = useCallback((s) => {
+    if (!s || typeof s !== "object") return;
+    if (Array.isArray(s.watchlist) && s.watchlist.length) setWatchlist(reconcileWatchlist(s.watchlist));
+    if (s.instrument) setInstrument(thesisInstrumentConfig(s.instrument).symbol);
+    if (s.weights) setWeights(normalizeWeightsToBudget(s.weights));
+    if (s.lean) setLean(s.lean);
+    if (s.risk) setRisk(s.risk);
+    if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
+  }, []);
+
   /* clock */
   useEffect(() => {
     const id = setInterval(() => { setClock(nyClock()); setSession(marketSession()); }, 1000);
@@ -5320,27 +5361,7 @@ export default function Overwatch() {
         if (s.weights) setWeights(normalizeWeightsToBudget(s.weights));
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
-        if (s.deskTools) setDeskTools((d) => {
-          const savedPairs = s.deskTools.hedge?.pairs || {};
-          const validSym = (sym, fallback) => THESIS_INSTRUMENTS.some((it) => it.symbol === sym) ? sym : fallback;
-          return {
-            ...d,
-            ...s.deskTools,
-            env: { ...d.env, ...(s.deskTools.env || {}) },
-            options: { ...d.options, ...(s.deskTools.options || {}) },
-            hedge: {
-              beta: { ...d.hedge.beta, ...(s.deskTools.hedge?.beta || {}) },
-              vertical: { ...d.hedge.vertical, ...(s.deskTools.hedge?.vertical || {}) },
-              calendar: { ...d.hedge.calendar, ...(s.deskTools.hedge?.calendar || {}) },
-              pairs: {
-                ...d.hedge.pairs,
-                ...savedPairs,
-                longSym: validSym(savedPairs.longSym, d.hedge.pairs.longSym),
-                shortSym: validSym(savedPairs.shortSym, d.hedge.pairs.shortSym),
-              },
-            },
-          };
-        });
+        if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
       }
       // Load archive: Upstash first (cross-device), fall back to localStorage only when KV returns null
       let ah = null;
@@ -5363,10 +5384,41 @@ export default function Overwatch() {
     })();
   }, []);
 
-  /* persist on change */
+  /* persist on change — always keep the local cache; the cloud is layered on top when signed in */
   useEffect(() => {
     if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk, deskTools });
   }, [storageReady, watchlist, instrument, weights, lean, risk, deskTools]);
+
+  /* on sign-in, hydrate settings from the account (source of truth); seed the account from this
+     browser's settings the first time so nothing is lost migrating from local-only. */
+  useEffect(() => {
+    if (!storageReady || !auth.signedIn) { cloudHydrated.current = false; return; }
+    let cancelled = false;
+    (async () => {
+      const cloud = await loadUserSettings(auth.getToken).catch(() => null);
+      if (cancelled) return;
+      if (cloud) {
+        applyLoadedSettings(cloud);
+      } else {
+        // No account record yet — push the current (local) settings up as the initial snapshot.
+        await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
+      }
+      cloudHydrated.current = true;
+    })();
+    return () => { cancelled = true; };
+    // Intentionally keyed on identity/readiness only — settings changes are handled by the saver below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageReady, auth.signedIn]);
+
+  /* while signed in, debounce-save settings changes to the account (after the initial hydrate). */
+  useEffect(() => {
+    if (!storageReady || !auth.signedIn || !cloudHydrated.current) return;
+    if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+    cloudSaveTimer.current = setTimeout(() => {
+      saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
+    }, 1200);
+    return () => { if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current); };
+  }, [storageReady, auth.signedIn, watchlist, instrument, weights, lean, risk, deskTools]);
   useEffect(() => {
     if (!storageReady) return;
     saveStored(ARCHIVE_KEY, archiveHistory);
