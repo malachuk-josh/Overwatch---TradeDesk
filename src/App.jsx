@@ -1654,7 +1654,7 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
-          className="collapsible-header"
+          className={`collapsible-header${tickersOpen ? " snap-open" : ""}`}
           role="button"
           tabIndex={0}
           onClick={() => setTickersOpen((o) => !o)}
@@ -1663,12 +1663,12 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         >
           <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
           <span>Market snapshot</span>
-          <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
+          <small className="snap-count" style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
             {tickersOpen && liveOnly ? `${orderedTickers.filter((t) => symbolMarketOpen(t.symbol)).length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
           </small>
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {tickersOpen && at?.ts && (
-              <span onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
+              <span className="snap-asof" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
                 <AsOfLabel ts={at.ts} />
               </span>
             )}
