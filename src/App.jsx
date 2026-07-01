@@ -1162,9 +1162,8 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 }
 .fchip:hover{color:var(--text);border-color:#3a4d66}
 .fchip.on{color:var(--brass);border-color:var(--brass);background:var(--brass-dim)}
-/* Market-snapshot "live markets" filter */
-.snap-toolbar{display:flex;align-items:center;gap:8px;padding:2px 0 10px}
-.snap-live{display:inline-flex;align-items:center;gap:7px}
+/* Market-snapshot "live markets" filter (sits in the section header row) */
+.snap-live{display:inline-flex;align-items:center;gap:7px;padding-top:3px;padding-bottom:3px}
 .snap-live-dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
 .snap-live-dot.on{background:var(--bull);--dir-glow:var(--bull);animation:tkDirPulse 2s ease-in-out infinite}
 .snap-empty{padding:14px 2px 4px;color:var(--muted);font-size:12px;line-height:1.55}
@@ -2532,34 +2531,38 @@ const PulseTab = ({ market, points, pointsState, news, recap, vixHint, hiddenSym
         </div>
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <button
+        <div
           className="collapsible-header"
+          role="button"
+          tabIndex={0}
           onClick={() => setTickersOpen((o) => !o)}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTickersOpen((o) => !o); } }}
           aria-expanded={tickersOpen}
         >
           <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
           <span>Market snapshot</span>
-          <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>{orderedTickers.length} instruments</small>
-          <span style={{ marginLeft: "auto" }}>
-            {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </span>
-        </button>
-        {tickersOpen && (() => {
-          const displayTickers = liveOnly ? orderedTickers.filter((t) => symbolMarketOpen(t.symbol)) : orderedTickers;
-          return (
-          <div style={{ padding: "0 12px 12px" }}>
-            <div className="snap-toolbar">
+          <small style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
+            {tickersOpen && liveOnly ? `${orderedTickers.filter((t) => symbolMarketOpen(t.symbol)).length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
+          </small>
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+            {tickersOpen && (
               <button
                 className={`fchip snap-live${liveOnly ? " on" : ""}`}
-                onClick={() => setLiveOnly((v) => !v)}
+                onClick={(e) => { e.stopPropagation(); setLiveOnly((v) => !v); }}
                 aria-pressed={liveOnly}
                 title="Show only markets that are trading right now"
               >
                 <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />
                 Live markets
               </button>
-              <small style={{ marginLeft: "auto", opacity: 0.6 }}>{displayTickers.length} of {orderedTickers.length} shown</small>
-            </div>
+            )}
+            {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </span>
+        </div>
+        {tickersOpen && (() => {
+          const displayTickers = liveOnly ? orderedTickers.filter((t) => symbolMarketOpen(t.symbol)) : orderedTickers;
+          return (
+          <div style={{ padding: "12px 12px 12px" }}>
             {displayTickers.length ? (
             <div className="grid g-pulse">
             {displayTickers.map((t) => (
