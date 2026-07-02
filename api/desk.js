@@ -1075,9 +1075,9 @@ const btAtr = (bars, len = 14) => {
   return out;
 };
 
-const btFetchBars = async (symbol, interval) => {
+const btFetchBars = async (symbol, interval, range = BT_RANGES[interval]) => {
   const payload = await fetchJson(
-    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${BT_RANGES[interval]}&interval=${interval}&includePrePost=false`,
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}&includePrePost=false`,
   );
   const result = payload?.chart?.result?.[0];
   const ts = result?.timestamp || [];
@@ -1095,8 +1095,7 @@ const btFetchBars = async (symbol, interval) => {
 };
 
 // Daily ^VIX closes keyed by ET day, ascending. 1h backtests reach back two years, so pull deeper.
-const btFetchVix = async (interval) => {
-  const range = interval === "1h" ? "5y" : "6mo";
+const btFetchVix = async (range = "6mo") => {
   const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=${range}&interval=1d`);
   const result = payload?.chart?.result?.[0];
   const ts = result?.timestamp || [];
@@ -1235,28 +1234,178 @@ const btRun = (bars, vixDays, p, meta) => {
   };
 };
 
-const runBacktest = async (raw = {}) => {
+// Shared input sanitizer for the backtest + live-monitor ops.
+const algoParams = (raw = {}) => {
   const symbol = String(raw.symbol || "SPY").toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,7}$/.test(symbol)) throw new Error("Unrecognized symbol");
   const interval = BT_RANGES[raw.interval] ? raw.interval : "15m";
-  const p = {
-    emaLen: Math.round(btNum(raw.emaLen, 21, 2, 200)),
-    atrMult: btNum(raw.atrMult, 2.5, 0.1, 10),
-    rsiOS: btNum(raw.rsiOS, 30, 1, 99),
-    rsiOB: btNum(raw.rsiOB, 70, 1, 99),
-    rr: btNum(raw.rr, 3, 0.1, 20),
-    stopAtr: btNum(raw.stopAtr, 2, 0.1, 20),
-    startHour: Math.round(btNum(raw.startHour, 11, 0, 23)),
-    endHour: Math.round(btNum(raw.endHour, 16, 1, 24)),
-    vixMin: btNum(raw.vixMin, 15, 0, 200),
-    vixMax: btNum(raw.vixMax, 40, 0, 200),
-    qtyPct: btNum(raw.qtyPct, 10, 1, 100),
-    vixMode: raw.vixMode === "prior" ? "prior" : "sameday",
+  return {
+    symbol, interval,
+    p: {
+      emaLen: Math.round(btNum(raw.emaLen, 21, 2, 200)),
+      atrMult: btNum(raw.atrMult, 2.5, 0.1, 10),
+      rsiOS: btNum(raw.rsiOS, 30, 1, 99),
+      rsiOB: btNum(raw.rsiOB, 70, 1, 99),
+      rr: btNum(raw.rr, 3, 0.1, 20),
+      stopAtr: btNum(raw.stopAtr, 2, 0.1, 20),
+      startHour: Math.round(btNum(raw.startHour, 11, 0, 23)),
+      endHour: Math.round(btNum(raw.endHour, 16, 1, 24)),
+      vixMin: btNum(raw.vixMin, 15, 0, 200),
+      vixMax: btNum(raw.vixMax, 40, 0, 200),
+      qtyPct: btNum(raw.qtyPct, 10, 1, 100),
+      vixMode: raw.vixMode === "prior" ? "prior" : "sameday",
+    },
   };
-  const [bars, vixDays] = await Promise.all([btFetchBars(symbol, interval), btFetchVix(interval)]);
+};
+
+const runBacktest = async (raw = {}) => {
+  const { symbol, interval, p } = algoParams(raw);
+  const [bars, vixDays] = await Promise.all([
+    btFetchBars(symbol, interval),
+    btFetchVix(interval === "1h" ? "5y" : "6mo"),
+  ]);
   if (bars.length < 60) throw new Error(`Not enough ${interval} history for ${symbol}`);
   if (!vixDays.length) throw new Error("VIX history unavailable");
   return btRun(bars, vixDays, p, { symbol, interval });
+};
+
+// --- Strategy Lab: live signal monitor + forward-test journal ---------------------------------
+// Evaluates the scalper's conditions on the latest COMPLETED bar (signals never fire mid-bar, same
+// as the Pine strategy on bar close). When a setup triggers, it's logged once per bar to a Redis
+// journal; later polls resolve open entries against fresh bars with the same fill model as the
+// backtester (fill at next bar open, stop counted before target, forced flat at (endHour−1):21 ET).
+// Detection only happens while a client polls — the desk being closed means missed signals, which
+// is the honest cost of not having an always-on worker.
+const ALGO_JOURNAL_KEY = "overwatch:algo:journal:v1";
+const ALGO_JOURNAL_MAX = 200;
+const ALGO_LIVE_RANGES = { "15m": "30d", "30m": "30d", "1h": "6mo" }; // enough depth to warm the indicators
+
+const algoEvalState = (bars, vixDays, p) => {
+  const closes = bars.map((b) => b.c);
+  const ema = btEma(closes, p.emaLen), rsi = btRsi(closes, 14), atr = btAtr(bars, 14);
+  const i = bars.length - 1, b = bars[i], t = btEt(b.t);
+  let vi = -1;
+  while (vi + 1 < vixDays.length && vixDays[vi + 1].day <= t.day) vi++;
+  const vixVal = p.vixMode === "prior"
+    ? (vi >= 0 && vixDays[vi].day === t.day ? vixDays[vi - 1]?.close : vixDays[vi]?.close)
+    : vixDays[vi]?.close;
+  const vixOK = Number.isFinite(vixVal) && vixVal >= p.vixMin && vixVal <= p.vixMax;
+  const inWindow = t.hour >= p.startHour && t.hour < p.endHour;
+  const ok = ema[i] != null && rsi[i] != null && atr[i] != null;
+  const upperKC = ok ? ema[i] + p.atrMult * atr[i] : null;
+  const lowerKC = ok ? ema[i] - p.atrMult * atr[i] : null;
+  let signal = null, sl = null, tp = null;
+  if (ok && inWindow && vixOK) {
+    const stop = atr[i] * p.stopAtr;
+    if (b.c < lowerKC && rsi[i] < p.rsiOS) { signal = "long"; sl = b.c - stop; tp = b.c + stop * p.rr; }
+    else if (b.c > upperKC && rsi[i] > p.rsiOB) { signal = "short"; sl = b.c + stop; tp = b.c - stop * p.rr; }
+  }
+  return {
+    barTs: b.t, etHour: t.hour, etMinute: t.minute, price: b.c,
+    ema: ema[i], upperKC, lowerKC, rsi: rsi[i], atr: atr[i],
+    vix: Number.isFinite(vixVal) ? vixVal : null, vixOK, inWindow, signal, sl, tp,
+  };
+};
+
+// Walk fresh bars through one open journal entry. Mutates the entry; returns true when it changed.
+const algoResolveEntry = (entry, bars) => {
+  const step = BT_STEP[entry.interval] || 900;
+  let changed = false;
+  let i;
+  if (entry.fillPx == null) {
+    i = bars.findIndex((b) => b.t > entry.signalTs);
+    if (i === -1) return false; // the signal bar is still the newest — no fill yet
+    // Only fill from the bar that actually followed the signal; if the data window no longer
+    // reaches back that far the true fill price is gone, so void the entry rather than fake it.
+    if (bars[i].t - entry.signalTs > step * 3) { entry.status = "void"; return true; }
+    entry.fillPx = bars[i].o;
+    entry.fillTs = bars[i].t;
+    changed = true;
+  } else {
+    i = bars.findIndex((b) => b.t >= entry.fillTs);
+    if (i === -1) return false;
+  }
+  const side = entry.side === "long" ? 1 : -1;
+  const done = (b, px, status) => {
+    entry.status = status;
+    entry.exitTs = b.t;
+    entry.exitPx = px;
+    entry.pnlPct = (side * (px - entry.fillPx) / entry.fillPx) * 100;
+  };
+  let timeExit = false;
+  for (; i < bars.length; i++) {
+    const b = bars[i];
+    if (timeExit) { done(b, b.o, "flat"); return true; }
+    if (side > 0) {
+      if (b.o <= entry.sl) { done(b, b.o, "stop"); return true; }
+      if (b.o >= entry.tp) { done(b, b.o, "target"); return true; }
+      if (b.l <= entry.sl) { done(b, entry.sl, "stop"); return true; }
+      if (b.h >= entry.tp) { done(b, entry.tp, "target"); return true; }
+    } else {
+      if (b.o >= entry.sl) { done(b, b.o, "stop"); return true; }
+      if (b.o <= entry.tp) { done(b, b.o, "target"); return true; }
+      if (b.h >= entry.sl) { done(b, entry.sl, "stop"); return true; }
+      if (b.l <= entry.tp) { done(b, entry.tp, "target"); return true; }
+    }
+    const t = btEt(b.t);
+    if (t.hour === entry.endHour - 1 && t.minute >= 21) timeExit = true;
+  }
+  return changed;
+};
+
+const runAlgoLive = async (raw = {}, action = null) => {
+  if (action === "clear") {
+    await _kvCmd(["DEL", ALGO_JOURNAL_KEY]);
+    return { cleared: true };
+  }
+  const { symbol, interval, p } = algoParams(raw);
+  const [bars, vixDays] = await Promise.all([
+    btFetchBars(symbol, interval, ALGO_LIVE_RANGES[interval]),
+    btFetchVix("3mo"),
+  ]);
+  if (bars.length < Math.max(p.emaLen + 15, 40)) throw new Error(`Not enough ${interval} history for ${symbol}`);
+  if (!vixDays.length) throw new Error("VIX history unavailable");
+  const state = algoEvalState(bars, vixDays, p);
+
+  const kvOn = !!(_kvUrl() && _kvToken());
+  let journal = null;
+  if (kvOn) {
+    journal = (await _kvGetJson(ALGO_JOURNAL_KEY)) || [];
+    let changed = false;
+    if (state.signal) {
+      const id = `${symbol}|${interval}|${state.barTs}`;
+      if (!journal.some((e) => e.id === id)) {
+        journal.push({
+          id, symbol, interval, side: state.signal,
+          signalTs: state.barTs, signalPx: state.price, sl: state.sl, tp: state.tp,
+          endHour: p.endHour, status: "open",
+          fillTs: null, fillPx: null, exitTs: null, exitPx: null, pnlPct: null,
+        });
+        state.logged = true;
+        changed = true;
+      }
+    }
+    // Resolve whatever is still open, batched per (symbol, interval) so entries left over from a
+    // different config still settle; the active config reuses the bars already fetched above.
+    const groups = new Map();
+    for (const e of journal) {
+      if (e.status !== "open") continue;
+      const k = `${e.symbol}|${e.interval}`;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(e);
+    }
+    for (const [key, entries] of [...groups.entries()].slice(0, 5)) {
+      const [gSym, gInt] = key.split("|");
+      let gBars = gSym === symbol && gInt === interval ? bars : null;
+      if (!gBars) {
+        try { gBars = await btFetchBars(gSym, gInt, ALGO_LIVE_RANGES[gInt] || "30d"); } catch { continue; }
+      }
+      for (const e of entries) if (algoResolveEntry(e, gBars)) changed = true;
+    }
+    if (journal.length > ALGO_JOURNAL_MAX) { journal = journal.slice(-ALGO_JOURNAL_MAX); changed = true; }
+    if (changed) await _kvCmd(["SET", ALGO_JOURNAL_KEY, JSON.stringify(journal)]);
+  }
+  return { state, journal, persisted: kvOn };
 };
 
 // --- Sector rotation (RRG-style) ------------------------------------------------------------
@@ -2717,6 +2866,7 @@ export default async function handler(req, res) {
     else if (operation === "history") data = await fetchHistory(payload.symbol);
     else if (operation === "rotation") data = await fetchSectorRotation();
     else if (operation === "backtest") data = await runBacktest(payload.params);
+    else if (operation === "algolive") data = await runAlgoLive(payload.params, payload.action);
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {

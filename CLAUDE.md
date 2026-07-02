@@ -24,6 +24,7 @@ React + Vite trading intelligence dashboard. Fetches live market data, synthesiz
 | `thesis` | fetch | Daily bias call |
 | `newsletter` | fetch | Morning note (includes trade plan) |
 | `backtest` | fetch | Strategy Lab: replay the VIX Range scalper over Yahoo intraday bars |
+| `algolive` | fetch/write | Strategy Lab: evaluate live setup on the latest bar + Redis forward-test journal |
 | `getarchive` | fetch | Load archive from Upstash Redis |
 | `savearchive` | write | Persist archive to Upstash Redis |
 
