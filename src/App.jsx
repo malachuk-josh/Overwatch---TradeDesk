@@ -4888,7 +4888,8 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
-  const [layout, setLayout] = usePersistentState("overwatch:charts:layout", "auto"); // auto | 1 | 2 columns
+  const [layout, setLayout] = usePersistentState("overwatch:charts:layout", "auto"); // regular: auto | 1 | 2 | 3
+  const [splitLayout, setSplitLayout] = usePersistentState("overwatch:charts:splitlayout", "1"); // split pane: 1 | 2
   const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
   const [fsSymbol, setFsSymbol] = useState(null);
 
@@ -4924,9 +4925,15 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
 
   const symbolLabel = (sym) => CHART_PRESETS.find((p) => p.symbol === sym)?.label || sym.split(":").pop();
 
-  // In a split pane, stack charts in a single column so several stay readable at half width.
-  const cols = compact ? 1 : layout === "1" ? 1 : layout === "2" ? 2 : (selected.length <= 2 ? 1 : 2);
-  const chartH = compact ? 360 : cols === 1 ? 520 : 420;
+  // Grid columns. Split panes are half-width so they cap at 2; the regular view goes up to 3.
+  // Each context keeps its own choice. "auto" fills up to the cap based on how many charts are shown.
+  const activeLayout = compact ? splitLayout : layout;
+  const setActiveLayout = compact ? setSplitLayout : setLayout;
+  const maxCols = compact ? 2 : 3;
+  const rawCols = activeLayout === "auto" ? (selected.length <= 2 ? 1 : maxCols) : Math.min(Number(activeLayout) || 1, maxCols);
+  const cols = Math.max(1, Math.min(rawCols, selected.length));
+  const chartH = compact ? (cols >= 2 ? 300 : 340) : cols >= 3 ? 320 : cols === 2 ? 420 : 520;
+  const layoutOptions = compact ? [["1", "1"], ["2", "2"]] : [["auto", "Auto"], ["1", "1"], ["2", "2"], ["3", "3"]];
 
   const fsOverlay = fsSymbol ? (
     <div className="chart-fs-overlay">
@@ -5003,13 +5010,11 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
                 <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
               ))}
             </div>
-            {!compact && (
-              <div className="seg" title="Chart columns">
-                {[["auto", "Auto"], ["1", "1"], ["2", "2"]].map(([m, lbl]) => (
-                  <button key={m} className={layout === m ? "on" : ""} onClick={() => setLayout(m)}>{lbl}</button>
-                ))}
-              </div>
-            )}
+            <div className="seg" title="Chart grid columns">
+              {layoutOptions.map(([m, lbl]) => (
+                <button key={m} className={activeLayout === m ? "on" : ""} onClick={() => setActiveLayout(m)}>{lbl}</button>
+              ))}
+            </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
             {selected.map((sym) => (
