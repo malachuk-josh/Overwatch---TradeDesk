@@ -875,29 +875,46 @@ const FINNHUB_RT_SYMBOLS = new Set([
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 
+// Per-symbol cache for Finnhub quotes (same pattern as scanCache below), so repeated page loads/
+// refreshes within a warm lambda reuse recent quotes instead of re-hitting Finnhub's free tier
+// (60 calls/min) for all ~24 covered symbols on every single sync — a few quick refreshes could
+// otherwise trip the rate limit and silently drop those symbols back to the delayed scanner feed.
+const finnhubQuoteCache = new Map();
+const FINNHUB_QUOTE_TTL = 25_000;
+
 // Real-time US equity/ETF quote from Finnhub's free tier. Returns null (→ fall back) when there's no
-// key or the symbol isn't covered.
+// key, the symbol isn't covered, or the request fails (rate-limited, bad key, etc — logged so it's
+// diagnosable instead of silently degrading to the delayed feed with no trace).
 const finnhubQuote = async (symbol) => {
   const key = process.env.FINNHUB_API_KEY;
   if (!key) return null;
-  try {
-    const d = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
-    if (!d || !Number.isFinite(Number(d.c)) || Number(d.c) === 0) return null;
-    return {
-      price: Number(d.c),
-      change: Number(d.d),
-      changePct: Number(d.dp),
-      dayOpen: Number(d.o),
-      dayHigh: Number(d.h),
-      dayLow: Number(d.l),
-      previousClose: Number(d.pc),
-      asOf: Number(d.t) || Math.floor(Date.now() / 1000),
-      source: "finnhub",
-      delaySec: 0,
-    };
-  } catch {
-    return null;
-  }
+  const cached = finnhubQuoteCache.get(symbol);
+  if (cached?.expires > Date.now()) return cached.promise;
+
+  const promise = (async () => {
+    try {
+      const d = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
+      if (!d || !Number.isFinite(Number(d.c)) || Number(d.c) === 0) return null;
+      return {
+        price: Number(d.c),
+        change: Number(d.d),
+        changePct: Number(d.dp),
+        dayOpen: Number(d.o),
+        dayHigh: Number(d.h),
+        dayLow: Number(d.l),
+        previousClose: Number(d.pc),
+        asOf: Number(d.t) || Math.floor(Date.now() / 1000),
+        source: "finnhub",
+        delaySec: 0,
+      };
+    } catch (error) {
+      console.error(`finnhubQuote(${symbol}) failed — falling back to delayed feed:`, error instanceof Error ? error.message : error);
+      return null;
+    }
+  })();
+
+  finnhubQuoteCache.set(symbol, { expires: Date.now() + FINNHUB_QUOTE_TTL, promise });
+  return promise;
 };
 
 // Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
