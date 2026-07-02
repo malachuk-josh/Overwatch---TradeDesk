@@ -1982,14 +1982,15 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
                       : t.changePct != null && (() => {
                           const up = t.changePct >= 0;
                           const col = up ? C.bull : C.bear;
-                          // Only pulse for a genuinely real-time, currently-trading symbol.
-                          const live = symbolMarketOpen(t.symbol) && !t.delayed;
+                          // Pulse whenever the market is trading — delayed or not. The LIVE/delay
+                          // chip communicates feed freshness; this glow just means "open now".
+                          const live = symbolMarketOpen(t.symbol);
                           const DirIcon = up ? TrendingUp : TrendingDown;
                           return (
                             <span
                               className={`tk-dir${live ? " tk-dir-live" : ""}`}
                               style={live ? { "--dir-glow": col } : undefined}
-                              title={live ? "Real-time — trading now" : undefined}
+                              title={live ? (t.delayed ? "Market open — quotes ~15 min delayed" : "Market open — real-time") : undefined}
                             >
                               <DirIcon size={14} color={col} />
                             </span>
