@@ -885,23 +885,6 @@ const Freshness = ({ at }) => {
   );
 };
 
-// Dark-yellow "as of" pill: shows the effective quote time (~15 min behind the last sync, since the
-// free feed is delayed) with a staleness tier. Shared by the global header and the Session read card.
-const AsOfLabel = ({ ts, prefix = "prices as of", compact = false }) => {
-  if (!ts) return null;
-  const ageMin = Math.floor((Date.now() - ts) / 60000);
-  const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
-  const quoteLabel = new Date(ts - 15 * 60 * 1000)
-    .toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-  // Compact form ("~15 min delay") is used where space is tight (Market snapshot header); the full
-  // form shows the effective quote time. The tooltip carries the specifics either way.
-  return (
-    <span className={`bd-asof ${tier}`} title={`Quotes are on a ~15-minute delay from a free public feed — not real-time. Displayed price time ≈ ${quoteLabel} ET; desk last synced ${ageMin}m ago.`}>
-      {tier === "stale" ? "STALE · " : ""}{compact ? "~15 min delay" : `${prefix} ${quoteLabel} ET`}
-    </span>
-  );
-};
-
 // Per-symbol freshness chip: LIVE (real-time feed + trading now), a delay tag (delayed feed), or
 // nothing when the instrument's market is closed — then every price is just the last close.
 const FreshTag = ({ delayed, open, delaySec }) => {
@@ -5646,7 +5629,6 @@ export default function Overwatch() {
         </div>
         <div className="bd-hright">
           <span className="bd-clock">{clock}<span>ET</span></span>
-          <AsOfLabel ts={market.at?.ts} />
           <span className={`bd-session bd-session-${session.tone}`}>
             <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
             {session.label}
