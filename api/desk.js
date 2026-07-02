@@ -844,7 +844,41 @@ const quote = async (symbol) => {
     dayHigh: s(Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : (bars.high || []).filter(Number.isFinite).at(-1)),
     previousClose: s(previous),
     asOf: meta.regularMarketTime || Math.floor(Date.now() / 1000),
+    source: "yahoo",
+    // Exchange-reported delay for THIS symbol, in seconds (0 = real-time). Authoritative when present.
+    delaySec: Number.isFinite(meta.exchangeDataDelayedBy) ? meta.exchangeDataDelayedBy : null,
   };
+};
+
+// Symbols we can get real-time for free: US equities/ETFs via Finnhub's free tier, plus 24/7 crypto
+// (Coinbase feed via the scanner). Everything else — cash indices, futures, rates, FX, commodities —
+// is delayed on free feeds because real-time requires paid exchange entitlements.
+const FINNHUB_RT_SYMBOLS = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"]);
+const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
+
+// Real-time US equity/ETF quote from Finnhub's free tier. Returns null (→ fall back) when there's no
+// key or the symbol isn't covered.
+const finnhubQuote = async (symbol) => {
+  const key = process.env.FINNHUB_API_KEY;
+  if (!key) return null;
+  try {
+    const d = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
+    if (!d || !Number.isFinite(Number(d.c)) || Number(d.c) === 0) return null;
+    return {
+      price: Number(d.c),
+      change: Number(d.d),
+      changePct: Number(d.dp),
+      dayOpen: Number(d.o),
+      dayHigh: Number(d.h),
+      dayLow: Number(d.l),
+      previousClose: Number(d.pc),
+      asOf: Number(d.t) || Math.floor(Date.now() / 1000),
+      source: "finnhub",
+      delaySec: 0,
+    };
+  } catch {
+    return null;
+  }
 };
 
 // Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
@@ -881,16 +915,27 @@ const fetchMarket = async (watchlist = []) => {
 
   const tickerResults = await Promise.allSettled(
     requested.map(async (item) => {
-      const scanSymbol = SYMBOLS[item.symbol];
-      const result = scanSymbol && scan.get(scanSymbol)
-        ? scan.get(scanSymbol)
-        : await quote(item.symbol);
+      // Source hierarchy: Finnhub real-time (US equities/ETFs) → TradingView scanner → Yahoo.
+      let result = FINNHUB_RT_SYMBOLS.has(item.symbol) ? await finnhubQuote(item.symbol) : null;
+      let source = result ? result.source : null;
+      if (!result) {
+        const scanSymbol = SYMBOLS[item.symbol];
+        if (scanSymbol && scan.get(scanSymbol)) { result = scan.get(scanSymbol); source = "scanner"; }
+      }
+      if (!result) { result = await quote(item.symbol); source = result.source || "yahoo"; }
+
       const precision = item.symbol === "US10Y" || item.symbol === "US02Y" ? 3 : 2;
       const dayOpen = Number.isFinite(Number(result.dayOpen))
         ? Number(result.dayOpen)
         : Number.isFinite(Number(result.previousClose))
           ? Number(result.previousClose)
           : null;
+      // Freshness: honor the provider-reported delay when present; otherwise base it on the ACTUAL
+      // source used (a Finnhub-intended symbol that fell back to the scanner is delayed, not live).
+      let delaySec;
+      if (Number.isFinite(result.delaySec)) delaySec = result.delaySec;
+      else if (source === "scanner") delaySec = REALTIME_CRYPTO.has(item.symbol) ? 0 : 900;
+      else delaySec = 900;
       return {
         symbol: item.symbol,
         name: item.name,
@@ -901,6 +946,10 @@ const fetchMarket = async (watchlist = []) => {
         dayLow: round(result.dayLow, precision),
         dayHigh: round(result.dayHigh, precision),
         previousClose: Number.isFinite(Number(result.previousClose)) ? round(result.previousClose, precision) : null,
+        source,
+        delaySec,
+        delayed: delaySec >= 60,
+        quoteTs: Number.isFinite(Number(result.asOf)) ? Number(result.asOf) : null,
       };
     }),
   );
@@ -909,7 +958,7 @@ const fetchMarket = async (watchlist = []) => {
   const tickers = tickerResults.map((result, i) => {
     if (result.status === "fulfilled") return result.value;
     const item = requested[i];
-    return { symbol: item.symbol, name: item.name, price: null, change: null, changePct: null, dayOpen: null, dayLow: null, dayHigh: null, previousClose: null, _stale: true };
+    return { symbol: item.symbol, name: item.name, price: null, change: null, changePct: null, dayOpen: null, dayLow: null, dayHigh: null, previousClose: null, _stale: true, source: null, delaySec: null, delayed: true, quoteTs: null };
   });
   const sectors = SECTORS.flatMap(([name, symbol]) => {
     const result = scan.get(symbol);
