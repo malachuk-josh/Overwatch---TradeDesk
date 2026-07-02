@@ -4771,7 +4771,13 @@ const useIsDesktop = (bp = 768) => {
   return desk;
 };
 
-const CloudNewsletterList = ({ inSplit = false }) => {
+// Only this account can delete Jacks Journal entries — it's a shared cloud archive (every signed-in
+// user reads the same list via /api/archive), so unlike the per-user watchlist/thesis library this
+// isn't gated on "signed in", it's gated on WHO. The server enforces the same check independently
+// (api/archive/delete.js) — this is just what shows the control.
+const JOURNAL_ADMIN_EMAIL = "malachuk@gmail.com";
+
+const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   // Persist the open newsletter so a refresh reopens the reader instead of dumping you back to the list.
@@ -4780,6 +4786,33 @@ const CloudNewsletterList = ({ inSplit = false }) => {
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
   const collapsedCount = isDesktop ? 7 : 3;
+  const canDelete = auth?.email && auth.email.toLowerCase() === JOURNAL_ADMIN_EMAIL;
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const deleteEntry = async (id, e) => {
+    e.stopPropagation();
+    if (confirmDeleteId !== id) {
+      setConfirmDeleteId(id);
+      setTimeout(() => setConfirmDeleteId((cur) => (cur === id ? null : cur)), 4000);
+      return;
+    }
+    setConfirmDeleteId(null);
+    setDeletingId(id);
+    try {
+      const token = await auth.getToken();
+      const res = await fetch("/api/archive/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setItems((prev) => prev.filter((x) => x.id !== id));
+        setPreviewId((cur) => (cur === id ? null : cur));
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     fetch("/api/archive?limit=50")
@@ -4877,6 +4910,17 @@ const CloudNewsletterList = ({ inSplit = false }) => {
             <a href={item.url || `/api/archive/${item.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Open full page" onClick={(e) => e.stopPropagation()}>
               <ExternalLink size={12} />
             </a>
+            {canDelete && (
+              <button
+                className={`btn btn-sm ${confirmDeleteId === item.id ? "btn-danger" : "btn-ghost"}`}
+                style={{ flex: "none" }}
+                disabled={deletingId === item.id}
+                title={confirmDeleteId === item.id ? "Click again to permanently delete" : "Delete this journal entry"}
+                onClick={(e) => deleteEntry(item.id, e)}
+              >
+                {deletingId === item.id ? <RefreshCw size={12} className="spin" /> : <Trash2 size={12} />}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -4979,6 +5023,7 @@ const ArchiveTab = ({
   onDeleteEntry,
   onGoThesis,
   inSplit = false,
+  auth = null,
 }) => {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -5006,7 +5051,7 @@ const ArchiveTab = ({
         open={journalOpen}
         onToggle={() => setJournalOpen((o) => !o)}
       >
-        {journalOpen && <CloudNewsletterList inSplit={inSplit} />}
+        {journalOpen && <CloudNewsletterList inSplit={inSplit} auth={auth} />}
       </Card>
       <ThesisScoreboard history={archiveHistory} />
       <Card
@@ -6438,6 +6483,7 @@ export default function Overwatch() {
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => nav("thesis")}
             inSplit={splitOn}
+            auth={auth}
           />
         );
       default:
