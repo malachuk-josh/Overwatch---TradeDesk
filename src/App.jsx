@@ -3739,7 +3739,7 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points, onGoLibrary }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   // "Inputs changed — regenerate": compare the live controls against the inputs the displayed
@@ -3928,7 +3928,10 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
             <History size={14} color={C.brass} />
             <span style={{ fontSize: 12.5, color: C.muted }}>Viewing archived thesis — {archiveStamp(viewing)}</span>
-            <button className="btn btn-sm" style={{ marginLeft: "auto" }} onClick={() => setViewing(null)}>Back to latest</button>
+            <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              {onGoLibrary && <button className="btn btn-sm" onClick={onGoLibrary}><History size={13} /> Back to library</button>}
+              <button className="btn btn-sm" onClick={() => setViewing(null)}>Back to latest</button>
+            </span>
           </div>
         )}
         {thesis.status === "error" && !t && <ErrBlock msg={thesis.error} onRetry={onGenerate} />}
@@ -5497,11 +5500,12 @@ export default function Overwatch() {
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
 
-  // Render a tab's content by id so it can be placed in either the single view or a split pane.
-  const renderTab = (id) => {
+  // Render a tab's content by id. `nav` navigates the SAME pane this content lives in (setTab for the
+  // main/left pane, setSplitTab for the right pane) so cross-tab jumps stay in the window you're in.
+  const renderTab = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
@@ -5520,6 +5524,7 @@ export default function Overwatch() {
             onDeleteHist={deleteArchiveEntry} anyData={anyData}
             deskTools={deskTools} setDeskTools={setDeskTools}
             market={market.data} points={points.data}
+            onGoLibrary={() => nav("archives")}
           />
         );
       case "charts":
@@ -5531,7 +5536,7 @@ export default function Overwatch() {
             viewing={viewing}
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
-            onGoThesis={() => setTab("thesis")}
+            onGoThesis={() => nav("thesis")}
             inSplit={splitOn}
           />
         );
@@ -5638,7 +5643,7 @@ export default function Overwatch() {
         <main className="bd-main bd-main-split">
           <section className="split-pane">
             {paneTabs(tab, setTab)}
-            <div className="split-pane-body">{renderTab(tab)}</div>
+            <div className="split-pane-body">{renderTab(tab, setTab)}</div>
           </section>
           <section className="split-pane">
             {paneTabs(splitTab, setSplitTab, (
@@ -5646,11 +5651,11 @@ export default function Overwatch() {
                 <Columns2 size={14} /> <span>Exit split</span>
               </button>
             ))}
-            <div className="split-pane-body">{renderTab(splitTab)}</div>
+            <div className="split-pane-body">{renderTab(splitTab, setSplitTab)}</div>
           </section>
         </main>
       ) : (
-        <main className="bd-main">{renderTab(tab)}</main>
+        <main className="bd-main">{renderTab(tab, setTab)}</main>
       )}
 
       <footer className="bd-foot">
