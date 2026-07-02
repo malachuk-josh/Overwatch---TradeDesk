@@ -77,11 +77,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bd-title em{font-style:normal;color:var(--brass)}
 .bd-sub{font-size:10.5px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:1px}
 .bd-hright{margin-left:auto;display:flex;align-items:center;gap:12px}
-/* Groups the account avatar with the settings button so the pair moves as one unit. On desktop this
-   is transparent to layout (display:contents unwraps it, so avatar + gear sit side by side exactly as
-   before); on mobile it switches to a small vertical stack — avatar above the gear — so the avatar
-   doesn't get orphaned onto its own full-width row when .bd-hright wraps. */
-.bd-acct-stack{display:contents}
+/* On mobile the avatar renders inside .bd-logo instead of .bd-hright (App.jsx swaps it by width), so
+   it shares the title's row — right-aligned there via the media query below — landing directly above
+   the settings button, which stays the last (right-most) item in .bd-hright underneath. */
+.bd-logo-avatar{flex:none;display:flex;align-items:center}
 .bd-clock{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);letter-spacing:.04em}
 .bd-clock span{color:var(--faint);font-size:10px;margin-left:5px}
 /* dark-yellow pill to flag that prices are on a delay (not real-time) */
@@ -310,11 +309,13 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   .bd-title{font-size:15px}
   .bd-sub{font-size:9px;letter-spacing:.13em}
   .bd-mark{width:32px;height:32px;border-radius:8px;font-size:12px}
+  /* Stretch the title row to full width and push the avatar (last child, added by App.jsx below this
+     width) to its right edge — same row as the title, sitting directly above the settings button. */
+  .bd-logo{width:100%;justify-content:space-between}
   .bd-hright{width:100%;justify-content:space-between;margin-left:0;flex-wrap:wrap;gap:8px}
   /* icon-only Sync on mobile so the cluster (clock · session · sync · theme · settings) fits one row */
   .sync-label{display:none}
   .bd-hright .btn-brass{padding:8px 11px}
-  .bd-acct-stack{display:flex;flex-direction:column;align-items:center;gap:4px}
   .bd-tabs{display:none}
   .bd-bottom-nav{display:block}
   /* lift toasts clear above the floating nav so sync notifications don't cover it */
