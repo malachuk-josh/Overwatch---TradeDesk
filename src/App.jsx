@@ -1168,16 +1168,24 @@ const SectorFocus = ({ tickers = [] }) => {
       return t && !t._stale && t.changePct != null ? { ...t, sector } : null;
     })
     .filter(Boolean);
-  if (!rows.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>;
+  if (!rows.length) {
+    return (
+      <div className="sector-focus">
+        <div className="sector-focus-head">
+          <span className="sector-focus-title">Sector focus <small>live SPDRs</small></span>
+        </div>
+        <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>
+      </div>
+    );
+  }
   const sorted = [...rows].sort((a, b) => b.changePct - a.changePct);
   const maxAbs = Math.max(0.4, ...sorted.map((r) => Math.abs(r.changePct)));
-  const green = rows.filter((r) => r.changePct > 0).length;
   const leader = sorted[0];
   const laggard = sorted[sorted.length - 1];
   return (
     <div className="sector-focus">
       <div className="sector-focus-head">
-        <span><b style={{ color: green >= rows.length - green ? C.bull : C.bear }}>{green}</b> of {rows.length} sectors green</span>
+        <span className="sector-focus-title">Sector focus <small>live SPDRs</small></span>
         <span className="sector-focus-lead">
           <span>Leader <b style={{ color: chgColor(leader.changePct) }}>{leader.symbol} {fmtSigned(leader.changePct, 2, "%")}</b></span>
           <span>Laggard <b style={{ color: chgColor(laggard.changePct) }}>{laggard.symbol} {fmtSigned(laggard.changePct, 2, "%")}</b></span>
@@ -1192,10 +1200,10 @@ const SectorFocus = ({ tickers = [] }) => {
           return (
             <div key={r.symbol} className="sf-tile" style={{ background: bg, borderColor: bc }} title={`${r.sector} · ${r.name}`}>
               <div className="sf-top">
-                <span className="sf-sym">{r.symbol}</span>
+                <span className="sf-name">{r.sector}</span>
                 <FreshTag delayed={r.delayed} open={symbolMarketOpen(r.symbol)} delaySec={r.delaySec} />
               </div>
-              <div className="sf-name">{r.sector}</div>
+              <span className="sf-sym">{r.symbol}</span>
               <div className="sf-bottom">
                 <span className="sf-price">{fmtNum(r.price, 2)}</span>
                 <b className="sf-pct" style={{ color: chgColor(r.changePct) }}>{fmtSigned(r.changePct, 2, "%")}</b>
@@ -2136,13 +2144,10 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
-      <Card icon={Gauge} title="Market breadth" sub="Sector participation & distribution">
-        <MarketBreadth data={points} />
+      <Card icon={Gauge} title="Market breadth" sub="Sector participation, distribution & live SPDR sectors">
+        <MarketBreadth data={points} tickers={data?.tickers || []} />
       </Card>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
-      <Card icon={Layers} title="Sector focus" sub="Live Select Sector SPDR ETFs, strongest first">
-        <SectorFocus tickers={data?.tickers || []} />
-      </Card>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn" onClick={onGoThesis}>Build today's thesis <ArrowRight size={14} /></button>
       </div>
@@ -2567,7 +2572,7 @@ const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
   );
 };
 
-const MarketBreadth = ({ data }) => {
+const MarketBreadth = ({ data, tickers = [] }) => {
   const internals = data?.internals || {};
   const breadth = internals.breadthDetail || {};
   const sectors = breadth.sectors || [];
@@ -2596,6 +2601,7 @@ const MarketBreadth = ({ data }) => {
         <span>Broad participation</span>
       </div>
       <BreadthDistribution distribution={breadth.distribution} total={total} />
+      <SectorFocus tickers={tickers} />
     </div>
   );
 };
