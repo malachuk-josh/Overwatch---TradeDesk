@@ -5927,7 +5927,16 @@ export default function Overwatch() {
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
-  const [lightMode, setLightMode] = useState(() => { try { return localStorage.getItem("overwatch:light") === "1"; } catch { return false; } });
+  // Theme defaults to dark, except a first-ever mobile visit (no saved preference yet) defaults to
+  // light — better readability outdoors / on the go. Once anyone toggles the theme button, that
+  // explicit choice is saved and always wins here, on any device, from then on.
+  const [lightMode, setLightMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem("overwatch:light");
+      if (saved !== null) return saved === "1";
+      return typeof window !== "undefined" && window.innerWidth <= 760;
+    } catch { return false; }
+  });
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
 
   useEffect(() => { try { localStorage.setItem("overwatch:light", lightMode ? "1" : "0"); } catch {} }, [lightMode]);
