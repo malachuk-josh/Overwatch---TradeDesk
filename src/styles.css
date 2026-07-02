@@ -798,6 +798,11 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 }
 .hist-row:hover{border-color:var(--line2);background:var(--panel3)}
 .hist-row.viewing{border-color:var(--brass)}
+/* Scrollable journal/library list — pad the right so rows don't sit under the scrollbar. */
+.hist-scroll{padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;overscroll-behavior:contain}
+.hist-scroll::-webkit-scrollbar{width:8px}
+.hist-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:999px}
+.hist-scroll::-webkit-scrollbar-track{background:transparent}
 /* mobile: let library/journal rows wrap instead of overflowing the card — the fixed date
    column shrinks to its content and the title takes a full line and wraps */
 @media (max-width:760px){
