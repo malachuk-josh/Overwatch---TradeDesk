@@ -1592,11 +1592,26 @@ const FactorRadarChart = ({ weights, onChange }) => {
   );
 };
 
-const LEVEL_MAP_GROUPS = [
-  { name: "S&P 500", keys: ["SPY", "SPX", "ES"], subs: { SPY: "S&P 500 ETF", SPX: "S&P 500 Index", ES: "E-mini S&P Futures" } },
-  { name: "Nasdaq 100", keys: ["QQQ", "NDX", "NQ"], subs: { QQQ: "Nasdaq 100 ETF", NDX: "Nasdaq 100 Index", NQ: "E-mini Nasdaq Futures" } },
-  { name: "Dow", keys: ["DIA", "DJI", "YM"], subs: { DIA: "Dow Jones ETF", DJI: "Dow Jones Index", YM: "E-mini Dow Futures" } },
-];
+// Level maps: three cards defaulted to the major index ETFs, each retargetable to ANY watchlist
+// instrument via the header dropdown. Levels come from the points feed when the symbol is part of
+// the index complex, otherwise from the stocklevels endpoint (cached briefly client-side).
+const LEVEL_MAP_DEFAULTS = ["SPY", "QQQ", "DIA"];
+const _lmLevelsCache = new Map();
+const fetchLevelsCached = async (symbol) => {
+  const hit = _lmLevelsCache.get(symbol);
+  if (hit && Date.now() - hit.ts < 2 * 60 * 1000) return hit.data;
+  const data = await callDesk("stocklevels", "", { symbol }).catch(() => null);
+  _lmLevelsCache.set(symbol, { ts: Date.now(), data });
+  return data;
+};
+const _lmHistCache = new Map();
+const fetchHistoryCached = async (symbol) => {
+  const hit = _lmHistCache.get(symbol);
+  if (hit && Date.now() - hit.ts < 10 * 60 * 1000) return hit.data;
+  const data = await callDesk("history", "", { symbol }).catch(() => null);
+  _lmHistCache.set(symbol, { ts: Date.now(), data });
+  return data;
+};
 
 // Pull the active instrument's session OHLC off its market ticker so the level map can draw
 // O/H/L/C rails. C uses the prior close so it stays distinct from the live spot line.
@@ -1607,65 +1622,94 @@ const ohlcForSymbol = (tickers, symbol) => {
   return { o: num(t.dayOpen), h: num(t.dayHigh), l: num(t.dayLow), c: num(t.previousClose) };
 };
 
-// Mini header candle for the active instrument, sourced from its market ticker.
-const levelMapCandle = (tickers, symbol) => {
-  const t = (tickers || []).find((x) => x.symbol === symbol);
-  if (!t) return null;
+const lmDecimals = (symbol, tickers) => {
+  if (symbol === "US10Y" || symbol === "US02Y") return 3;
+  const px = Number((tickers || []).find((x) => x.symbol === symbol)?.price);
+  return ETF_INSTRUMENTS.has(symbol) || (Number.isFinite(px) && Math.abs(px) < 1000) ? 2 : 0;
+};
+
+// Five mini daily candlesticks for the level-map header (today's partial candle is the last one).
+const CandleStrip = ({ candles, decimals = 2, live = false }) => {
+  if (!candles?.length) return null;
+  const W = 96, H = 34, n = candles.length;
+  const min = Math.min(...candles.map((c) => c.l));
+  const max = Math.max(...candles.map((c) => c.h));
+  const y = (v) => 3 + ((max - v) / (max - min || 1)) * (H - 6);
+  const bw = 7, gap = (W - n * bw) / n;
   return (
-    <MiniCandle
-      low={t.dayLow}
-      high={t.dayHigh}
-      price={t.price}
-      dayOpen={t.dayOpen}
-      previousClose={t.previousClose}
-      decimals={ETF_INSTRUMENTS.has(symbol) ? 2 : 0}
-      live={symbolMarketOpen(symbol)}
-    />
+    <svg width={W} height={H} className="lm-candles" aria-label={`Last ${n} daily candles`}>
+      {candles.map((c, i) => {
+        const x = gap / 2 + i * (bw + gap) + bw / 2;
+        const up = c.c >= c.o;
+        const col = up ? C.bull : C.bear;
+        const top = y(Math.max(c.o, c.c)), bot = y(Math.min(c.o, c.c));
+        const dateLabel = new Date(c.t * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+        return (
+          <g key={c.t}>
+            <title>{`${dateLabel} — O ${fmtNum(c.o, decimals)} H ${fmtNum(c.h, decimals)} L ${fmtNum(c.l, decimals)} C ${fmtNum(c.c, decimals)}`}</title>
+            <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1" />
+            <rect x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 1.5)} fill={col} rx="1" opacity={i === n - 1 && live ? 1 : 0.8} />
+          </g>
+        );
+      })}
+    </svg>
   );
 };
 
-const LevelMapCard = ({ group, points, tickers }) => {
-  const [active, setActive] = useState(group.keys[0]);
-  const dataKey = active.toLowerCase();
-  const data = points?.[dataKey];
-  // Draw the spot line off the live market ticker (same source as the header candle and Market
+// Header candles for the active instrument: 5-day history strip, falling back to the single-session
+// MiniCandle while history loads (or if the history fetch fails).
+const LevelMapCandles = ({ symbol, tickers }) => {
+  const [hist, setHist] = useState(null);
+  useEffect(() => {
+    let dead = false;
+    setHist(null);
+    fetchHistoryCached(symbol).then((h) => { if (!dead) setHist(h); });
+    return () => { dead = true; };
+  }, [symbol]);
+  const dec = lmDecimals(symbol, tickers);
+  if (hist?.candles?.length) return <CandleStrip candles={hist.candles} decimals={dec} live={symbolMarketOpen(symbol)} />;
+  const t = (tickers || []).find((x) => x.symbol === symbol);
+  if (!t) return null;
+  return (
+    <MiniCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} live={symbolMarketOpen(symbol)} />
+  );
+};
+
+const LevelMapCard = ({ defaultSymbol, points, tickers }) => {
+  const [active, setActive] = useState(defaultSymbol);
+  const symbols = (tickers || []).map((t) => t.symbol);
+  const pointsData = points?.[active.toLowerCase()];
+  const [fetched, setFetched] = useState(null);
+  // Symbols outside the index complex have no levels in the points feed — pull real ones on demand.
+  useEffect(() => {
+    if (pointsData) return;
+    let dead = false;
+    fetchLevelsCached(active).then((lv) => { if (!dead) setFetched({ symbol: active, levels: lv }); });
+    return () => { dead = true; };
+  }, [active, pointsData]);
+  const data = pointsData || (fetched?.symbol === active ? fetched.levels : null);
+  // Draw the spot line off the live market ticker (same source as the header candles and Market
   // Snapshot) rather than the separately-fetched levels payload, so the price doesn't diverge
-  // panel-to-panel. The R/S/pivot levels still come from the points feed.
+  // panel-to-panel. The R/S/pivot levels still come from the points/levels feed.
   const liveT = (tickers || []).find((x) => x.symbol === active);
   const livePrice = liveT && typeof liveT.price === "number" && !isNaN(liveT.price) ? liveT.price : null;
   const spxData = data && livePrice != null ? { ...data, spot: livePrice } : data;
   return (
-    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]} tools={levelMapCandle(tickers, active)}>
-      <div className="seg" style={{ marginBottom: 10 }}>
-        {group.keys.map((k) => (
-          <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
-        ))}
-      </div>
-      <LevelsLadder spx={spxData} label={active} ohlc={ohlcForSymbol(tickers, active)} />
-    </Card>
-  );
-};
-
-// Mobile-only: collapses the three stacked level maps into one card with a complex selector,
-// so phones don't scroll through three screen-heights of pivot ladders.
-const LevelMapPanel = ({ points, tickers }) => {
-  const [groupIdx, setGroupIdx] = useState(0);
-  const group = LEVEL_MAP_GROUPS[groupIdx];
-  const [active, setActive] = useState(group.keys[0]);
-  const data = points?.[active.toLowerCase()];
-  return (
-    <Card icon={Crosshair} title={`${active} level map`} sub={group.subs[active]} tools={levelMapCandle(tickers, active)}>
-      <div className="seg" style={{ marginBottom: 8 }}>
-        {LEVEL_MAP_GROUPS.map((g, i) => (
-          <button key={g.name} className={groupIdx === i ? "on" : ""} onClick={() => { setGroupIdx(i); setActive(g.keys[0]); }}>{g.name}</button>
-        ))}
-      </div>
-      <div className="seg" style={{ marginBottom: 10 }}>
-        {group.keys.map((k) => (
-          <button key={k} className={active === k ? "on" : ""} onClick={() => setActive(k)}>{k}</button>
-        ))}
-      </div>
-      <LevelsLadder spx={data} label={active} ohlc={ohlcForSymbol(tickers, active)} />
+    <Card
+      icon={Crosshair}
+      title={`${active} level map`}
+      sub={liveT?.name || ""}
+      tools={
+        <span className="lm-tools">
+          <LevelMapCandles symbol={active} tickers={tickers} />
+          <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any watchlist instrument">
+            {!symbols.includes(active) && <option value={active}>{active}</option>}
+            {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </span>
+      }
+    >
+      <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlcForSymbol(tickers, active)} />
     </Card>
   );
 };
@@ -1927,12 +1971,12 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
         {levelsOpen && (
           <div style={{ padding: "0 12px 12px" }}>
             <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
-              {LEVEL_MAP_GROUPS.map((g) => (
-                <LevelMapCard key={g.keys[0]} group={g} points={points} tickers={tickers} />
+              {LEVEL_MAP_DEFAULTS.map((sym) => (
+                <LevelMapCard key={sym} defaultSymbol={sym} points={points} tickers={tickers} />
               ))}
             </div>
             <div className="pulse-levels-mobile">
-              <LevelMapPanel points={points} tickers={tickers} />
+              <LevelMapCard defaultSymbol="SPY" points={points} tickers={tickers} />
             </div>
           </div>
         )}

@@ -802,8 +802,19 @@ const fetchFlowScan = async () => {
   }
 };
 
+// App symbols that aren't Yahoo-native. ^TNX quotes the 10Y yield ×10, hence the scale entry.
+const YAHOO_SYMBOLS = {
+  SPX: "^GSPC", NDX: "^NDX", DJI: "^DJI", RUT: "^RUT", VIX: "^VIX",
+  DXY: "DX-Y.NYB", US10Y: "^TNX", US02Y: "2YY=F",
+  ES: "ES=F", NQ: "NQ=F", YM: "YM=F", RTY: "RTY=F",
+  GC: "GC=F", CL: "CL=F", HG: "HG=F", BTC: "BTC-USD", ETH: "ETH-USD",
+};
+const YAHOO_SCALE = { US10Y: 0.1 };
+
 const quote = async (symbol) => {
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=5d&interval=1d&includePrePost=true`;
+  const ysym = YAHOO_SYMBOLS[symbol] || symbol;
+  const scale = YAHOO_SCALE[symbol] || 1;
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1d&includePrePost=true`;
   const payload = await fetchJson(url);
   const result = payload?.chart?.result?.[0];
   if (!result) throw new Error(`No quote for ${symbol}`);
@@ -823,16 +834,39 @@ const quote = async (symbol) => {
     ? meta.regularMarketOpen
     : validOpens.at(-1);
 
+  const s = (v) => (Number.isFinite(v) ? v * scale : v);
   return {
-    price,
-    change,
+    price: s(price),
+    change: s(change),
     changePct: previous ? (change / previous) * 100 : 0,
-    dayOpen: Number.isFinite(open) ? open : previous,
-    dayLow: Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : (bars.low || []).filter(Number.isFinite).at(-1),
-    dayHigh: Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : (bars.high || []).filter(Number.isFinite).at(-1),
-    previousClose: previous,
+    dayOpen: s(Number.isFinite(open) ? open : previous),
+    dayLow: s(Number.isFinite(meta.regularMarketDayLow) ? meta.regularMarketDayLow : (bars.low || []).filter(Number.isFinite).at(-1)),
+    dayHigh: s(Number.isFinite(meta.regularMarketDayHigh) ? meta.regularMarketDayHigh : (bars.high || []).filter(Number.isFinite).at(-1)),
+    previousClose: s(previous),
     asOf: meta.regularMarketTime || Math.floor(Date.now() / 1000),
   };
+};
+
+// Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
+const fetchHistory = async (symbol) => {
+  if (!symbol || typeof symbol !== "string") return null;
+  try {
+    const sym = symbol.toUpperCase();
+    const ysym = YAHOO_SYMBOLS[sym] || sym;
+    const scale = YAHOO_SCALE[sym] || 1;
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=10d&interval=1d`);
+    const result = payload?.chart?.result?.[0];
+    const ts = result?.timestamp || [];
+    const bars = result?.indicators?.quote?.[0] || {};
+    const candles = ts
+      .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
+      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+      .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
+      .slice(-5);
+    return candles.length ? { symbol: sym, candles } : null;
+  } catch {
+    return null;
+  }
 };
 
 const fetchMarket = async (watchlist = []) => {
@@ -2105,6 +2139,7 @@ export default async function handler(req, res) {
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol);
+    else if (operation === "history") data = await fetchHistory(payload.symbol);
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {
