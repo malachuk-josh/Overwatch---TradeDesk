@@ -902,6 +902,31 @@ const AsOfLabel = ({ ts, prefix = "prices as of", compact = false }) => {
   );
 };
 
+// Per-symbol freshness chip: LIVE (real-time feed + trading now), a delay tag (delayed feed), or
+// nothing when the instrument's market is closed — then every price is just the last close.
+const FreshTag = ({ delayed, open, delaySec }) => {
+  if (!open) return null;
+  if (delayed) {
+    const m = Number.isFinite(delaySec) && delaySec > 0 ? Math.round(delaySec / 60) : 15;
+    return <span className="tk-fresh delayed" title={`Delayed ~${m} min — free public feed (real-time needs a paid exchange entitlement)`}>{m}m</span>;
+  }
+  return <span className="tk-fresh live" title="Real-time feed"><span className="tk-fresh-dot" />LIVE</span>;
+};
+
+// Compact live/delayed summary for the Market snapshot header, computed across the shown tickers.
+const SnapFreshness = ({ tickers }) => {
+  const open = (tickers || []).filter((t) => !t._stale && symbolMarketOpen(t.symbol));
+  if (!open.length) return <span className="snap-fresh closed">markets closed</span>;
+  const live = open.filter((t) => !t.delayed).length;
+  const delayed = open.length - live;
+  return (
+    <span className="snap-fresh" title="Real-time vs delayed instruments currently trading">
+      {live > 0 && <span className="snap-fresh-live"><span className="tk-fresh-dot" />{live} live</span>}
+      {delayed > 0 && <span className="snap-fresh-delayed">{delayed} delayed</span>}
+    </span>
+  );
+};
+
 const Skeleton = ({ h = 16, w = "100%", style }) => <div className="skel" style={{ height: h, width: w, ...style }} />;
 
 const LoadingBlock = ({ lines = 3, msg }) => (
@@ -1946,9 +1971,9 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
             {tickersOpen && marketFilter !== "all" ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
           </small>
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            {tickersOpen && at?.ts && (
+            {tickersOpen && (
               <span className="snap-asof" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
-                <AsOfLabel ts={at.ts} compact />
+                <SnapFreshness tickers={displayTickers} />
               </span>
             )}
             {tickersOpen && (
@@ -1967,23 +1992,27 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
                 <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
                 <div className="tk-top">
                   <span className="tk-sym">{t.symbol}</span>
-                  {t._stale
-                    ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
-                    : t.changePct != null && (() => {
-                        const up = t.changePct >= 0;
-                        const col = up ? C.bull : C.bear;
-                        const live = symbolMarketOpen(t.symbol);
-                        const DirIcon = up ? TrendingUp : TrendingDown;
-                        return (
-                          <span
-                            className={`tk-dir${live ? " tk-dir-live" : ""}`}
-                            style={live ? { "--dir-glow": col } : undefined}
-                            title={live ? "Market open — trading now" : undefined}
-                          >
-                            <DirIcon size={14} color={col} />
-                          </span>
-                        );
-                      })()}
+                  <span className="tk-top-right">
+                    {!t._stale && <FreshTag delayed={t.delayed} open={symbolMarketOpen(t.symbol)} delaySec={t.delaySec} />}
+                    {t._stale
+                      ? <span style={{ fontSize: 9, color: C.muted, fontFamily: "monospace", letterSpacing: ".06em" }}>NO DATA</span>
+                      : t.changePct != null && (() => {
+                          const up = t.changePct >= 0;
+                          const col = up ? C.bull : C.bear;
+                          // Only pulse for a genuinely real-time, currently-trading symbol.
+                          const live = symbolMarketOpen(t.symbol) && !t.delayed;
+                          const DirIcon = up ? TrendingUp : TrendingDown;
+                          return (
+                            <span
+                              className={`tk-dir${live ? " tk-dir-live" : ""}`}
+                              style={live ? { "--dir-glow": col } : undefined}
+                              title={live ? "Real-time — trading now" : undefined}
+                            >
+                              <DirIcon size={14} color={col} />
+                            </span>
+                          );
+                        })()}
+                  </span>
                 </div>
                 <div className="tk-body">
                   <div className="tk-left">
