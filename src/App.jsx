@@ -4499,7 +4499,9 @@ const CloudNewsletterList = ({ inSplit = false }) => {
   const filtered = !query ? items : items.filter((item) =>
     [item.type, item.bias, item.instrument, item.title, rowDate(item.sentAt)].filter(Boolean).join(" ").toLowerCase().includes(query));
   const effectiveExpanded = expanded || !!query;
-  const shown = effectiveExpanded ? filtered : filtered.slice(0, collapsedCount);
+  // Desktop scrolls the full archive inside a fixed-height pane; mobile keeps the show-more collapse.
+  const showAll = isDesktop || effectiveExpanded;
+  const shown = showAll ? filtered : filtered.slice(0, collapsedCount);
 
   // Reader navigation runs over the full archive (newest first).
   const current = previewId ? items.find((i) => i.id === previewId) : null;
@@ -4533,7 +4535,7 @@ const CloudNewsletterList = ({ inSplit = false }) => {
     <>
       <input className="bd-in" style={{ marginBottom: 8 }} placeholder="Search newsletters — title, ticker, bias or date…" value={q} onChange={(e) => setQ(e.target.value)} />
       {!filtered.length && <div style={{ color: C.muted, fontSize: 12.5 }}>No newsletters match “{q}”.</div>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: effectiveExpanded ? 320 : "none", overflowY: effectiveExpanded ? "auto" : "visible" }}>
+      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 380 : "none", overflowY: showAll ? "auto" : "visible" }}>
         {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
             <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
@@ -4675,7 +4677,9 @@ const ArchiveTab = ({
       .filter(Boolean).join(" ").toLowerCase().includes(query);
   });
   const effectiveExpanded = expanded || !!query;
-  const shownHistory = effectiveExpanded ? filteredHistory : filteredHistory.slice(0, collapsedCount);
+  // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
+  const showAll = isDesktop || effectiveExpanded;
+  const shownHistory = showAll ? filteredHistory : filteredHistory.slice(0, collapsedCount);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <Card
@@ -4707,7 +4711,7 @@ const ArchiveTab = ({
         {archiveHistory.length > 0 && !filteredHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>No saved theses match “{q}”.</div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: effectiveExpanded ? 320 : "none", overflowY: effectiveExpanded ? "auto" : "visible" }}>
+        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 380 : "none", overflowY: showAll ? "auto" : "visible" }}>
           {shownHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
