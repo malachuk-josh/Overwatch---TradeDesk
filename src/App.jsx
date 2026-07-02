@@ -1658,7 +1658,7 @@ const lmDecimals = (symbol, tickers) => {
   return ETF_INSTRUMENTS.has(symbol) || (Number.isFinite(px) && Math.abs(px) < 1000) ? 2 : 0;
 };
 
-// Five daily candlesticks for the level-map header (today's partial candle is the last one). Rendered
+// Seven daily candlesticks for the level-map header (today's partial candle is the last one). Rendered
 // in HTML with the exact same wick/body classes as the Market Pulse ticker-card candle, so the
 // gradient bodies, inset borders, glow and bull/bear/flat tones match one-for-one.
 const CandleStrip = ({ candles, decimals = 2, live = false }) => {
