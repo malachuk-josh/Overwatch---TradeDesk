@@ -2170,6 +2170,92 @@ const CAT_TONE = { macro: "b-info", fed: "b-brass", earnings: "b-bull", geopolit
 
 const newsKey = (h) => h?.url || h?.title || "";
 
+// Compact mobile stand-in for the News tab's category/sentiment/sort chip rows. On phones those two
+// rows wrap to 3-4 lines of chips and read as cluttered, so below the 760px breakpoint they're
+// replaced with a single "Filters" trigger that opens all three groups in one portaled panel — same
+// dropdown pattern as SnapMarketFilter above. Desktop keeps the original always-visible chip rows.
+const NewsFilterMenu = ({ cats, cat, setCat, tone, setTone, sortBy, setSortBy, sortDir, setSortDir }) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const activeCount = (cat !== "all" ? 1 : 0) + (tone !== "all" ? 1 : 0) + (sortBy !== "time" || sortDir !== "desc" ? 1 : 0);
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const menuW = Math.min(300, window.innerWidth - 24);
+      setPos({ top: r.bottom + 6, left: Math.min(r.left, window.innerWidth - menuW - 12) });
+    };
+    place();
+    const onDoc = (e) => {
+      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+  const resetAll = () => { setCat("all"); setTone("all"); setSortBy("time"); setSortDir("desc"); };
+  return (
+    <span className="news-filter" onClick={(e) => e.stopPropagation()}>
+      <button
+        ref={btnRef}
+        className={`fchip news-filter-btn${activeCount ? " on" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Category, sentiment and sort"
+      >
+        <SlidersHorizontal size={12} />
+        Filters{activeCount ? ` · ${activeCount}` : ""}
+        <ChevronDown size={12} style={{ opacity: 0.7 }} />
+      </button>
+      {open && pos && createPortal(
+        <div ref={menuRef} className="news-filter-menu" style={{ top: pos.top, left: pos.left }} role="dialog" aria-label="News filters" onClick={(e) => e.stopPropagation()}>
+          <div className="nfm-section">
+            <span className="nfm-label">Category</span>
+            <div className="nfm-chips">
+              {cats.map((c) => (
+                <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>
+              ))}
+            </div>
+          </div>
+          <div className="nfm-section">
+            <span className="nfm-label">Sentiment</span>
+            <div className="nfm-chips">
+              {["all", "bullish", "bearish", "neutral"].map((t) => (
+                <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => setTone(t)} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
+              ))}
+            </div>
+          </div>
+          <div className="nfm-section">
+            <span className="nfm-label">Sort</span>
+            <div className="nfm-chips">
+              {[["time", "Time"], ["impact", "Impact"]].map(([v, lbl]) => (
+                <button key={v} className={`fchip ${sortBy === v ? "on" : ""}`} onClick={() => setSortBy(v)}>{lbl}</button>
+              ))}
+              <button className={`fchip ${sortDir === "desc" ? "on" : ""}`} onClick={() => setSortDir("desc")} title={sortBy === "impact" ? "Highest impact first" : "Newest first"} style={{ padding: "5px 7px" }}><ArrowDown size={13} /></button>
+              <button className={`fchip ${sortDir === "asc" ? "on" : ""}`} onClick={() => setSortDir("asc")} title={sortBy === "impact" ? "Lowest impact first" : "Oldest first"} style={{ padding: "5px 7px" }}><ArrowUp size={13} /></button>
+            </div>
+          </div>
+          {activeCount > 0 && <button className="nfm-reset" onClick={resetAll}>Reset filters</button>}
+        </div>,
+        document.body,
+      )}
+    </span>
+  );
+};
+
 const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = usePersistentState("overwatch:news:cat", "all");
@@ -2219,7 +2305,10 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
           </div>
           <p>{data?.brief || data?.mood || "No desk brief in the last sync."}</p>
         </div>
-        <div className="filter-row">
+        <div className="news-filters-mobile">
+          <NewsFilterMenu cats={cats} cat={cat} setCat={setCat} tone={tone} setTone={setTone} sortBy={sortBy} setSortBy={setSortBy} sortDir={sortDir} setSortDir={setSortDir} />
+        </div>
+        <div className="filter-row news-filters-desktop">
           {cats.map((c) => (
             <button key={c} className={`fchip ${cat === c ? "on" : ""}`} onClick={() => setCat(c)}>{c}</button>
           ))}
@@ -2228,7 +2317,7 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
             <button key={t} className={`fchip ${tone === t ? "on" : ""}`} onClick={() => setTone(t)} style={tone === t && t !== "all" ? { color: sentColor(t), borderColor: sentColor(t) } : {}}>{t}</button>
           ))}
         </div>
-        <div className="filter-row" style={{ marginTop: -3 }}>
+        <div className="filter-row news-filters-desktop" style={{ marginTop: -3 }}>
           <span style={{ fontSize: 10, color: C.muted, fontFamily: "'JetBrains Mono', monospace", letterSpacing: ".1em", alignSelf: "center", marginRight: 2 }}>SORT</span>
           {[["time", "Time"], ["impact", "Impact"]].map(([v, lbl]) => (
             <button key={v} className={`fchip ${sortBy === v ? "on" : ""}`} onClick={() => setSortBy(v)} title={v === "time" ? "Newest first" : "Most significant first"}>{lbl}</button>
