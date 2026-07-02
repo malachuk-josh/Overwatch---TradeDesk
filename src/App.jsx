@@ -5841,8 +5841,10 @@ export default function Overwatch() {
   const cloudSaveTimer = useRef(null);
   const prevSignedIn = useRef(false); // to detect a sign-out transition (Phase 4 cache clear)
 
-  // Apply a persisted layout block (active tab, split pane, theme) — profile-synced so a refresh or
-  // a different device restores the view you left, in split or regular mode.
+  // Apply a persisted layout block (active tab, split pane, theme). Used only for the LOCAL settings
+  // blob on first load — tab/splitTab/lightMode already restore instantly from their own local-storage
+  // keys (TAB_KEY, "overwatch:split", "overwatch:light") read synchronously in useState above, so this
+  // just keeps them in sync with the rest of that same local snapshot.
   const applyLayout = useCallback((layout) => {
     if (!layout || typeof layout !== "object") return;
     if (typeof layout.tab === "string") setTab(safeTab(layout.tab));
@@ -5852,7 +5854,13 @@ export default function Overwatch() {
     if (typeof layout.lightMode === "boolean") setLightMode(layout.lightMode);
   }, []);
 
-  // Apply a settings blob (from local storage or the cloud) through the state setters.
+  // Apply a settings blob (from the cloud) through the state setters. Deliberately does NOT touch
+  // layout (tab/splitTab/lightMode): those are per-device UI state that already restores instantly
+  // from local storage on every load. The cloud round trip is debounced and only starts saving after
+  // its own hydrate completes, so on a refresh soon after a local-only change (e.g. just turning split
+  // view on) the account's copy is still stale — applying it here was overwriting the correct, fresher
+  // local state and made split view (and the active tab) revert on refresh. Everything else genuinely
+  // is account data, so it stays synced.
   const applyLoadedSettings = useCallback((s) => {
     if (!s || typeof s !== "object") return;
     if (Array.isArray(s.watchlist) && s.watchlist.length) setWatchlist(reconcileWatchlist(s.watchlist));
@@ -5861,8 +5869,7 @@ export default function Overwatch() {
     if (s.lean) setLean(s.lean);
     if (s.risk) setRisk(s.risk);
     if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
-    applyLayout(s.layout);
-  }, [applyLayout]);
+  }, []);
 
   /* clock */
   useEffect(() => {
