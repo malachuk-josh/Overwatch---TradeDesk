@@ -42,6 +42,7 @@ import Minimize2 from "lucide-react/dist/esm/icons/minimize-2.mjs";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link.mjs";
 import Eye from "lucide-react/dist/esm/icons/eye.mjs";
 import EyeOff from "lucide-react/dist/esm/icons/eye-off.mjs";
+import GripVertical from "lucide-react/dist/esm/icons/grip-vertical.mjs";
 import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
 import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
@@ -1866,7 +1867,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -1879,7 +1880,13 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
   // filter/sort and the session synthesis only recompute when their inputs actually change.
   const hideSet = hiddenSymbols || THESIS_STOCK_SET;
   const tickers = useMemo(() => (data?.tickers || []).filter((t) => !hideSet.has(t.symbol)), [data, hideSet]);
-  const orderedTickers = useMemo(() => orderAssetCards(tickers), [tickers]);
+  // The board follows the watchlist order (drag-to-reorder in Settings), reflected instantly rather
+  // than waiting for the next sync. Unknown symbols fall to the end, preserving their fetched order.
+  const orderIndex = useMemo(() => new Map((watchlist || []).map((w, i) => [w.symbol, i])), [watchlist]);
+  const orderedTickers = useMemo(() => {
+    if (!orderIndex.size) return orderAssetCards(tickers);
+    return [...tickers].sort((a, b) => (orderIndex.get(a.symbol) ?? 1e6) - (orderIndex.get(b.symbol) ?? 1e6));
+  }, [tickers, orderIndex]);
   // Level maps can target the full fetched universe (incl. the Mag 7 that are hidden from the grid),
   // grouped in the picker by type.
   const levelTickers = useMemo(() => orderAssetCards(data?.tickers || []), [data]);
@@ -4678,20 +4685,10 @@ const ArchiveTab = ({
    ================================================================ */
 
 const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, storageOk, notify, auth }) => {
-  const [sym, setSym] = useState("");
-  const [name, setName] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [overIndex, setOverIndex] = useState(null);
   if (!open) return null;
-
-  const addTicker = () => {
-    const s = sym.trim().toUpperCase();
-    if (!s) return;
-    if (watchlist.some((w) => w.symbol === s)) { notify(`${s} is already on the board`, "err"); return; }
-    if (watchlist.length >= WATCHLIST_CAP) { notify(`Watchlist is capped at ${WATCHLIST_CAP} — drop one first`, "err"); return; }
-    setWatchlist([...watchlist, { symbol: s, name: name.trim() || s }]);
-    setSym(""); setName("");
-    notify(`${s} added — resync prices to pull it in`, "ok");
-  };
 
   // Flip a symbol's visibility on the Pulse grid without dropping it from the board.
   const toggleTicker = (symbol) => setWatchlist(watchlist.map((x) => {
@@ -4699,6 +4696,17 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
     if (x.off) { const { off, ...rest } = x; return rest; }
     return { ...x, off: true };
   }));
+
+  // Drag-to-reorder the watchlist (and therefore the Market Pulse card order).
+  const moveRow = (from, to) => {
+    if (from == null || to == null || from === to) return;
+    setWatchlist((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  };
 
   return (
     <>
@@ -4718,28 +4726,33 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           </div>
         )}
 
-        <span className="lab-label">Watchlist · {watchlist.length}/{WATCHLIST_CAP}</span>
-        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 8px" }}>Tap the eye to show/hide a ticker card on Market Pulse. Hidden names still price for the Thesis Lab.</div>
-        <div style={{ marginBottom: 10 }}>
-          {watchlist.map((w) => (
-            <span className={`wl-chip${w.off ? " wl-chip-off" : ""}`} key={w.symbol}>
-              <span
-                className="wl-eye"
+        <span className="lab-label">Watchlist · {watchlist.length}</span>
+        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Drag the handle to reorder cards on Market Pulse. Use Show / Hide to control what appears — hidden names still price for the Thesis Lab.</div>
+        <div className="wl-list">
+          {watchlist.map((w, i) => (
+            <div
+              key={w.symbol}
+              className={`wl-row${w.off ? " off" : ""}${dragIndex === i ? " dragging" : ""}${overIndex === i && dragIndex !== null && dragIndex !== i ? " over" : ""}`}
+              draggable
+              onDragStart={(e) => { setDragIndex(i); e.dataTransfer.effectAllowed = "move"; }}
+              onDragOver={(e) => { e.preventDefault(); if (overIndex !== i) setOverIndex(i); }}
+              onDrop={(e) => { e.preventDefault(); moveRow(dragIndex, i); setDragIndex(null); setOverIndex(null); }}
+              onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+            >
+              <span className="wl-grip" title="Drag to reorder"><GripVertical size={15} /></span>
+              <span className="wl-sym mono">{w.symbol}</span>
+              <span className="wl-name">{w.name}</span>
+              <button
+                className={`wl-vis${w.off ? "" : " on"}`}
                 onClick={() => toggleTicker(w.symbol)}
-                title={w.off ? "Hidden — show card on Market Pulse" : "Shown — hide card on Market Pulse"}
-              >{w.off ? <EyeOff size={12} /> : <Eye size={12} />}</span>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 12 }}>{w.symbol}</span>
-              <span style={{ fontSize: 11, color: C.muted, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
-              <span className="wl-x" onClick={() => setWatchlist(watchlist.filter((x) => x.symbol !== w.symbol))} title="Remove"><X size={12} /></span>
-            </span>
+                title={w.off ? "Hidden — show this card on Market Pulse" : "Shown — hide this card from Market Pulse"}
+              >
+                {w.off ? <><EyeOff size={13} /> Hidden</> : <><Eye size={13} /> Shown</>}
+              </button>
+            </div>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input className="bd-in mono-in" style={{ width: 96, flex: "none" }} placeholder="SYM" value={sym} onChange={(e) => setSym(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTicker()} />
-          <input className="bd-in" placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addTicker()} />
-          <button className="btn btn-sm" style={{ flex: "none" }} onClick={addTicker}><Plus size={14} /></button>
-        </div>
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 10 }} onClick={() => { setWatchlist(DEFAULT_WATCHLIST); notify("Watchlist restored to desk defaults", "ok"); }}>
+        <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={() => { setWatchlist(DEFAULT_WATCHLIST); notify("Watchlist restored to desk defaults", "ok"); }}>
           <RotateCcw size={12} /> Restore default board
         </button>
 
@@ -5543,7 +5556,7 @@ export default function Overwatch() {
   const renderTab = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
