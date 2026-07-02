@@ -1090,8 +1090,18 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 }
 /* Candle wicks (level-map strips + Market snapshot ticker cards) use a white gradient tuned for the
    dark glass — invisible against light mode's near-white cards. Swap to a dark slate gradient so the
-   high/low tails read clearly. The bull/bear/flat bodies are saturated enough to keep as-is. */
+   high/low tails read clearly. */
 .bd-root.light .candle-wick{background:linear-gradient(180deg,rgba(51,65,85,.9),rgba(51,65,85,.5))}
+/* In dark mode the wick is a faint white line, so the translucent body sitting on top of it reads
+   cleanly — the wick shows only as tails and fades out through the body. The new dark slate wick is
+   opaque enough to punch straight through the body's translucent lower gradient (.28 floor) as a
+   solid line down the center. Turn the body's transparency down in light mode (raise the gradient's
+   alpha floor) so it occludes the wick where they overlap; the wick fades out through the body while
+   the dark tails above/below stay visible. Keeps a subtle top→bottom fade so it still reads as a
+   candle, not a flat bar. */
+.bd-root.light .candle-body.bull{background:linear-gradient(180deg,rgba(34,197,94,.98),rgba(34,197,94,.9))}
+.bd-root.light .candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.98),rgba(239,68,68,.9))}
+.bd-root.light .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.98),rgba(59,130,246,.9))}
 .bd-root.light .internals-hero{
   background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.08),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
 }
