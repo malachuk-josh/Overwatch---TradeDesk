@@ -985,8 +985,8 @@ const primeFinnhubQuotes = async (symbols) => {
   return out;
 };
 
-// Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
-// Pull ~15 calendar days so weekends/holidays still leave 5 completed trading sessions.
+// Last 7 daily OHLC candles for one symbol (includes today's partial candle during the session).
+// Pull ~15 calendar days so weekends/holidays still leave 7 completed trading sessions.
 const fetchHistory = async (symbol) => {
   if (!symbol || typeof symbol !== "string") return null;
   try {
@@ -1001,7 +1001,7 @@ const fetchHistory = async (symbol) => {
       .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
       .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
       .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
-      .slice(-5);
+      .slice(-7);
     return candles.length ? { symbol: sym, candles } : null;
   } catch {
     return null;
