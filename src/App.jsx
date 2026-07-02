@@ -1804,27 +1804,42 @@ const SECTOR_ETF_META = new Map(SECTOR_ETFS.map((s) => [s.symbol, s.sector]));
 
 const SNAP_FUTURES_SET = new Set(["ES", "NQ", "YM", "RTY"]);
 const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "TLT", "USO", ...SECTOR_ETFS.map((s) => s.symbol)]);
+const SNAP_INDEX_SET = new Set(["SPX", "NDX", "DJI", "RUT"]);
+const SNAP_SECTOR_SET = new Set(SECTOR_ETFS.map((s) => s.symbol));
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
+  { key: "indexes", label: "Indexes", short: "Indexes" },
   { key: "futures", label: "Futures", short: "Futures" },
   { key: "etfs", label: "ETFs", short: "ETFs" },
+  { key: "sectors", label: "Sectors", short: "Sectors" },
   { key: "mag7", label: "Mag 7", short: "Mag 7" },
 ];
 const SNAP_FILTER_TEST = {
   live: (t) => symbolMarketOpen(t.symbol),
+  indexes: (t) => SNAP_INDEX_SET.has(t.symbol),
   futures: (t) => SNAP_FUTURES_SET.has(t.symbol),
   etfs: (t) => SNAP_ETF_SET.has(t.symbol),
+  sectors: (t) => SNAP_SECTOR_SET.has(t.symbol),
   mag7: (t) => THESIS_STOCK_SET.has(t.symbol),
 };
+// Groups whose members are hidden from the default board (off:true), so focusing them pulls from the
+// full fetched universe rather than the visible board.
+const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7"]);
+// Instrument-type groups the user can hide from the "All markets" view (the dynamic "live" filter and
+// "all" itself aren't hideable).
+const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7"];
 
-// "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header.
-const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
+// "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header. Each row can
+// be tapped to focus that group, or (for instrument-type groups) toggled with the eye button to hide
+// that group from the default "All markets" view.
+const SnapMarketFilter = ({ value, onChange, anyMarketOpen, hidden = [], onToggleHide }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
   const current = SNAP_FILTER_OPTIONS.find((o) => o.key === value) || SNAP_FILTER_OPTIONS[0];
+  const btnLabel = value === "all" && hidden.length ? `${current.short} −${hidden.length}` : current.short;
   // The menu is portaled to <body> so the snapshot card's overflow:hidden can't clip it; position it
   // under the button and keep it there on scroll/resize. Close on outside click or Escape.
   useEffect(() => {
@@ -1854,31 +1869,46 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
     <span className="snap-filter" onClick={(e) => e.stopPropagation()}>
       <button
         ref={btnRef}
-        className={`fchip snap-filter-btn${value !== "all" ? " on" : ""}`}
+        className={`fchip snap-filter-btn${value !== "all" || hidden.length ? " on" : ""}`}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title="Filter the snapshot by market group"
+        title="Focus a market group, or hide groups from the All markets view"
       >
         {value === "live" && <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />}
-        {current.short}
+        {btnLabel}
         <ChevronDown size={12} style={{ opacity: 0.7 }} />
       </button>
       {open && pos && createPortal(
         <div ref={menuRef} className="snap-filter-menu" style={{ top: pos.top, right: pos.right }} role="listbox" onClick={(e) => e.stopPropagation()}>
-          {SNAP_FILTER_OPTIONS.map((o) => (
-            <button
-              key={o.key}
-              role="option"
-              aria-selected={o.key === value}
-              className={`snap-filter-item${o.key === value ? " on" : ""}`}
-              onClick={() => { onChange(o.key); setOpen(false); }}
-            >
-              {o.key === "live" && <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />}
-              <span>{o.label}</span>
-              {o.key === value && <Check size={13} style={{ marginLeft: "auto" }} />}
-            </button>
-          ))}
+          {SNAP_FILTER_OPTIONS.map((o) => {
+            const isHidden = hidden.includes(o.key);
+            const hideable = onToggleHide && SNAP_HIDEABLE.includes(o.key);
+            return (
+              <div key={o.key} className={`snap-filter-item${o.key === value ? " on" : ""}${isHidden ? " hidden-group" : ""}`}>
+                <button
+                  role="option"
+                  aria-selected={o.key === value}
+                  className="sfi-main"
+                  onClick={() => { onChange(o.key); setOpen(false); }}
+                >
+                  {o.key === "live" && <span className={`snap-live-dot${anyMarketOpen ? " on" : ""}`} />}
+                  <span>{o.label}</span>
+                  {o.key === value && <Check size={13} className="sfi-check" />}
+                </button>
+                {hideable && (
+                  <button
+                    className="sfi-hide"
+                    onClick={(e) => { e.stopPropagation(); onToggleHide(o.key); }}
+                    aria-pressed={isHidden}
+                    title={isHidden ? `Show ${o.label} in All markets` : `Hide ${o.label} from All markets`}
+                  >
+                    {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>,
         document.body,
       )}
@@ -1892,6 +1922,12 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
   const [tickersOpen, setTickersOpen] = usePersistentState("overwatch:sec:snapshot", false); // Market snapshot — collapsed by default
   const [marketFilter, setMarketFilter] = usePersistentState("overwatch:snap:filter", "all"); // snapshot "Markets" dropdown (expanded only)
+  const [hiddenGroups, setHiddenGroups] = usePersistentState("overwatch:snap:hidden", []); // groups excluded from the "All markets" view
+  const toggleHiddenGroup = useCallback((key) => setHiddenGroups((prev) => {
+    const set = new Set(Array.isArray(prev) ? prev : []);
+    if (set.has(key)) set.delete(key); else set.add(key);
+    return [...set].filter((k) => SNAP_HIDEABLE.includes(k));
+  }), [setHiddenGroups]);
   const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
@@ -1913,13 +1949,20 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
   const anyMarketOpen = useMemo(() => orderedTickers.some((t) => symbolMarketOpen(t.symbol)), [orderedTickers]);
   const session = useMemo(() => buildSessionRead({ market: data, points, news }), [data, points, news]);
 
-  // The snapshot grid after the "Markets" filter. Mag 7 pulls from the full fetched set so it can be
-  // seen even though those tickers are hidden from the default board; other filters stay on the board.
+  // The snapshot grid after the "Markets" filter. Focusing a group that lives in the hidden universe
+  // (Sectors, Mag 7) pulls from the full fetched set so it's visible even though those tickers are off
+  // the default board; the "All markets" view drops any groups the user has toggled hidden.
   const displayTickers = useMemo(() => {
-    if (marketFilter === "mag7") return orderAssetCards((data?.tickers || []).filter((t) => THESIS_STOCK_SET.has(t.symbol)));
-    const test = SNAP_FILTER_TEST[marketFilter];
-    return test ? orderedTickers.filter(test) : orderedTickers;
-  }, [marketFilter, orderedTickers, data]);
+    if (marketFilter !== "all") {
+      const test = SNAP_FILTER_TEST[marketFilter];
+      if (!test) return orderedTickers;
+      if (SNAP_FROM_HIDDEN.has(marketFilter)) return orderAssetCards((data?.tickers || []).filter(test));
+      return orderedTickers.filter(test);
+    }
+    if (!hiddenGroups.length) return orderedTickers;
+    const tests = hiddenGroups.map((g) => SNAP_FILTER_TEST[g]).filter(Boolean);
+    return orderedTickers.filter((t) => !tests.some((test) => test(t)));
+  }, [marketFilter, hiddenGroups, orderedTickers, data]);
 
   if (status === "idle")
     return (
@@ -1977,7 +2020,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
           <span>Market snapshot</span>
           <small className="snap-count" style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
-            {tickersOpen && marketFilter !== "all" ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
+            {tickersOpen && (marketFilter !== "all" || hiddenGroups.length) ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
           </small>
           <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {tickersOpen && (
@@ -1986,7 +2029,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
               </span>
             )}
             {tickersOpen && (
-              <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} />
+              <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} hidden={hiddenGroups} onToggleHide={toggleHiddenGroup} />
             )}
             {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </span>
@@ -2044,7 +2087,11 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                   ? "No markets are trading right now. Index futures and crypto run nearly around the clock; cash indexes, ETFs and single stocks reopen at the next session."
                   : marketFilter === "mag7"
                     ? "No Mag 7 prices in the last sync — hit Sync to pull them in."
-                    : "Nothing on the board matches this filter."}
+                    : marketFilter === "sectors"
+                      ? "No sector ETF prices in the last sync — hit Sync to pull them in."
+                      : marketFilter === "all"
+                        ? "Every market group is hidden — un-hide a group from the Markets filter to see the board."
+                        : "Nothing on the board matches this filter."}
               </div>
             )}
           </div>
