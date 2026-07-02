@@ -2545,28 +2545,38 @@ const RegimeScoreRail = ({ score, leftLabel = "Defensive", rightLabel = "Constru
 };
 
 const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
+  // Ordered left → right: Strong down → Down → Flat → Up → Strong up, so the bar runs the same
+  // direction as its axis (reds on the left, greens on the right) instead of inverted.
   const segments = [
-    { key: "strongUp", label: "Strong up", color: C.bull, value: distribution.strongUp || 0 },
-    { key: "up", label: "Up", color: "rgba(34,197,94,.58)", value: distribution.up || 0 },
-    { key: "flat", label: "Flat", color: C.brass, value: distribution.flat || 0 },
-    { key: "down", label: "Down", color: "rgba(239,68,68,.58)", value: distribution.down || 0 },
-    { key: "strongDown", label: "Strong down", color: C.bear, value: distribution.strongDown || 0 },
+    { key: "strongDown", label: "Strong down", short: "Str down", color: C.bear, value: distribution.strongDown || 0 },
+    { key: "down", label: "Down", short: "Down", color: "rgba(239,68,68,.55)", value: distribution.down || 0 },
+    { key: "flat", label: "Flat", short: "Flat", color: C.brass, value: distribution.flat || 0 },
+    { key: "up", label: "Up", short: "Up", color: "rgba(34,197,94,.55)", value: distribution.up || 0 },
+    { key: "strongUp", label: "Strong up", short: "Str up", color: C.bull, value: distribution.strongUp || 0 },
   ];
+  const counted = segments.reduce((sum, s) => sum + s.value, 0);
+  const denom = Math.max(total, counted, 1);
   return (
     <div className="breadth-dist" aria-label="Sector breadth distribution">
       <div className="breadth-dist-track">
-        {segments.map((segment) => (
-          <span
-            key={segment.key}
-            title={`${segment.label}: ${segment.value}`}
-            style={{ width: `${Math.max(0, (segment.value / Math.max(total, 1)) * 100)}%`, background: segment.color }}
-          />
-        ))}
+        {counted === 0
+          ? <span style={{ width: "100%", background: "var(--panel3)" }} />
+          : segments.map((segment) => (
+              <span
+                key={segment.key}
+                title={`${segment.label}: ${segment.value} sector${segment.value === 1 ? "" : "s"}`}
+                style={{ width: `${(segment.value / denom) * 100}%`, background: segment.color }}
+              />
+            ))}
       </div>
-      <div className="breadth-dist-labels">
-        <span>Strong down</span>
-        <span>Flat</span>
-        <span>Strong up</span>
+      <div className="breadth-dist-legend">
+        {segments.map((s) => (
+          <span key={s.key} className={`breadth-dist-key${s.value ? "" : " empty"}`} title={`${s.label}: ${s.value}`}>
+            <i style={{ background: s.color }} />
+            <span>{s.short}</span>
+            <b>{s.value}</b>
+          </span>
+        ))}
       </div>
     </div>
   );
