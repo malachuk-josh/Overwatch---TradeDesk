@@ -6502,8 +6502,10 @@ export default function Overwatch() {
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
-          <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
-          {CLERK_ENABLED && <AuthControl />}
+          <span className="bd-acct-stack">
+            {CLERK_ENABLED && <AuthControl />}
+            <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
+          </span>
         </div>
       </header>
 
