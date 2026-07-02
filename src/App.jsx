@@ -1719,7 +1719,7 @@ const LevelMapCandles = ({ symbol, tickers }) => {
   );
 };
 
-const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = false, onGrabStart, onGrabEnd }) => {
+const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = false }) => {
   // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
   const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
   const active = pref.sym || defaultSymbol;
@@ -1749,25 +1749,16 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = 
   const ohlc = period === "w" ? (fetchedData?.ohlc || null) : ohlcForSymbol(tickers, active);
   return (
     <Card
-      icon={Crosshair}
+      icon={reorderable ? GripVertical : Crosshair}
       title={`${active} level map`}
       sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
       tools={
         <span className="lm-tools">
-          {reorderable && (
-            <span
-              className="lm-grip"
-              title="Drag to reorder the level maps"
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = "move";
-                const slot = e.currentTarget.closest(".lm-slot");
-                if (slot) e.dataTransfer.setDragImage(slot, 24, 18);
-                onGrabStart?.();
-              }}
-              onDragEnd={() => onGrabEnd?.()}
-            >
-              <GripVertical size={15} />
+          <LevelMapCandles symbol={active} tickers={tickers} />
+          {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
+            <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
+              <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
+              <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))}</small>
             </span>
           )}
           <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
@@ -1784,17 +1775,6 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = 
         </span>
       }
     >
-      {/* Candle strip + day-change reference on their own fixed-height row so the header title/subtitle
-          keep full width (no wrap) and every card is the same height regardless of instrument name. */}
-      <div className="lm-strip">
-        <LevelMapCandles symbol={active} tickers={tickers} />
-        {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
-          <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
-            <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
-            <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))} pts</small>
-          </span>
-        )}
-      </div>
       <div className="lm-map-wrap">
         <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlc} />
         <div className="lm-period" role="group" aria-label="Level timeframe">
@@ -2165,8 +2145,11 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                 <div
                   key={origIdx}
                   className={`lm-slot${lmDragPos === pos ? " dragging" : ""}${lmOverPos === pos && lmDragPos !== null && lmDragPos !== pos ? " over" : ""}`}
+                  draggable
+                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setLmDragPos(pos); }}
                   onDragOver={(e) => { e.preventDefault(); if (lmOverPos !== pos) setLmOverPos(pos); }}
                   onDrop={(e) => { e.preventDefault(); moveLm(lmDragPos, pos); setLmDragPos(null); setLmOverPos(null); }}
+                  onDragEnd={() => { setLmDragPos(null); setLmOverPos(null); }}
                 >
                   <LevelMapCard
                     defaultSymbol={LEVEL_MAP_DEFAULTS[origIdx]}
@@ -2174,8 +2157,6 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                     points={points}
                     tickers={levelTickers}
                     reorderable
-                    onGrabStart={() => setLmDragPos(pos)}
-                    onGrabEnd={() => { setLmDragPos(null); setLmOverPos(null); }}
                   />
                 </div>
               ))}
