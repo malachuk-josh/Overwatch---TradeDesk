@@ -1158,65 +1158,6 @@ const ConvictionPips = ({ n, bias }) => {
   );
 };
 
-// Live sector-focus panel — the 11 Select Sector SPDR ETFs quoted real-time (Finnhub) and sorted
-// strongest → weakest. Pulls from the full fetched universe since these tickers are hidden from the
-// default board. Falls back gracefully when a sync hasn't landed the ETF quotes yet.
-const SectorFocus = ({ tickers = [] }) => {
-  const bySym = new Map(tickers.map((t) => [t.symbol, t]));
-  const rows = SECTOR_ETFS
-    .map(({ symbol, sector }) => {
-      const t = bySym.get(symbol);
-      return t && !t._stale && t.changePct != null ? { ...t, sector } : null;
-    })
-    .filter(Boolean);
-  if (!rows.length) {
-    return (
-      <div className="sector-focus">
-        <div className="sector-focus-head">
-          <span className="sector-focus-title">Sector focus <small>live SPDRs</small></span>
-        </div>
-        <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>
-      </div>
-    );
-  }
-  const sorted = [...rows].sort((a, b) => b.changePct - a.changePct);
-  const maxAbs = Math.max(0.4, ...sorted.map((r) => Math.abs(r.changePct)));
-  const leader = sorted[0];
-  const laggard = sorted[sorted.length - 1];
-  return (
-    <div className="sector-focus">
-      <div className="sector-focus-head">
-        <span className="sector-focus-title">Sector focus <small>live SPDRs</small></span>
-        <span className="sector-focus-lead">
-          <span>Leader <b style={{ color: chgColor(leader.changePct) }}>{leader.symbol} {fmtSigned(leader.changePct, 2, "%")}</b></span>
-          <span>Laggard <b style={{ color: chgColor(laggard.changePct) }}>{laggard.symbol} {fmtSigned(laggard.changePct, 2, "%")}</b></span>
-        </span>
-      </div>
-      <div className="sector-focus-grid">
-        {sorted.map((r) => {
-          const a = clamp(Math.abs(r.changePct) / maxAbs, 0.12, 1);
-          const up = r.changePct >= 0;
-          const bg = up ? `rgba(34,197,94,${(0.05 + a * 0.16).toFixed(3)})` : `rgba(239,68,68,${(0.05 + a * 0.16).toFixed(3)})`;
-          const bc = up ? `rgba(34,197,94,${(0.22 + a * 0.4).toFixed(3)})` : `rgba(239,68,68,${(0.22 + a * 0.4).toFixed(3)})`;
-          return (
-            <div key={r.symbol} className="sf-tile" style={{ background: bg, borderColor: bc }} title={`${r.sector} · ${r.name}`}>
-              <div className="sf-top">
-                <span className="sf-name">{r.sector}</span>
-                <FreshTag delayed={r.delayed} open={symbolMarketOpen(r.symbol)} delaySec={r.delaySec} />
-              </div>
-              <span className="sf-sym">{r.symbol}</span>
-              <div className="sf-bottom">
-                <span className="sf-price">{fmtNum(r.price, 2)}</span>
-                <b className="sf-pct" style={{ color: chgColor(r.changePct) }}>{fmtSigned(r.changePct, 2, "%")}</b>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
   if (low == null || high == null || price == null || high <= low) return null;
   const open = Number.isFinite(Number(dayOpen))
@@ -2150,7 +2091,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
-      <Card icon={Gauge} title="Market breadth" sub="Sector participation, distribution & live SPDR sectors">
+      <Card icon={Gauge} title="Market breadth" sub="Participation & live SPDR sector performance">
         <MarketBreadth data={points} tickers={data?.tickers || []} />
       </Card>
       <Card icon={Orbit} title="Sector rotation" sub="Where money is rotating — weekly relative strength vs SPY (RRG)">
@@ -2553,39 +2494,42 @@ const RegimeScoreRail = ({ score, leftLabel = "Defensive", rightLabel = "Constru
   );
 };
 
-const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
-  // Ordered left → right: Strong down → Down → Flat → Up → Strong up, so the bar runs the same
-  // direction as its axis (reds on the left, greens on the right) instead of inverted.
-  const segments = [
-    { key: "strongDown", label: "Strong down", short: "Str down", color: C.bear, value: distribution.strongDown || 0 },
-    { key: "down", label: "Down", short: "Down", color: "rgba(239,68,68,.55)", value: distribution.down || 0 },
-    { key: "flat", label: "Flat", short: "Flat", color: C.brass, value: distribution.flat || 0 },
-    { key: "up", label: "Up", short: "Up", color: "rgba(34,197,94,.55)", value: distribution.up || 0 },
-    { key: "strongUp", label: "Strong up", short: "Str up", color: C.bull, value: distribution.strongUp || 0 },
-  ];
-  const counted = segments.reduce((sum, s) => sum + s.value, 0);
-  const denom = Math.max(total, counted, 1);
+// Diverging per-sector bar chart from the live SPDR quotes: one row per sector, sorted strongest →
+// weakest, bars growing right (green) / left (red) from a center zero line. Replaces the abstract
+// distribution bar + count pills and the SPDR tiles with a single quantitative view.
+const SectorBreadthBars = ({ tickers = [] }) => {
+  const bySym = new Map(tickers.map((t) => [t.symbol, t]));
+  const rows = SECTOR_ETFS
+    .map(({ symbol, sector }) => {
+      const t = bySym.get(symbol);
+      return t && !t._stale && t.changePct != null
+        ? { symbol, sector, changePct: t.changePct, price: t.price, delayed: t.delayed }
+        : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.changePct - a.changePct);
+  if (!rows.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>;
+  const maxAbs = Math.max(0.4, ...rows.map((r) => Math.abs(r.changePct)));
   return (
-    <div className="breadth-dist" aria-label="Sector breadth distribution">
-      <div className="breadth-dist-track">
-        {counted === 0
-          ? <span className="breadth-dist-empty" style={{ width: "100%" }} />
-          : segments.filter((s) => s.value > 0).map((segment) => (
+    <div className="sbar" aria-label="Per-sector performance vs prior close">
+      {rows.map((r) => {
+        const up = r.changePct >= 0;
+        const col = chgColor(r.changePct);
+        const w = clamp((Math.abs(r.changePct) / maxAbs) * 50, 0, 50);
+        return (
+          <div className="sbar-row" key={r.symbol} title={`${r.sector} (${r.symbol}) · ${fmtNum(r.price, 2)} · ${fmtSigned(r.changePct, 2, "%")}${r.delayed ? " · delayed" : ""}`}>
+            <span className="sbar-name">{r.sector}</span>
+            <div className="sbar-track">
+              <span className="sbar-zero" />
               <span
-                key={segment.key}
-                title={`${segment.label}: ${segment.value} sector${segment.value === 1 ? "" : "s"}`}
-                style={{ width: `${(segment.value / denom) * 100}%`, background: segment.color }}
+                className={`sbar-fill ${up ? "up" : "down"}`}
+                style={up ? { left: "50%", width: `${w}%`, background: col } : { right: "50%", width: `${w}%`, background: col }}
               />
-            ))}
-      </div>
-      <div className="breadth-dist-legend">
-        {segments.map((s) => (
-          <div key={s.key} className={`bdk${s.value ? "" : " bdk-empty"}`} title={`${s.label}: ${s.value} sector${s.value === 1 ? "" : "s"}`}>
-            <span className="bdk-name"><i style={{ background: s.color }} />{s.short}</span>
-            <b>{s.value}</b>
+            </div>
+            <b className="sbar-val" style={{ color: col }}>{fmtSigned(r.changePct, 2, "%")}</b>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 };
@@ -2618,8 +2562,7 @@ const MarketBreadth = ({ data, tickers = [] }) => {
         <span>{pctPositive}% sectors positive</span>
         <span>Broad participation</span>
       </div>
-      <BreadthDistribution distribution={breadth.distribution} total={total} />
-      <SectorFocus tickers={tickers} />
+      <SectorBreadthBars tickers={tickers} />
     </div>
   );
 };
