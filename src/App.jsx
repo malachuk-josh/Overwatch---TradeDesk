@@ -2299,7 +2299,7 @@ const calFig = (v) => (v == null ? "—" : fmtNum(Number(v), Math.abs(Number(v))
 // Embedded TradingView economic-calendar widget. The full tradingview.com calendar page
 // can't be framed (X-Frame-Options), so we use TradingView's official embed widget, which
 // renders the same live calendar inside an iframe it injects into our container.
-const TradingViewCalendarWidget = () => {
+const TradingViewCalendarWidget = ({ lightMode = false }) => {
   const containerRef = useRef(null);
   useEffect(() => {
     const container = containerRef.current;
@@ -2314,9 +2314,9 @@ const TradingViewCalendarWidget = () => {
     script.src = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
     script.async = true;
     script.innerHTML = JSON.stringify({
-      colorTheme: "dark",
-      // Keep transparency off: the Events widget falls back to a light surface and ignores
-      // colorTheme:"dark" when isTransparent is true, so force it to paint its own dark background.
+      colorTheme: lightMode ? "light" : "dark",
+      // Keep transparency off: the Events widget ignores colorTheme when isTransparent is true, so
+      // force it to paint its own surface matching the app theme (light in light mode, dark otherwise).
       isTransparent: false,
       locale: "en",
       countryFilter: "us",
@@ -2326,7 +2326,7 @@ const TradingViewCalendarWidget = () => {
     });
     container.appendChild(script);
     return () => { container.innerHTML = ""; };
-  }, []);
+  }, [lightMode]);
   return <div className="tradingview-widget-container" ref={containerRef} style={{ height: "100%", width: "100%" }} />;
 };
 
@@ -2355,7 +2355,7 @@ const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
   </div>
 );
 
-const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
+const CalendarTab = ({ points, onRefresh, inSplit = false, lightMode = false }) => {
   const { status, data, error, at } = points;
   const [tvOpen, setTvOpen] = useState(false);
 
@@ -2404,7 +2404,7 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
         </div>
         <button className="btn btn-ghost btn-sm" onClick={() => setTvOpen(false)} title="Close (Esc)"><X size={16} /></button>
       </div>
-      <div className="cal-reader-body"><TradingViewCalendarWidget /></div>
+      <div className="cal-reader-body"><TradingViewCalendarWidget lightMode={lightMode} /></div>
     </>
   );
 
@@ -2465,7 +2465,7 @@ const CalendarTab = ({ points, onRefresh, inSplit = false }) => {
             sub="Live U.S. macro · TradingView"
             tools={<button className="btn btn-ghost btn-sm" onClick={() => setTvOpen(true)} title="Expand to full view"><Maximize2 size={14} /></button>}
           >
-            <div className="cal-embed-card-body"><TradingViewCalendarWidget /></div>
+            <div className="cal-embed-card-body"><TradingViewCalendarWidget lightMode={lightMode} /></div>
           </Card>
           {!!(groups.recent || []).length && (
             <Card icon={History} title="Recent catalysts" sub="High-impact events from the past 7 days — context for recent price action">
@@ -5645,7 +5645,7 @@ export default function Overwatch() {
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
-        return <CalendarTab points={points} onRefresh={refreshPoints} inSplit={splitOn} />;
+        return <CalendarTab points={points} onRefresh={refreshPoints} inSplit={splitOn} lightMode={lightMode} />;
       case "thesis":
         return (
           <ThesisTab
