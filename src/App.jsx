@@ -681,6 +681,18 @@ const saveStored = async (key, val) => {
   }
 };
 
+// localStorage-backed state so per-view UI prefs (level-map ticker/timeframe, card collapse state)
+// survive a refresh instead of snapping back to defaults.
+const usePersistentState = (key, initial) => {
+  const [val, setVal] = useState(() => {
+    try { const s = window.localStorage.getItem(key); return s != null ? JSON.parse(s) : initial; } catch { return initial; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(val)); } catch {}
+  }, [key, val]);
+  return [val, setVal];
+};
+
 /* ---------------- secure desk API layer ---------------- */
 
 const callDesk = async (operation, prompt, payload = {}) => {
@@ -1689,9 +1701,13 @@ const LevelMapCandles = ({ symbol, tickers }) => {
   );
 };
 
-const LevelMapCard = ({ defaultSymbol, points, tickers }) => {
-  const [active, setActive] = useState(defaultSymbol);
-  const [period, setPeriod] = useState("d"); // d = daily (session), w = weekly (week-to-date)
+const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
+  // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
+  const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
+  const active = pref.sym || defaultSymbol;
+  const period = pref.period === "w" ? "w" : "d"; // d = daily (session), w = weekly (prior week)
+  const setActive = (s) => setPref((p) => ({ ...p, sym: s }));
+  const setPeriod = (p2) => setPref((p) => ({ ...p, period: p2 }));
   const symbols = (tickers || []).map((t) => t.symbol);
   // Weekly always comes from the levels endpoint (the points feed only carries daily index levels).
   const pointsData = period === "d" ? points?.[active.toLowerCase()] : null;
@@ -1841,9 +1857,9 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
-  const [tickersOpen, setTickersOpen] = useState(false); // Market snapshot — collapsed by default
+  const [tickersOpen, setTickersOpen] = usePersistentState("overwatch:sec:snapshot", false); // Market snapshot — collapsed by default
   const [marketFilter, setMarketFilter] = useState("all"); // snapshot "Markets" dropdown (expanded only)
-  const [levelsOpen, setLevelsOpen] = useState(true);    // Level maps — open by default (core read)
+  const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
   // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
@@ -2007,12 +2023,12 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
         {levelsOpen && (
           <div style={{ padding: "0 12px 12px" }}>
             <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
-              {LEVEL_MAP_DEFAULTS.map((sym) => (
-                <LevelMapCard key={sym} defaultSymbol={sym} points={points} tickers={levelTickers} />
+              {LEVEL_MAP_DEFAULTS.map((sym, i) => (
+                <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} />
               ))}
             </div>
             <div className="pulse-levels-mobile">
-              <LevelMapCard defaultSymbol="SPY" points={points} tickers={levelTickers} />
+              <LevelMapCard defaultSymbol="SPY" storeKey="m" points={points} tickers={levelTickers} />
             </div>
           </div>
         )}
@@ -4541,8 +4557,8 @@ const ArchiveTab = ({
 }) => {
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const [journalOpen, setJournalOpen] = useState(true);
-  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [journalOpen, setJournalOpen] = usePersistentState("overwatch:sec:journal", true);
+  const [libraryOpen, setLibraryOpen] = usePersistentState("overwatch:sec:library", true);
   const collapsedCount = useIsDesktop() ? 5 : 3;
   const query = q.trim().toLowerCase();
   const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {

@@ -239,6 +239,14 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   .split-pane .hist-title{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip}
 }
 @media(max-width:1023px){.bd-main-split{grid-template-columns:1fr}}
+/* Split view: pin each pane under the sticky header and scroll its body independently, so the two
+   sides move on their own instead of scrolling the whole page together. */
+@media(min-width:1024px){
+  .bd-main-split .split-pane{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+  .bd-main-split .split-pane-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:6px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+  .bd-main-split .split-pane-body::-webkit-scrollbar{width:9px}
+  .bd-main-split .split-pane-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}
+}
 .grid{display:grid;gap:14px}
 .g-pulse{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
 .g-2{grid-template-columns:1.15fr .85fr}
