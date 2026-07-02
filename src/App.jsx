@@ -45,6 +45,7 @@ import EyeOff from "lucide-react/dist/esm/icons/eye-off.mjs";
 import GripVertical from "lucide-react/dist/esm/icons/grip-vertical.mjs";
 import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
 import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
+import Gauge from "lucide-react/dist/esm/icons/gauge.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
@@ -2074,9 +2075,14 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
-      <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
-        <SectorHeatmap sectors={data?.sectors} />
-      </Card>
+      <div className="grid g-2">
+        <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
+          <SectorHeatmap sectors={data?.sectors} />
+        </Card>
+        <Card icon={Gauge} title="Market breadth" sub="Sector participation & distribution">
+          <MarketBreadth data={points} />
+        </Card>
+      </div>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn" onClick={onGoThesis}>Build today's thesis <ArrowRight size={14} /></button>
@@ -2502,6 +2508,39 @@ const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
   );
 };
 
+const MarketBreadth = ({ data }) => {
+  const internals = data?.internals || {};
+  const breadth = internals.breadthDetail || {};
+  const sectors = breadth.sectors || [];
+  const total = breadth.total || sectors.length || 11;
+  const advancers = Number.isFinite(Number(breadth.advancers)) ? Number(breadth.advancers) : sectors.filter((s) => s.changePct > 0).length;
+  const pctPositive = Number.isFinite(Number(breadth.pctPositive)) ? clamp(Number(breadth.pctPositive), 0, 100) : Math.round((advancers / total) * 100);
+  const tone = pctPositive >= 65 ? C.bull : pctPositive <= 35 ? C.bear : C.brass;
+  const avg = Number.isFinite(Number(breadth.avgChange)) ? Number(breadth.avgChange) : null;
+
+  return (
+    <div className="market-breadth">
+      <div className="market-breadth-hero">
+        <div className="market-breadth-count">
+          <b style={{ color: tone }}>{advancers}<span>/{total}</span></b>
+          <small>sectors green{avg != null ? ` · avg ${fmtSigned(avg, 2, "%")}` : ""}</small>
+        </div>
+        <p>{breadth.read || internals.breadth || "Sector breadth is still loading."}</p>
+      </div>
+      <div className="breadth-meter">
+        <span className="breadth-fill" style={{ width: `${pctPositive}%` }} />
+        <span className="breadth-mid" />
+      </div>
+      <div className="breadth-labels">
+        <span>Weak participation</span>
+        <span>{pctPositive}% sectors positive</span>
+        <span>Broad participation</span>
+      </div>
+      <BreadthDistribution distribution={breadth.distribution} total={total} />
+    </div>
+  );
+};
+
 const VolStructureMap = ({ detail = {} }) => {
   const bands = detail.bands || [
     { label: "Calm", min: 0, max: 16 },
@@ -2587,33 +2626,6 @@ const InternalsRegime = ({ data }) => {
           <b style={{ color: volColor }}>{vol.structure || data?.vix?.structure || "—"}</b>
           <small>VIX {fmtNum(vol.vix ?? data?.vix?.spot, 1)} · {vol.zone || "zone pending"}</small>
         </div>
-      </div>
-
-      <div className="internals-section">
-        <div className="internals-section-head">
-          <b>Market breadth</b>
-          <span>{breadth.read || internals.breadth || "Sector breadth is still loading."}</span>
-        </div>
-        <div className="breadth-meter">
-          <span className="breadth-fill" style={{ width: `${pctPositive}%` }} />
-          <span className="breadth-mid" />
-        </div>
-        <div className="breadth-labels">
-          <span>Weak participation</span>
-          <span>{pctPositive}% sectors positive</span>
-          <span>Broad participation</span>
-        </div>
-        <BreadthDistribution distribution={breadth.distribution} total={total} />
-        {!!sectors.length && (
-          <div className="sector-chip-grid">
-            {sectors.map((sector) => (
-              <span className="sector-chip" key={sector.name}>
-                <span>{sector.name}</span>
-                <b style={{ color: chgColor(sector.changePct) }}>{fmtSigned(sector.changePct, 2, "%")}</b>
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="internals-two">
