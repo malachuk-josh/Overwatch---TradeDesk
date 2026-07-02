@@ -1719,7 +1719,7 @@ const LevelMapCandles = ({ symbol, tickers }) => {
   );
 };
 
-const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
+const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = false, onGrabStart, onGrabEnd }) => {
   // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
   const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
   const active = pref.sym || defaultSymbol;
@@ -1754,11 +1754,20 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
       sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
       tools={
         <span className="lm-tools">
-          <LevelMapCandles symbol={active} tickers={tickers} />
-          {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
-            <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
-              <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
-              <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))}</small>
+          {reorderable && (
+            <span
+              className="lm-grip"
+              title="Drag to reorder the level maps"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                const slot = e.currentTarget.closest(".lm-slot");
+                if (slot) e.dataTransfer.setDragImage(slot, 24, 18);
+                onGrabStart?.();
+              }}
+              onDragEnd={() => onGrabEnd?.()}
+            >
+              <GripVertical size={15} />
             </span>
           )}
           <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
@@ -1775,6 +1784,17 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
         </span>
       }
     >
+      {/* Candle strip + day-change reference on their own fixed-height row so the header title/subtitle
+          keep full width (no wrap) and every card is the same height regardless of instrument name. */}
+      <div className="lm-strip">
+        <LevelMapCandles symbol={active} tickers={tickers} />
+        {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
+          <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
+            <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
+            <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))} pts</small>
+          </span>
+        )}
+      </div>
       <div className="lm-map-wrap">
         <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlc} />
         <div className="lm-period" role="group" aria-label="Level timeframe">
@@ -1937,6 +1957,25 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
     return [...set].filter((k) => SNAP_HIDEABLE.includes(k));
   }), [setHiddenGroups]);
   const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
+  // Level-map card order (drag-to-reorder). Persist the original-index order so each card keeps its own
+  // chosen ticker (stored per storeKey d0/d1/d2) while the user rearranges their left-to-right position.
+  const [lmOrder, setLmOrder] = usePersistentState("overwatch:lm:order", LEVEL_MAP_DEFAULTS.map((_, i) => i));
+  const [lmDragPos, setLmDragPos] = useState(null);
+  const [lmOverPos, setLmOverPos] = useState(null);
+  const lmSafeOrder = useMemo(() => {
+    const base = LEVEL_MAP_DEFAULTS.map((_, i) => i);
+    return Array.isArray(lmOrder) && lmOrder.length === base.length && base.every((i) => lmOrder.includes(i)) ? lmOrder : base;
+  }, [lmOrder]);
+  const moveLm = useCallback((from, to) => {
+    if (from == null || to == null || from === to) return;
+    setLmOrder((prev) => {
+      const base = LEVEL_MAP_DEFAULTS.map((_, i) => i);
+      const next = Array.isArray(prev) && prev.length === base.length && base.every((i) => prev.includes(i)) ? [...prev] : base;
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, [setLmOrder]);
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
   // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
@@ -2121,9 +2160,24 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
         </button>
         {levelsOpen && (
           <div style={{ padding: "0 12px 12px" }}>
-            <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
-              {LEVEL_MAP_DEFAULTS.map((sym, i) => (
-                <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} />
+            <div className="grid g-data pulse-levels-desktop">
+              {lmSafeOrder.map((origIdx, pos) => (
+                <div
+                  key={origIdx}
+                  className={`lm-slot${lmDragPos === pos ? " dragging" : ""}${lmOverPos === pos && lmDragPos !== null && lmDragPos !== pos ? " over" : ""}`}
+                  onDragOver={(e) => { e.preventDefault(); if (lmOverPos !== pos) setLmOverPos(pos); }}
+                  onDrop={(e) => { e.preventDefault(); moveLm(lmDragPos, pos); setLmDragPos(null); setLmOverPos(null); }}
+                >
+                  <LevelMapCard
+                    defaultSymbol={LEVEL_MAP_DEFAULTS[origIdx]}
+                    storeKey={`d${origIdx}`}
+                    points={points}
+                    tickers={levelTickers}
+                    reorderable
+                    onGrabStart={() => setLmDragPos(pos)}
+                    onGrabEnd={() => { setLmDragPos(null); setLmOverPos(null); }}
+                  />
+                </div>
               ))}
             </div>
             <div className="pulse-levels-mobile">

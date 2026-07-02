@@ -454,18 +454,26 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .tstruct-lvl-tag{margin-left:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:10px;border:1px solid;font-family:'Inter',sans-serif}
 .tstruct-lvl-tag.ok{color:var(--bull);border-color:rgba(34,197,94,.5)}
 .tstruct-lvl-tag.warn{color:var(--bear);border-color:rgba(239,68,68,.5)}
-.lm-tools{display:flex;align-items:center;gap:9px}
-/* 7-day header strip: a flex row of candle columns using the same wick/body language as the
-   Market Pulse ticker candle, so the two read identically. Tightened to make room for the day-change
-   reference next to the ticker picker. */
-.lm-candles{flex:none;display:flex;align-items:stretch;gap:2px;width:112px}
+/* Level-map header holds only the drag grip + ticker picker now — the candles moved to their own body
+   row (below), so the title + instrument name get the full header width back and stay on one line. */
+.lm-tools{display:flex;align-items:center;gap:7px;flex:none}
+.lm-grip{display:flex;align-items:center;color:var(--muted);cursor:grab;padding:3px 2px;border-radius:5px;flex:none}
+.lm-grip:hover{color:var(--text);background:var(--panel3)}
+.lm-grip:active{cursor:grabbing}
+/* Keep the card title ("SPY level map") and its instrument-name subtitle each on a single line, so
+   every card's header is the same height — the variable-length name no longer stretches the card. */
+.pulse-levels-desktop .card-title,.pulse-levels-mobile .card-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pulse-levels-desktop .card-title small,.pulse-levels-mobile .card-title small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Candle strip + day-change reference share one fixed-height row above the ladder, so all three cards
+   line up. The candles use the same wick/body language as the Market Pulse ticker candle. */
+.lm-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;height:72px;margin-bottom:12px}
+.lm-candles{flex:none;display:flex;align-items:stretch;gap:2px;width:126px}
 .lm-candle{position:relative;flex:1;min-width:0}
 .lm-candle .candle-body{width:8px}
-/* Compact day-change reference next to the ticker picker: % on top, point change below. */
-.lm-chg{display:flex;flex-direction:column;align-items:flex-end;line-height:1.05;flex:none;margin-left:1px}
-.lm-chg b{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700}
-.lm-chg small{font-family:'JetBrains Mono',monospace;font-size:9px;margin-top:1px}
-.lm-tools .lm-select{margin-left:2px}
+/* Day-change reference: % on top, point change below — legible now that it has room. */
+.lm-chg{display:flex;flex-direction:column;align-items:flex-end;line-height:1.1;flex:none;text-align:right}
+.lm-chg b{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+.lm-chg small{font-family:'JetBrains Mono',monospace;font-size:10px;margin-top:2px}
 /* pulse only the current (live) session candle while that instrument's market is trading — a soft
    single-blur glow rather than the tight double shadow, which read as a box around the candle */
 .lm-candle-live .candle-body{animation:lmCandlePulse 2.4s ease-in-out infinite}
@@ -473,13 +481,19 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
   0%,100%{filter:drop-shadow(0 0 0px var(--candle-glow))}
   50%{filter:drop-shadow(0 0 3.5px var(--candle-glow))}
 }
-/* Narrow the ticker picker: override select.bd-in's own padding/arrow reservation (higher specificity
-   than a bare .lm-select) and pull the dropdown arrow in tight, so the box hugs the symbol (still fits
-   the 5-char ones like US10Y/GOOGL) and the reclaimed width goes to the candle strip. */
+/* Ticker picker: override select.bd-in's own padding/arrow reservation (higher specificity than a bare
+   .lm-select) and pull the dropdown arrow in tight so the box hugs the symbol (still fits the 5-char
+   ones like US10Y/GOOGL). */
 select.bd-in.lm-select{
-  width:auto;min-width:60px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
+  width:auto;min-width:58px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
   padding:5px 20px 5px 8px;background-position:right 5px center;
 }
+/* Drag-to-reorder slots for the three level-map cards. Grid stretches slots to equal height; the card
+   fills its slot so a rearranged row stays flush. */
+.lm-slot{display:flex;min-width:0;border-radius:15px;transition:opacity .15s ease,box-shadow .15s ease}
+.lm-slot>.card{flex:1;min-width:0}
+.lm-slot.dragging{opacity:.4}
+.lm-slot.over{box-shadow:0 0 0 2px var(--brass)}
 .lm-map-wrap{position:relative}
 .lm-period{position:absolute;right:-1px;bottom:3px;display:flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden;background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.35)}
 .lm-period button{border:none;background:none;color:var(--muted);font-size:9.5px;font-weight:700;font-family:'JetBrains Mono',monospace;letter-spacing:.02em;padding:2px 6px;cursor:pointer;line-height:1.1}
