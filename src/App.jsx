@@ -50,6 +50,8 @@ import Orbit from "lucide-react/dist/esm/icons/orbit.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
+import Bot from "lucide-react/dist/esm/icons/bot.mjs";
+import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal.mjs";
 import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
 import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive } from "./auth.jsx";
 import "./styles.css";
@@ -377,7 +379,7 @@ const HISTORY_KEY = "overwatch:history";
 const ARCHIVE_KEY = "overwatch:archive";
 const TAB_KEY = "overwatch:tab";
 // Valid tab ids — layout restore is validated against these so a stale/bad id can't blank the view.
-const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "charts"];
+const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "algo", "charts"];
 const safeTab = (id, fallback = "pulse") => (LAYOUT_TAB_IDS.includes(id) ? id : fallback);
 const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
@@ -5386,6 +5388,214 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
 };
 
 /* ================================================================
+   STRATEGY LAB — algorithmic strategy backtester
+   ================================================================ */
+
+// Frontend for the desk's "VIX Range Intraday Reversal Momentum Scalper" — the inputs mirror the
+// TradingView strategy one-for-one and the replay itself runs server-side (`backtest` operation).
+const ALGO_PARAMS_KEY = "overwatch:algo:params";
+const ALGO_DEFAULTS = {
+  symbol: "SPY", interval: "15m",
+  emaLen: 21, atrMult: 2.5, rsiOS: 30, rsiOB: 70,
+  rr: 3, stopAtr: 2, startHour: 11, endHour: 16,
+  vixMin: 15, vixMax: 40, qtyPct: 10, vixMode: "sameday",
+};
+const ALGO_SYMBOL_GROUPS = [
+  ["Index ETFs", ["SPY", "QQQ", "DIA", "IWM", "SMH"]],
+  ["Rates & commodities", ["TLT", "HYG", "USO"]],
+  ["Sector SPDRs", ["XLK", "XLF", "XLV", "XLY", "XLC", "XLI", "XLP", "XLE", "XLU", "XLRE", "XLB"]],
+  ["Mag 7", ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"]],
+];
+const ALGO_EXIT_LABEL = { tp: "target", sl: "stop", time: "flat @ close", reverse: "reversed", end: "open @ end" };
+
+// Trade timestamps print in ET — the strategy's session window and exchange clock both live there.
+const algoTime = (ts) =>
+  new Date(ts * 1000).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const algoDate = (ts) =>
+  new Date(ts * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "2-digit" });
+
+// Cumulative equity for the run: dashed baseline at starting capital, line/area tinted by outcome.
+const EquityCurve = ({ curve, capital }) => {
+  if (!Array.isArray(curve) || curve.length < 2) return null;
+  const W = 640, H = 170, padT = 12, padB = 20, padL = 8, padR = 8;
+  let lo = capital, hi = capital;
+  for (const p of curve) { if (p.eq < lo) lo = p.eq; if (p.eq > hi) hi = p.eq; }
+  const span = hi - lo || 1;
+  lo -= span * 0.08; hi += span * 0.08;
+  const x = (i) => padL + (i / (curve.length - 1)) * (W - padL - padR);
+  const y = (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const line = curve.map((p, i) => `${x(i).toFixed(1)},${y(p.eq).toFixed(1)}`).join(" ");
+  const col = curve[curve.length - 1].eq >= capital ? C.bull : C.bear;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Backtest equity curve">
+      <defs>
+        <linearGradient id="algoEqFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={col} stopOpacity=".26" />
+          <stop offset="100%" stopColor={col} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <line x1={padL} x2={W - padR} y1={y(capital)} y2={y(capital)} stroke="var(--line2)" strokeDasharray="4 4" />
+      <polygon points={`${x(0).toFixed(1)},${y(capital).toFixed(1)} ${line} ${x(curve.length - 1).toFixed(1)},${y(capital).toFixed(1)}`} fill="url(#algoEqFill)" />
+      <polyline points={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" />
+      <text x={padL} y={H - 6} fill="var(--faint)" fontSize="10" fontFamily="'JetBrains Mono',monospace">{algoDate(curve[0].t)}</text>
+      <text x={W - padR} y={H - 6} textAnchor="end" fill="var(--faint)" fontSize="10" fontFamily="'JetBrains Mono',monospace">{algoDate(curve[curve.length - 1].t)}</text>
+    </svg>
+  );
+};
+
+const StrategyLabTab = () => {
+  const [saved, setSaved] = usePersistentState(ALGO_PARAMS_KEY, ALGO_DEFAULTS);
+  const p = { ...ALGO_DEFAULTS, ...saved };
+  const set = (k, v) => setSaved((prev) => ({ ...ALGO_DEFAULTS, ...prev, [k]: v }));
+  const [bt, setBt] = useState({ status: "idle", data: null, error: null });
+  const dirty = Object.keys(ALGO_DEFAULTS).some((k) => String(p[k]) !== String(ALGO_DEFAULTS[k]));
+
+  const runNow = async () => {
+    setBt((prev) => ({ ...prev, status: "loading", error: null }));
+    try {
+      const params = {
+        symbol: p.symbol, interval: p.interval, vixMode: p.vixMode,
+        emaLen: numOr(p.emaLen, ALGO_DEFAULTS.emaLen), atrMult: numOr(p.atrMult, ALGO_DEFAULTS.atrMult),
+        rsiOS: numOr(p.rsiOS, ALGO_DEFAULTS.rsiOS), rsiOB: numOr(p.rsiOB, ALGO_DEFAULTS.rsiOB),
+        rr: numOr(p.rr, ALGO_DEFAULTS.rr), stopAtr: numOr(p.stopAtr, ALGO_DEFAULTS.stopAtr),
+        startHour: numOr(p.startHour, ALGO_DEFAULTS.startHour), endHour: numOr(p.endHour, ALGO_DEFAULTS.endHour),
+        vixMin: numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vixMax: numOr(p.vixMax, ALGO_DEFAULTS.vixMax),
+        qtyPct: numOr(p.qtyPct, ALGO_DEFAULTS.qtyPct),
+      };
+      const data = await callDesk("backtest", "", { params });
+      setBt({ status: "done", data, error: null });
+    } catch (e) {
+      setBt({ status: "error", data: null, error: e.message });
+    }
+  };
+
+  const s = bt.data?.stats, m = bt.data?.meta;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div className="grid g-2" style={{ alignItems: "start" }}>
+        <Card
+          icon={SlidersHorizontal}
+          title="Strategy inputs"
+          sub="VIX Range Intraday Reversal Momentum Scalper — Keltner-band fade with RSI confirmation"
+          tools={dirty ? <button className="btn btn-ghost btn-sm" title="Reset every input to the strategy's defaults" onClick={() => setSaved(ALGO_DEFAULTS)}><RotateCcw size={12} /> Reset</button> : null}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
+            <label className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label">Symbol</span>
+              <select className="bd-in" style={{ width: "auto", minWidth: 96 }} value={p.symbol} onChange={(e) => set("symbol", e.target.value)}>
+                {ALGO_SYMBOL_GROUPS.map(([group, syms]) => (
+                  <optgroup key={group} label={group}>
+                    {syms.map((sym) => <option key={sym} value={sym}>{sym}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+            <div className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label">Timeframe</span>
+              <div className="seg">
+                {["15m", "30m", "1h"].map((iv) => (
+                  <button key={iv} className={p.interval === iv ? "on" : ""} onClick={() => set("interval", iv)} title={iv === "1h" ? "~2 years of history" : "~60 trading days of history"}>{iv}</button>
+                ))}
+              </div>
+            </div>
+            <div className="lab-field" style={{ marginTop: 0 }}>
+              <span className="lab-label" title="How the daily VIX regime gate reads the tape">VIX gate</span>
+              <div className="seg">
+                <button className={p.vixMode === "sameday" ? "on" : ""} onClick={() => set("vixMode", "sameday")} title="Gate each bar with that day's VIX close — what a TradingView backtest sees on history (slight lookahead)">Same-day</button>
+                <button className={p.vixMode === "prior" ? "on" : ""} onClick={() => set("vixMode", "prior")} title="Gate with the previous session's VIX close — what you'd actually know at trade time (no lookahead)">Prior-day</button>
+              </div>
+            </div>
+          </div>
+          <div className="grid g-3" style={{ gap: 10 }}>
+            <NumField label="EMA period" value={p.emaLen} placeholder="21" onChange={(v) => set("emaLen", v)} />
+            <NumField label="Keltner ATR" hint="× width" value={p.atrMult} placeholder="2.5" onChange={(v) => set("atrMult", v)} />
+            <NumField label="Stop loss" hint="× ATR" value={p.stopAtr} placeholder="2" onChange={(v) => set("stopAtr", v)} />
+            <NumField label="RSI oversold" value={p.rsiOS} placeholder="30" onChange={(v) => set("rsiOS", v)} />
+            <NumField label="RSI overbought" value={p.rsiOB} placeholder="70" onChange={(v) => set("rsiOB", v)} />
+            <NumField label="Reward : risk" value={p.rr} placeholder="3" onChange={(v) => set("rr", v)} />
+            <NumField label="First entry" hint="ET hour" value={p.startHour} placeholder="11" onChange={(v) => set("startHour", v)} />
+            <NumField label="Last entry" hint="ET hour" value={p.endHour} placeholder="16" onChange={(v) => set("endHour", v)} />
+            <NumField label="Position" suffix="%" hint="of equity" value={p.qtyPct} placeholder="10" onChange={(v) => set("qtyPct", v)} />
+            <NumField label="VIX min" value={p.vixMin} placeholder="15" onChange={(v) => set("vixMin", v)} />
+            <NumField label="VIX max" value={p.vixMax} placeholder="40" onChange={(v) => set("vixMax", v)} />
+          </div>
+          <div style={{ marginTop: 12, fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
+            Free intraday history caps the window: ~60 trading days at 15m/30m, ~2 years at 1h.
+            The flat-by-close order fires at (last entry − 1):21 ET, exactly like the Pine script — set last entry past 17 and it never
+            triggers, so trades ride until stop or target.
+          </div>
+          <button className="btn btn-brass" style={{ marginTop: 14, width: "100%", justifyContent: "center" }} disabled={bt.status === "loading"} onClick={runNow}>
+            {bt.status === "loading" ? <><RefreshCw size={14} className="spin" /> Replaying bars…</> : <><PlayCircle size={14} /> Run backtest</>}
+          </button>
+        </Card>
+
+        <Card
+          icon={TrendingUp}
+          title="Backtest results"
+          sub={m ? `${m.symbol} · ${m.interval} · ${m.bars} bars · ${algoDate(m.from)} → ${algoDate(m.to)}` : "Set the inputs, then run the replay"}
+        >
+          {bt.status === "idle" && (
+            <EmptyState icon={Bot} title="No run yet" body="Run the backtest to replay your scalper over the recent tape and see P/L, win rate, drawdown, and every trade it took." />
+          )}
+          {bt.status === "loading" && !bt.data && <LoadingBlock lines={4} msg="Fetching bars and replaying the strategy…" />}
+          {bt.status === "error" && <ErrBlock msg={bt.error} onRetry={runNow} />}
+          {bt.data && bt.status !== "error" && (
+            <div style={{ opacity: bt.status === "loading" ? 0.5 : 1, transition: "opacity .15s" }}>
+              {s.trades === 0 && (
+                <div style={{ marginBottom: 12, fontSize: 12.5, color: C.muted }}>
+                  No signals fired in this window with these settings — loosen the RSI bands, widen the VIX gate, or extend the session window.
+                </div>
+              )}
+              <div className="grid g-3" style={{ gap: 10 }}>
+                <ToolStat k="Net P/L" v={fmtUsd(s.netPnl, 2)} color={chgColor(s.netPnl)} sub={`${fmtSigned(s.netPnlPct, 2, "%")} on ${fmtUsd(m.capital)}`} />
+                <ToolStat k="Win rate" v={s.winRate == null ? "—" : `${fmtNum(s.winRate, 1)}%`} sub={`${s.wins} of ${s.trades} trades`} />
+                <ToolStat k="Profit factor" v={s.profitFactor == null ? "∞" : fmtNum(s.profitFactor, 2)} sub="gross win ÷ gross loss" />
+                <ToolStat k="Max drawdown" v={fmtUsd(s.maxDrawdown, 0)} color={s.maxDrawdown > 0 ? C.bear : undefined} sub={`${fmtNum(s.maxDrawdownPct, 2)}% off peak`} />
+                <ToolStat k="Avg win / loss" v={`${s.avgWin == null ? "—" : fmtUsd(s.avgWin, 0)} / ${s.avgLoss == null ? "—" : fmtUsd(s.avgLoss, 0)}`} sub="per closed trade" />
+                <ToolStat k="Buy & hold" v={fmtSigned(m.buyHoldPct, 2, "%")} color={chgColor(m.buyHoldPct)} sub="same window, same symbol" />
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <EquityCurve curve={bt.data.curve} capital={m.capital} />
+              </div>
+              <div style={{ marginTop: 10, fontSize: 11.5, color: "var(--faint)", lineHeight: 1.5 }}>
+                Fills modeled like Pine (entries at next bar's open, brackets live from entry) with the stop counted first when one bar
+                spans both exits — conservative, so expect slightly worse numbers here than TradingView, never better.
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {bt.data && bt.data.trades.length > 0 && (
+        <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · oldest first`}>
+          <div className="algo-table-wrap">
+            <table className="algo-table">
+              <thead>
+                <tr><th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P/L</th><th>P/L %</th><th>Exit via</th></tr>
+              </thead>
+              <tbody>
+                {bt.data.trades.map((t, i) => (
+                  <tr key={`${t.entryT}-${i}`}>
+                    <td>{i + 1}</td>
+                    <td><span className={`algo-side ${t.side}`}>{t.side.toUpperCase()}</span></td>
+                    <td>{algoTime(t.entryT)} · <b>{fmtNum(t.entryPx, 2)}</b></td>
+                    <td>{algoTime(t.exitT)} · <b>{fmtNum(t.exitPx, 2)}</b></td>
+                    <td>{t.qty}</td>
+                    <td style={{ color: chgColor(t.pnl) }}>{fmtSigned(t.pnl, 2)}</td>
+                    <td style={{ color: chgColor(t.pnlPct) }}>{fmtSigned(t.pnlPct, 2, "%")}</td>
+                    <td><span className="algo-reason">{ALGO_EXIT_LABEL[t.reason] || t.reason}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+/* ================================================================
    ROOT APP
    ================================================================ */
 
@@ -5923,6 +6133,7 @@ export default function Overwatch() {
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
+    { id: "algo", label: "Strategy Lab", short: "Algo", icon: Bot },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
 
@@ -5953,6 +6164,8 @@ export default function Overwatch() {
             onGoLibrary={() => nav("archives")}
           />
         );
+      case "algo":
+        return <StrategyLabTab />;
       case "charts":
         return <ChartsTab lightMode={lightMode} compact={splitOn} focusSymbol={THESIS_CHART_SYMBOL[instrument] || null} />;
       case "archives":
