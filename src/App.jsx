@@ -2601,6 +2601,15 @@ const RotationGraph = ({ sectors, focus, onFocus }) => {
   };
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="rrg-plot" role="img" aria-label="Sector rotation graph: relative strength vs momentum by sector">
+      <defs>
+        <filter id="rrg-glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
       {Object.entries(quadFill).map(([key, r]) => (
         <rect key={key} x={r.x} y={r.y} width={Math.max(r.w, 0)} height={Math.max(r.h, 0)} fill={RRG_QUADRANTS[key].color} opacity="0.055" />
       ))}
@@ -2627,11 +2636,12 @@ const RotationGraph = ({ sectors, focus, onFocus }) => {
             style={{ cursor: "pointer" }}
           >
             <title>{`${s.name} (${s.symbol}) — ${RRG_QUADRANTS[s.quadrant].label}: RS ${fmtNum(head.ratio, 1)}, momentum ${fmtNum(head.momentum, 1)}`}</title>
-            <path d={path} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" opacity="0.55" />
+            <path d={path} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" opacity="0.6" />
             {s.tail.slice(0, -1).map((p, i) => (
               <circle key={p.t} cx={x(p.ratio)} cy={y(p.momentum)} r={1.6 + i * 0.5} fill={color} opacity={0.25 + (i / s.tail.length) * 0.45} />
             ))}
-            <circle cx={x(head.ratio)} cy={y(head.momentum)} r="5.5" fill={color} stroke="var(--panel2)" strokeWidth="1.5" />
+            <circle cx={x(head.ratio)} cy={y(head.momentum)} r="9" fill={color} opacity="0.16" />
+            <circle cx={x(head.ratio)} cy={y(head.momentum)} r="5.5" fill={color} stroke="var(--panel2)" strokeWidth="1.5" filter="url(#rrg-glow)" />
             <text
               x={x(head.ratio) + (labelLeft ? -9 : 9)}
               y={y(head.momentum) + 4}
@@ -2680,7 +2690,7 @@ const SectorRotation = () => {
     <div className="rrg">
       <div className="rrg-legend">
         {Object.entries(RRG_QUADRANTS).map(([key, q]) => (
-          <span key={key} className="rrg-key" title={q.blurb}>
+          <span key={key} className="rrg-key" style={{ "--rrg-c": q.color }} title={q.blurb}>
             <i style={{ background: q.color }} />{q.label}<b>{counts?.[key] ?? 0}</b>
           </span>
         ))}
