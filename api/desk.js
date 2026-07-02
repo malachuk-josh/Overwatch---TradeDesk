@@ -875,46 +875,112 @@ const FINNHUB_RT_SYMBOLS = new Set([
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 
-// Per-symbol cache for Finnhub quotes (same pattern as scanCache below), so repeated page loads/
-// refreshes within a warm lambda reuse recent quotes instead of re-hitting Finnhub's free tier
-// (60 calls/min) for all ~24 covered symbols on every single sync — a few quick refreshes could
-// otherwise trip the rate limit and silently drop those symbols back to the delayed scanner feed.
-const finnhubQuoteCache = new Map();
-const FINNHUB_QUOTE_TTL = 25_000;
+// --- Finnhub real-time quote cache (shared across serverless instances via Upstash) -------------
+// Finnhub's free tier allows 60 calls/min and we quote ~24 symbols per sync. Without a *shared*
+// cache, multiple browser tabs / focus-refreshes / manual syncs land on different lambda instances
+// that each fire their own 24 calls, blowing past the limit — every symbol then 429s and silently
+// drops to the 15-min delayed feed (the "live prices keep reverting" bug). We cache the whole quote
+// set in one Redis key so, across ALL instances, Finnhub is refreshed at most once per FRESH window
+// (guarded by a short cross-instance lock), and on a 429 we keep serving the last good real-time
+// values (up to MAX_STALE) instead of reverting to delayed.
+const FINNHUB_FRESH_MS = 45_000;         // cached quotes younger than this are treated as real-time
+const FINNHUB_MAX_STALE_MS = 5 * 60_000; // older than this → give up the cached value, use scanner/Yahoo
+const FINNHUB_CACHE_KEY = "overwatch:fh:quotes";
+const FINNHUB_LOCK_KEY = "overwatch:fh:lock";
+// Warm-instance mirror so a container with a fresh copy skips the Redis round-trip entirely.
+let _fhWarm = {}; // { SYM: { q: {..rawQuote..}, ts: epochMs } }
 
-// Real-time US equity/ETF quote from Finnhub's free tier. Returns null (→ fall back) when there's no
-// key, the symbol isn't covered, or the request fails (rate-limited, bad key, etc — logged so it's
-// diagnosable instead of silently degrading to the delayed feed with no trace).
-const finnhubQuote = async (symbol) => {
+const _fhFetchOne = async (symbol, key) => {
+  const d = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
+  if (!d || !Number.isFinite(Number(d.c)) || Number(d.c) === 0) return null;
+  return {
+    price: Number(d.c), change: Number(d.d), changePct: Number(d.dp),
+    dayOpen: Number(d.o), dayHigh: Number(d.h), dayLow: Number(d.l),
+    previousClose: Number(d.pc), asOf: Number(d.t) || Math.floor(Date.now() / 1000),
+  };
+};
+
+const _kvGetJson = async (cacheKey) => {
+  const url = _kvUrl(), token = _kvToken();
+  if (!url || !token) return null;
+  try {
+    const res = await fetch(`${url}/get/${encodeURIComponent(cacheKey)}`, {
+      headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(4000),
+    });
+    const { result } = await res.json();
+    return result ? JSON.parse(result) : null;
+  } catch { return null; }
+};
+
+const _kvCmd = async (cmd) => {
+  const url = _kvUrl(), token = _kvToken();
+  if (!url || !token) return null;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(cmd), signal: AbortSignal.timeout(4000),
+    });
+    const { result } = await res.json();
+    return result;
+  } catch { return null; }
+};
+
+// Refresh the Finnhub quote set for `symbols` (bounded by the FRESH window + a cross-instance lock)
+// and return usable quotes: { SYM: { ...quote, source:"finnhub", delaySec } }. Symbols with no cached
+// value (or staler than MAX_STALE) are omitted so the caller falls back to the scanner/Yahoo feed.
+const primeFinnhubQuotes = async (symbols) => {
   const key = process.env.FINNHUB_API_KEY;
-  if (!key) return null;
-  const cached = finnhubQuoteCache.get(symbol);
-  if (cached?.expires > Date.now()) return cached.promise;
+  const covered = [...new Set(symbols)].filter((s) => FINNHUB_RT_SYMBOLS.has(s));
+  if (!key || !covered.length) return {};
+  const kvOn = !!(_kvUrl() && _kvToken());
+  const isFresh = (sym) => _fhWarm[sym] && Date.now() - _fhWarm[sym].ts < FINNHUB_FRESH_MS;
 
-  const promise = (async () => {
-    try {
-      const d = await fetchJson(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
-      if (!d || !Number.isFinite(Number(d.c)) || Number(d.c) === 0) return null;
-      return {
-        price: Number(d.c),
-        change: Number(d.d),
-        changePct: Number(d.dp),
-        dayOpen: Number(d.o),
-        dayHigh: Number(d.h),
-        dayLow: Number(d.l),
-        previousClose: Number(d.pc),
-        asOf: Number(d.t) || Math.floor(Date.now() / 1000),
-        source: "finnhub",
-        delaySec: 0,
-      };
-    } catch (error) {
-      console.error(`finnhubQuote(${symbol}) failed — falling back to delayed feed:`, error instanceof Error ? error.message : error);
-      return null;
+  // Merge in the shared blob whenever the warm mirror isn't already fresh for everything requested.
+  if (kvOn && !covered.every(isFresh)) {
+    const blob = await _kvGetJson(FINNHUB_CACHE_KEY);
+    if (blob && typeof blob === "object") {
+      for (const [sym, entry] of Object.entries(blob)) {
+        if (entry && Number.isFinite(entry.ts) && (!_fhWarm[sym] || entry.ts > _fhWarm[sym].ts)) _fhWarm[sym] = entry;
+      }
     }
-  })();
+  }
 
-  finnhubQuoteCache.set(symbol, { expires: Date.now() + FINNHUB_QUOTE_TTL, promise });
-  return promise;
+  const stale = covered.filter((s) => !isFresh(s));
+  if (stale.length) {
+    // Only one instance refetches per window; others serve what they already have (serve-stale).
+    // With Redis off, there's a single instance anyway, so just refetch.
+    const gotLock = kvOn ? (await _kvCmd(["SET", FINNHUB_LOCK_KEY, String(Date.now()), "NX", "PX", "8000"])) === "OK" : true;
+    if (gotLock) {
+      const settled = await Promise.allSettled(stale.map(async (sym) => {
+        const q = await _fhFetchOne(sym, key);
+        if (!q) throw new Error("empty quote");
+        _fhWarm[sym] = { q, ts: Date.now() };
+      }));
+      const failed = settled.filter((r) => r.status === "rejected").length;
+      if (failed) console.error(`primeFinnhubQuotes: ${failed}/${stale.length} Finnhub quotes failed (rate limit or downtime) — serving cached values where available.`);
+      if (kvOn && failed < stale.length) {
+        const persist = {};
+        for (const s of FINNHUB_RT_SYMBOLS) if (_fhWarm[s]) persist[s] = _fhWarm[s];
+        await _kvCmd(["SET", FINNHUB_CACHE_KEY, JSON.stringify(persist), "EX", "600"]);
+      }
+    }
+  }
+
+  const out = {};
+  for (const sym of covered) {
+    const entry = _fhWarm[sym];
+    if (!entry) continue;
+    const ageMs = Date.now() - entry.ts;
+    if (ageMs > FINNHUB_MAX_STALE_MS) continue; // too old — fall back to the delayed feed instead
+    out[sym] = {
+      ...entry.q,
+      source: "finnhub",
+      // Fresh → real-time (0). Served-stale after a 429 → report the real age so the UI stays honest.
+      delaySec: ageMs <= FINNHUB_FRESH_MS ? 0 : Math.round(ageMs / 1000),
+    };
+  }
+  return out;
 };
 
 // Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
@@ -1080,10 +1146,14 @@ const fetchMarket = async (watchlist = []) => {
     return { ...SAMPLE_MARKET, fearGreed: await fearGreedPromise };
   }
 
+  // Refresh the whole Finnhub quote set once per sync (shared/lock-guarded cache), so the ticker loop
+  // below just looks each symbol up instead of firing 24 independent Finnhub calls every time.
+  const finnhubQuotes = await primeFinnhubQuotes(requested.map((i) => i.symbol));
+
   const tickerResults = await Promise.allSettled(
     requested.map(async (item) => {
       // Source hierarchy: Finnhub real-time (US equities/ETFs) → TradingView scanner → Yahoo.
-      let result = FINNHUB_RT_SYMBOLS.has(item.symbol) ? await finnhubQuote(item.symbol) : null;
+      let result = finnhubQuotes[item.symbol] || null;
       let source = result ? result.source : null;
       if (!result) {
         const scanSymbol = SYMBOLS[item.symbol];
