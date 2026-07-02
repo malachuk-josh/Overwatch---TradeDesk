@@ -1121,7 +1121,7 @@ const ConvictionPips = ({ n, bias }) => {
 };
 
 const SectorHeatmap = ({ sectors }) => {
-  const [sortMode, setSortMode] = useState("perf");
+  const [sortMode, setSortMode] = usePersistentState("overwatch:sector:sort", "perf");
   const base = [...(sectors || [])].filter((s) => s && s.changePct != null);
   if (!base.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector data in last sync.</div>;
   const sorted = base.sort((a, b) =>
@@ -1863,7 +1863,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
   const [tickersOpen, setTickersOpen] = usePersistentState("overwatch:sec:snapshot", false); // Market snapshot — collapsed by default
-  const [marketFilter, setMarketFilter] = useState("all"); // snapshot "Markets" dropdown (expanded only)
+  const [marketFilter, setMarketFilter] = usePersistentState("overwatch:snap:filter", "all"); // snapshot "Markets" dropdown (expanded only)
   const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
@@ -2075,10 +2075,10 @@ const newsKey = (h) => h?.url || h?.title || "";
 
 const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
   const { status, data, error, at } = news;
-  const [cat, setCat] = useState("all");
-  const [tone, setTone] = useState("all");
-  const [sortBy, setSortBy] = useState("time"); // time | impact
-  const [sortDir, setSortDir] = useState("desc"); // desc (newest / highest first) | asc
+  const [cat, setCat] = usePersistentState("overwatch:news:cat", "all");
+  const [tone, setTone] = usePersistentState("overwatch:news:tone", "all");
+  const [sortBy, setSortBy] = usePersistentState("overwatch:news:sortby", "time"); // time | impact
+  const [sortDir, setSortDir] = usePersistentState("overwatch:news:sortdir", "desc"); // desc (newest / highest first) | asc
 
   if (status === "idle")
     return (
@@ -3759,7 +3759,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     : null;
   const inputsDirty = !viewing && thesis.status === "ready" && !!thesis.data && currentSig !== thesisSig;
   const activeInstrument = thesisInstrumentConfig(instrument);
-  const [toolView, setToolView] = useState("synthesis");
+  const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "synthesis");
   const [copied, setCopied] = useState(false);
   const copyThesis = (thesisObj) => {
     const text = buildThesisText(thesisObj);
@@ -4888,7 +4888,7 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
     return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
   });
   const [interval, setInterval] = useState("D");
-  const [layout, setLayout] = useState("auto"); // auto | 1 | 2 columns
+  const [layout, setLayout] = usePersistentState("overwatch:charts:layout", "auto"); // auto | 1 | 2 columns
   const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
   const [fsSymbol, setFsSymbol] = useState(null);
 
@@ -5044,7 +5044,7 @@ export default function Overwatch() {
 
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
   const [instrument, setInstrument] = useState(DEFAULT_THESIS_INSTRUMENT);
-  const [secondary, setSecondary] = useState(""); // optional paired instrument for relative-value context
+  const [secondary, setSecondary] = usePersistentState("overwatch:secondary", ""); // optional paired instrument for relative-value context
   const [weights, setWeights] = useState(DEFAULT_WEIGHTS);
   const [lean, setLean] = useState("auto");
   const [risk, setRisk] = useState("balanced");
@@ -5076,7 +5076,20 @@ export default function Overwatch() {
   // Split view is offered on desktop widths only; the right pane shows a second tab beside the main one.
   const splitEligible = winW >= 1024;
   const splitOn = splitEligible && !!splitTab;
-  const toggleSplit = () => setSplitTab((s) => (s ? null : (tab === "charts" ? "pulse" : "charts")));
+  // Remember the last split layout so toggling split off then on restores the same right-pane tab
+  // instead of jumping to a default.
+  const [lastSplitTab, setLastSplitTab] = usePersistentState("overwatch:lastsplit", "charts");
+  const toggleSplit = () => {
+    if (splitTab) {
+      setLastSplitTab(splitTab);
+      setSplitTab(null);
+    } else {
+      const restore = lastSplitTab && lastSplitTab !== tab ? lastSplitTab : (tab === "charts" ? "pulse" : "charts");
+      setSplitTab(restore);
+    }
+  };
+  // Keep the memory current whenever the right pane changes while split is on.
+  useEffect(() => { if (splitTab) setLastSplitTab(splitTab); }, [splitTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const up = () => setOnline(true);
