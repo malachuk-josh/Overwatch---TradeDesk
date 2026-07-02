@@ -1601,11 +1601,12 @@ const FactorRadarChart = ({ weights, onChange }) => {
 // the index complex, otherwise from the stocklevels endpoint (cached briefly client-side).
 const LEVEL_MAP_DEFAULTS = ["SPY", "QQQ", "DIA"];
 const _lmLevelsCache = new Map();
-const fetchLevelsCached = async (symbol) => {
-  const hit = _lmLevelsCache.get(symbol);
+const fetchLevelsCached = async (symbol, period = "d") => {
+  const key = `${symbol}:${period}`;
+  const hit = _lmLevelsCache.get(key);
   if (hit && Date.now() - hit.ts < 2 * 60 * 1000) return hit.data;
-  const data = await callDesk("stocklevels", "", { symbol }).catch(() => null);
-  _lmLevelsCache.set(symbol, { ts: Date.now(), data });
+  const data = await callDesk("stocklevels", "", { symbol, period }).catch(() => null);
+  _lmLevelsCache.set(key, { ts: Date.now(), data });
   return data;
 };
 const _lmHistCache = new Map();
@@ -1681,28 +1682,33 @@ const LevelMapCandles = ({ symbol, tickers }) => {
 
 const LevelMapCard = ({ defaultSymbol, points, tickers }) => {
   const [active, setActive] = useState(defaultSymbol);
+  const [period, setPeriod] = useState("d"); // d = daily (session), w = weekly (week-to-date)
   const symbols = (tickers || []).map((t) => t.symbol);
-  const pointsData = points?.[active.toLowerCase()];
+  // Weekly always comes from the levels endpoint (the points feed only carries daily index levels).
+  const pointsData = period === "d" ? points?.[active.toLowerCase()] : null;
   const [fetched, setFetched] = useState(null);
-  // Symbols outside the index complex have no levels in the points feed — pull real ones on demand.
   useEffect(() => {
     if (pointsData) return;
     let dead = false;
-    fetchLevelsCached(active).then((lv) => { if (!dead) setFetched({ symbol: active, levels: lv }); });
+    const key = `${active}:${period}`;
+    fetchLevelsCached(active, period).then((lv) => { if (!dead) setFetched({ key, levels: lv }); });
     return () => { dead = true; };
-  }, [active, pointsData]);
-  const data = pointsData || (fetched?.symbol === active ? fetched.levels : null);
+  }, [active, period, pointsData]);
+  const fetchedData = fetched?.key === `${active}:${period}` ? fetched.levels : null;
+  const data = pointsData || fetchedData;
   // Draw the spot line off the live market ticker (same source as the header candles and Market
   // Snapshot) rather than the separately-fetched levels payload, so the price doesn't diverge
   // panel-to-panel. The R/S/pivot levels still come from the points/levels feed.
   const liveT = (tickers || []).find((x) => x.symbol === active);
   const livePrice = liveT && typeof liveT.price === "number" && !isNaN(liveT.price) ? liveT.price : null;
   const spxData = data && livePrice != null ? { ...data, spot: livePrice } : data;
+  // Weekly OHLC rails come from the fetched weekly bar; daily uses the live session ticker.
+  const ohlc = period === "w" ? (fetchedData?.ohlc || null) : ohlcForSymbol(tickers, active);
   return (
     <Card
       icon={Crosshair}
       title={`${active} level map`}
-      sub={liveT?.name || ""}
+      sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
       tools={
         <span className="lm-tools">
           <LevelMapCandles symbol={active} tickers={tickers} />
@@ -1713,7 +1719,14 @@ const LevelMapCard = ({ defaultSymbol, points, tickers }) => {
         </span>
       }
     >
-      <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlcForSymbol(tickers, active)} />
+      <div className="lm-map-wrap">
+        <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlc} />
+        <div className="lm-period" role="group" aria-label="Level timeframe">
+          {["d", "w"].map((p) => (
+            <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)} title={p === "d" ? "Daily levels" : "Weekly levels"}>{p.toUpperCase()}</button>
+          ))}
+        </div>
+      </div>
     </Card>
   );
 };
