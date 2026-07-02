@@ -84,7 +84,9 @@ const DEFAULT_WATCHLIST = [
   { symbol: "SMH", name: "VanEck Semiconductor ETF" },
   { symbol: "US02Y", name: "US 2-Year Treasury Yield" },
   { symbol: "HYG", name: "iShares High Yield Corporate Bond ETF" },
+  { symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF" },
   { symbol: "HG", name: "Copper Futures" },
+  { symbol: "USO", name: "United States Oil Fund" },
   { symbol: "ETH", name: "Ethereum" },
   // Magnificent Seven mega-caps ship on the board but start hidden (off) — flip them on from
   // Settings to render their ticker cards on Market Pulse. Their live prices are fetched either way.
@@ -1801,7 +1803,7 @@ const SECTOR_ETFS = [
 const SECTOR_ETF_META = new Map(SECTOR_ETFS.map((s) => [s.symbol, s.sector]));
 
 const SNAP_FUTURES_SET = new Set(["ES", "NQ", "YM", "RTY"]);
-const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", ...SECTOR_ETFS.map((s) => s.symbol)]);
+const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "TLT", "USO", ...SECTOR_ETFS.map((s) => s.symbol)]);
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
