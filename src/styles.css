@@ -601,7 +601,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .bdk-name{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;color:var(--muted)}
 .bdk-name i{width:6px;height:6px;border-radius:2px;flex:none}
 .bdk b{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--text)}
-.bdk.empty{opacity:.42}
+.bdk.bdk-empty{opacity:.42}
 @media(max-width:560px){.breadth-dist-legend{justify-content:center}}
 .sector-chip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(142px,1fr));gap:7px;margin-top:11px}
 .sector-chip{display:flex;align-items:center;justify-content:space-between;gap:9px;border:1px solid var(--line);border-radius:8px;background:var(--panel3);padding:7px 9px}
