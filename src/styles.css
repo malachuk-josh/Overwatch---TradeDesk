@@ -331,7 +331,7 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .card-head{display:flex;align-items:center;gap:9px;margin-bottom:13px}
 .card-title{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text)}
 .card-title small{display:block;font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;margin-top:1px}
-.card-head .ic{color:var(--brass)}
+.card-head .ic{color:var(--brass);flex-shrink:0}
 .card-tools{margin-left:auto;display:flex;align-items:center;gap:7px}
 .card-head-toggle{cursor:pointer;user-select:none;margin:-4px -6px 13px;padding:4px 6px;border-radius:8px;transition:background .15s ease}
 .card-head-toggle:hover{background:rgba(255,255,255,.04)}
@@ -454,6 +454,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .tstruct-lvl-tag{margin-left:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:10px;border:1px solid;font-family:'Inter',sans-serif}
 .tstruct-lvl-tag.ok{color:var(--bull);border-color:rgba(34,197,94,.5)}
 .tstruct-lvl-tag.warn{color:var(--bear);border-color:rgba(239,68,68,.5)}
+/* Clamp the instrument-name subtitle to a single line so a long name (e.g. the 20+yr Treasury ETF)
+   can't wrap to extra lines and stretch that card taller than the other two — all three level-map
+   cards line up at the same height. The title itself is untouched. */
+.pulse-levels-desktop .card-title small,.pulse-levels-mobile .card-title small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lm-tools{display:flex;align-items:center;gap:9px}
 .lm-candles{flex:none;display:flex;align-items:stretch;gap:2px;width:100px}
 .lm-candle{position:relative;flex:1;min-width:0}
