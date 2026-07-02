@@ -1955,14 +1955,6 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           </div>
         </div>
       )}
-      <Card
-        icon={Activity}
-        title="Session read"
-        sub="Plain-English market brief"
-        tools={<Freshness at={at} />}
-      >
-        <div className="session-summary">{session.summary}</div>
-      </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
           className={`collapsible-header${tickersOpen ? " snap-open" : ""}`}
@@ -1989,6 +1981,12 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
             {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
           </span>
         </div>
+        {session.summary && (
+          <div className="snap-brief">
+            <p className="session-summary">{session.summary}</p>
+            <Freshness at={at} />
+          </div>
+        )}
         {tickersOpen && (() => {
           return (
           <div style={{ padding: "12px 12px 12px" }}>
