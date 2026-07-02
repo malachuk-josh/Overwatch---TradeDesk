@@ -1716,36 +1716,41 @@ const lmDecimals = (symbol, tickers) => {
   return ETF_INSTRUMENTS.has(symbol) || (Number.isFinite(px) && Math.abs(px) < 1000) ? 2 : 0;
 };
 
-// Five mini daily candlesticks for the level-map header (today's partial candle is the last one).
+// Five daily candlesticks for the level-map header (today's partial candle is the last one). Rendered
+// in HTML with the exact same wick/body classes as the Market Pulse ticker-card candle, so the
+// gradient bodies, inset borders, glow and bull/bear/flat tones match one-for-one.
 const CandleStrip = ({ candles, decimals = 2, live = false }) => {
   if (!candles?.length) return null;
-  const W = 90, H = 72, n = candles.length, pad = 5;
+  const H = 72, n = candles.length, pad = 5;
   const min = Math.min(...candles.map((c) => c.l));
   const max = Math.max(...candles.map((c) => c.h));
-  const y = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
-  const bw = 12, gap = (W - n * bw) / n;
+  const yFor = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
   return (
-    <svg width={W} height={H} className="lm-candles" aria-label={`Last ${n} daily candles`}>
+    <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} daily candles`}>
       {candles.map((c, i) => {
-        const x = gap / 2 + i * (bw + gap) + bw / 2;
+        const isLast = i === n - 1;
         const up = c.c >= c.o;
-        const col = up ? C.bull : C.bear;
-        const top = y(Math.max(c.o, c.c)), bot = y(Math.min(c.o, c.c));
+        const flat = Math.abs(c.c - c.o) < Math.max((c.h - c.l) * 0.05, Number.EPSILON);
+        const toneClass = flat ? "flat" : up ? "bull" : "bear";
+        const glow = flat ? "#3B82F6" : up ? C.bull : C.bear;
+        const wickTop = yFor(c.h);
+        const wickHeight = Math.max(yFor(c.l) - wickTop, 1);
+        const bodyTop = yFor(Math.max(c.o, c.c));
+        const bodyHeight = Math.max(yFor(Math.min(c.o, c.c)) - bodyTop, 3);
         const dateLabel = new Date(c.t * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
         return (
-          <g key={c.t}>
-            <title>{`${dateLabel} — O ${fmtNum(c.o, decimals)} H ${fmtNum(c.h, decimals)} L ${fmtNum(c.l, decimals)} C ${fmtNum(c.c, decimals)}`}</title>
-            <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1.4" />
-            <rect
-              className={i === n - 1 && live ? "lm-candle-live" : undefined}
-              style={i === n - 1 && live ? { "--candle-glow": col } : undefined}
-              x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 2)} fill={col} rx="1.5"
-              opacity={i === n - 1 && live ? 1 : 0.82}
-            />
-          </g>
+          <div
+            key={c.t}
+            className={`lm-candle${isLast && live ? " lm-candle-live" : ""}`}
+            style={isLast && live ? { "--candle-glow": glow } : undefined}
+            title={`${dateLabel} — O ${fmtNum(c.o, decimals)} H ${fmtNum(c.h, decimals)} L ${fmtNum(c.l, decimals)} C ${fmtNum(c.c, decimals)}`}
+          >
+            <div className="candle-wick" style={{ top: `${wickTop}px`, height: `${wickHeight}px` }} />
+            <div className={`candle-body ${toneClass}`} style={{ top: `${bodyTop}px`, height: `${bodyHeight}px` }} />
+          </div>
         );
       })}
-    </svg>
+    </div>
   );
 };
 
