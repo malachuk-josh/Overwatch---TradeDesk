@@ -1257,20 +1257,27 @@ const indexLevels = (item, decimals = 0) => {
   };
 };
 
-// Current weekly OHLC bar (week-to-date) for a symbol, plus the prior week's close for change.
+// Prior COMPLETED weekly OHLC bar for a symbol (the in-progress current week is skipped), so weekly
+// pivots are projected from last week's range — the standard weekly pivot, and distinct from the
+// daily session levels. Includes the week-before's close for the change figure.
 const fetchWeeklyBar = async (symbol) => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
   const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=3mo&interval=1wk`);
   const result = payload?.chart?.result?.[0];
+  const ts = result?.timestamp || [];
   const bars = result?.indicators?.quote?.[0] || {};
   const closes = bars.close || [];
-  let i = closes.length - 1;
-  while (i >= 0 && !Number.isFinite(closes[i])) i--;
-  if (i < 0) return null;
-  const o = bars.open?.[i], h = bars.high?.[i], l = bars.low?.[i], c = closes[i];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const complete = (i) => [bars.open?.[i], bars.high?.[i], bars.low?.[i], closes[i]].every(Number.isFinite) && ts[i] + 5 * 86400 < nowSec;
+  const done = [];
+  for (let i = 0; i < closes.length; i++) if (complete(i)) done.push(i);
+  // Fallback to the last finite bar if the completed-week filter finds nothing (sparse data).
+  let idx = done.length ? done[done.length - 1] : (() => { let j = closes.length - 1; while (j >= 0 && !Number.isFinite(closes[j])) j--; return j; })();
+  if (idx < 0) return null;
+  const o = bars.open[idx], h = bars.high[idx], l = bars.low[idx], c = closes[idx];
   if (![o, h, l, c].every(Number.isFinite)) return null;
-  let p = i - 1;
+  let p = idx - 1;
   while (p >= 0 && !Number.isFinite(closes[p])) p--;
   const prevClose = p >= 0 ? closes[p] : c;
   const s = (v) => v * scale;
