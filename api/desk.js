@@ -922,6 +922,137 @@ const fetchHistory = async (symbol) => {
   }
 };
 
+// --- Sector rotation (RRG-style) ------------------------------------------------------------
+// Weekly relative-rotation coordinates for the 11 Select Sector SPDRs vs SPY. For each sector:
+//   RS        = sector close / SPY close (weekly)
+//   rsRatio   = 100 * RS / SMA(RS, 10 weeks)      → above 100 = outperforming its own trend
+//   rsMomentum= 100 * rsRatio_t / rsRatio_{t-1}    → above 100 = relative strength accelerating
+// The last 6 weekly points form the tail that draws the rotation path through the four quadrants
+// (Leading / Weakening / Lagging / Improving). Cached in-memory ~10 min per warm lambda.
+const ROTATION_SECTORS = [
+  ["XLK", "Technology"],
+  ["XLF", "Financials"],
+  ["XLV", "Health Care"],
+  ["XLY", "Cons Discret"],
+  ["XLC", "Comm Svcs"],
+  ["XLI", "Industrials"],
+  ["XLP", "Cons Staples"],
+  ["XLE", "Energy"],
+  ["XLU", "Utilities"],
+  ["XLRE", "Real Estate"],
+  ["XLB", "Materials"],
+];
+
+const fetchDailyCloses = async (symbol) => {
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=9mo&interval=1d`);
+  const result = payload?.chart?.result?.[0];
+  const ts = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  return ts
+    .map((t, i) => ({ t, c: closes[i] }))
+    .filter((bar) => Number.isFinite(bar.c));
+};
+
+const rotationQuadrant = (ratio, momentum) =>
+  ratio >= 100 ? (momentum >= 100 ? "leading" : "weakening") : (momentum >= 100 ? "improving" : "lagging");
+
+let _rotationCache = null;
+const fetchSectorRotation = async () => {
+  if (_rotationCache && Date.now() - _rotationCache.ts < 10 * 60 * 1000) return _rotationCache.data;
+
+  const symbols = ["SPY", ...ROTATION_SECTORS.map(([sym]) => sym)];
+  const settled = await Promise.allSettled(symbols.map((sym) => fetchDailyCloses(sym)));
+  const bySym = new Map();
+  settled.forEach((result, i) => {
+    if (result.status === "fulfilled" && result.value.length) bySym.set(symbols[i], result.value);
+  });
+  const spy = bySym.get("SPY");
+  if (!spy || spy.length < 60) throw new Error("Rotation benchmark history unavailable");
+
+  // Weekly sampling: walk the SPY daily bars and keep the last close of each ISO week, then align
+  // every sector to those exact dates so the RS series never mixes timestamps.
+  const weekKey = (t) => {
+    const d = new Date(t * 1000);
+    // Thursday-anchored ISO week key
+    const day = (d.getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - day + 3);
+    return `${d.getUTCFullYear()}-${Math.floor((d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 604800000)}`;
+  };
+  const weekly = [];
+  spy.forEach((bar) => {
+    const key = weekKey(bar.t);
+    if (weekly.length && weekly[weekly.length - 1].key === key) weekly[weekly.length - 1] = { key, t: bar.t, c: bar.c };
+    else weekly.push({ key, t: bar.t, c: bar.c });
+  });
+  const weekTs = weekly.map((w) => w.t);
+
+  const SMA_WEEKS = 10;
+  const TAIL_WEEKS = 6;
+  const sectors = [];
+  for (const [sym, name] of ROTATION_SECTORS) {
+    const daily = bySym.get(sym);
+    if (!daily) continue;
+    const closeAt = new Map(daily.map((bar) => [bar.t, bar.c]));
+    // Align to SPY weekly stamps; tolerate a missing exact stamp by scanning back a few days.
+    const rs = weekTs.map((t, i) => {
+      let c = closeAt.get(t);
+      if (!Number.isFinite(c)) {
+        for (let back = 1; back <= 4 && !Number.isFinite(c); back++) c = closeAt.get(t - back * 86400);
+      }
+      return Number.isFinite(c) ? c / weekly[i].c : null;
+    });
+    const ratios = rs.map((value, i) => {
+      if (value == null || i < SMA_WEEKS - 1) return null;
+      const window = rs.slice(i - SMA_WEEKS + 1, i + 1);
+      if (window.some((v) => v == null)) return null;
+      const mean = window.reduce((sum, v) => sum + v, 0) / SMA_WEEKS;
+      return mean > 0 ? (value / mean) * 100 : null;
+    });
+    const tail = [];
+    for (let i = Math.max(0, ratios.length - TAIL_WEEKS); i < ratios.length; i++) {
+      const ratio = ratios[i];
+      const prev = ratios[i - 1];
+      if (ratio == null || prev == null || prev === 0) continue;
+      tail.push({
+        t: weekTs[i],
+        ratio: round(ratio, 2),
+        momentum: round((ratio / prev) * 100, 2),
+      });
+    }
+    if (tail.length < 2) continue;
+    const head = tail[tail.length - 1];
+    const prev = tail[tail.length - 2];
+    sectors.push({
+      symbol: sym,
+      name,
+      tail,
+      quadrant: rotationQuadrant(head.ratio, head.momentum),
+      heading: rotationQuadrant(head.ratio + (head.ratio - prev.ratio), head.momentum + (head.momentum - prev.momentum)),
+    });
+  }
+  if (!sectors.length) throw new Error("Rotation data unavailable");
+
+  const byQuadrant = { leading: [], improving: [], weakening: [], lagging: [] };
+  sectors.forEach((s) => byQuadrant[s.quadrant].push(s.symbol));
+  const phrase = (list) => list.join(", ");
+  const read = [
+    byQuadrant.leading.length ? `${phrase(byQuadrant.leading)} lead${byQuadrant.leading.length === 1 ? "s" : ""} the tape` : null,
+    byQuadrant.improving.length ? `${phrase(byQuadrant.improving)} ${byQuadrant.improving.length === 1 ? "is" : "are"} improving — early rotation candidates` : null,
+    byQuadrant.weakening.length ? `${phrase(byQuadrant.weakening)} ${byQuadrant.weakening.length === 1 ? "is" : "are"} losing relative momentum` : null,
+  ].filter(Boolean).join(". ");
+
+  const data = {
+    benchmark: "SPY",
+    weeks: TAIL_WEEKS,
+    asOf: new Date().toISOString(),
+    sectors,
+    counts: Object.fromEntries(Object.entries(byQuadrant).map(([key, list]) => [key, list.length])),
+    read: read ? `${read}.` : "Sector rotation is still resolving.",
+  };
+  _rotationCache = { ts: Date.now(), data };
+  return data;
+};
+
 const fetchMarket = async (watchlist = []) => {
   const requested = watchlist.length ? watchlist : SAMPLE_MARKET.tickers.map(({ symbol, name }) => ({ symbol, name }));
   const fearGreedPromise = fetchFearGreed().catch(() => SAMPLE_FEAR_GREED);
@@ -2243,6 +2374,7 @@ export default async function handler(req, res) {
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol, payload.period);
     else if (operation === "history") data = await fetchHistory(payload.symbol);
+    else if (operation === "rotation") data = await fetchSectorRotation();
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {
