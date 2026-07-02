@@ -1008,6 +1008,257 @@ const fetchHistory = async (symbol) => {
   }
 };
 
+// --- Strategy Lab: intraday backtester --------------------------------------------------------
+// JS port of the desk's "VIX Range Intraday Reversal Momentum Scalper" Pine strategy: fade a close
+// outside a Keltner Channel (EMA ± mult×ATR14) when RSI14 confirms exhaustion, bracket the trade
+// with an ATR stop and R:R target, only inside an ET session window and a daily-VIX regime band.
+// Fill model mirrors Pine defaults: entries/market-closes fill at the NEXT bar's open, stop/limit
+// brackets are live from the entry bar onward, and a repeat signal while positioned re-arms the
+// bracket at the new levels (Pine's strategy.exit modifies the working order). Where one bar
+// touches both stop and target the stop is counted — conservative by construction, so results here
+// read slightly worse than TradingView's, never better.
+const BT_RANGES = { "15m": "60d", "30m": "60d", "1h": "730d" }; // Yahoo's free intraday depth per interval
+const BT_STEP = { "15m": 900, "30m": 1800, "1h": 3600 };
+const BT_CAPITAL = 100000; // TradingView's default initial capital, so stats line up
+
+// ET wall-clock per bar: Pine's `hour`/`minute` run in the chart's exchange timezone (ET for US
+// equities), and the VIX regime is keyed by ET trading day.
+const _btEtFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/New_York", hourCycle: "h23",
+  year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+});
+const btEt = (tsSec) => {
+  const p = {};
+  for (const part of _btEtFmt.formatToParts(new Date(tsSec * 1000))) p[part.type] = part.value;
+  return { day: `${p.year}-${p.month}-${p.day}`, hour: Number(p.hour), minute: Number(p.minute) };
+};
+
+const btEma = (closes, len) => {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length < len) return out;
+  let acc = 0;
+  for (let i = 0; i < len; i++) acc += closes[i];
+  let prev = acc / len;
+  out[len - 1] = prev;
+  const k = 2 / (len + 1);
+  for (let i = len; i < closes.length; i++) { prev = closes[i] * k + prev * (1 - k); out[i] = prev; }
+  return out;
+};
+
+// Wilder's RSI, matching ta.rsi (RMA smoothing).
+const btRsi = (closes, len = 14) => {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length <= len) return out;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= len; i++) { const d = closes[i] - closes[i - 1]; if (d > 0) gain += d; else loss -= d; }
+  let ag = gain / len, al = loss / len;
+  out[len] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  for (let i = len + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    ag = (ag * (len - 1) + Math.max(d, 0)) / len;
+    al = (al * (len - 1) + Math.max(-d, 0)) / len;
+    out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  }
+  return out;
+};
+
+// Wilder's ATR, matching ta.atr (true range smoothed with RMA).
+const btAtr = (bars, len = 14) => {
+  const out = new Array(bars.length).fill(null);
+  if (bars.length <= len) return out;
+  const tr = (i) => Math.max(bars[i].h - bars[i].l, Math.abs(bars[i].h - bars[i - 1].c), Math.abs(bars[i].l - bars[i - 1].c));
+  let acc = 0;
+  for (let i = 1; i <= len; i++) acc += tr(i);
+  let prev = acc / len;
+  out[len] = prev;
+  for (let i = len + 1; i < bars.length; i++) { prev = (prev * (len - 1) + tr(i)) / len; out[i] = prev; }
+  return out;
+};
+
+const btFetchBars = async (symbol, interval) => {
+  const payload = await fetchJson(
+    `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${BT_RANGES[interval]}&interval=${interval}&includePrePost=false`,
+  );
+  const result = payload?.chart?.result?.[0];
+  const ts = result?.timestamp || [];
+  const q = result?.indicators?.quote?.[0] || {};
+  const step = BT_STEP[interval];
+  const nowSec = Math.floor(Date.now() / 1000);
+  const bars = [];
+  for (let i = 0; i < ts.length; i++) {
+    const o = q.open?.[i], h = q.high?.[i], l = q.low?.[i], c = q.close?.[i];
+    if (![o, h, l, c].every(Number.isFinite)) continue;
+    if (ts[i] + step > nowSec) continue; // Yahoo appends the in-progress bar — signals only fire on completed closes
+    bars.push({ t: ts[i], o, h, l, c });
+  }
+  return bars;
+};
+
+// Daily ^VIX closes keyed by ET day, ascending. 1h backtests reach back two years, so pull deeper.
+const btFetchVix = async (interval) => {
+  const range = interval === "1h" ? "5y" : "6mo";
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?range=${range}&interval=1d`);
+  const result = payload?.chart?.result?.[0];
+  const ts = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const days = [];
+  for (let i = 0; i < ts.length; i++) {
+    if (Number.isFinite(closes[i])) days.push({ day: btEt(ts[i]).day, close: closes[i] });
+  }
+  return days;
+};
+
+const btNum = (v, fallback, lo, hi) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+};
+
+const btRun = (bars, vixDays, p, meta) => {
+  const closes = bars.map((b) => b.c);
+  const ema = btEma(closes, p.emaLen);
+  const rsi = btRsi(closes, 14);
+  const atr = btAtr(bars, 14);
+  const et = bars.map((b) => btEt(b.t));
+
+  const trades = [];
+  let pos = null;          // { side:+1|-1, qty, entryPx, entryT, entryIdx, sl, tp }
+  let entryOrder = null;   // fills at next bar open
+  let closeOrder = false;  // time-based flat, fills at next bar open
+  let realized = BT_CAPITAL;
+  let peak = BT_CAPITAL, maxDD = 0, maxDDPct = 0;
+  let vixIdx = -1;         // rolling pointer into vixDays (bars ascend)
+  const equity = [];
+
+  const record = (i, px, reason) => {
+    const pnl = pos.side * (px - pos.entryPx) * pos.qty;
+    realized += pnl;
+    trades.push({
+      side: pos.side > 0 ? "long" : "short", qty: pos.qty,
+      entryT: pos.entryT, entryPx: pos.entryPx, exitT: bars[i].t, exitPx: px,
+      pnl, pnlPct: (pos.side * (px - pos.entryPx) / pos.entryPx) * 100,
+      bars: i - pos.entryIdx, reason,
+    });
+    pos = null;
+  };
+
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+
+    // -- open: fill pending market orders from the previous close
+    if (pos && (closeOrder || (entryOrder && entryOrder.side !== pos.side))) {
+      record(i, b.o, closeOrder ? "time" : "reverse");
+    }
+    closeOrder = false;
+    if (entryOrder && !pos) {
+      const qty = Math.floor((realized * p.qtyPct) / 100 / b.o);
+      if (qty >= 1) pos = { side: entryOrder.side, qty, entryPx: b.o, entryT: b.t, entryIdx: i, sl: entryOrder.sl, tp: entryOrder.tp };
+    }
+    entryOrder = null;
+
+    // -- intrabar: bracket exits (stop checked before target when one bar spans both)
+    if (pos) {
+      const { sl, tp, side } = pos;
+      if (side > 0) {
+        if (b.o <= sl) record(i, b.o, "sl");
+        else if (b.o >= tp) record(i, b.o, "tp");
+        else if (b.l <= sl) record(i, sl, "sl");
+        else if (b.h >= tp) record(i, tp, "tp");
+      } else {
+        if (b.o >= sl) record(i, b.o, "sl");
+        else if (b.o <= tp) record(i, b.o, "tp");
+        else if (b.h >= sl) record(i, sl, "sl");
+        else if (b.l <= tp) record(i, tp, "tp");
+      }
+    }
+
+    // -- close: evaluate signals on the completed bar
+    const t = et[i];
+    while (vixIdx + 1 < vixDays.length && vixDays[vixIdx + 1].day <= t.day) vixIdx++;
+    // sameday = the bar's own trading day (what a TradingView backtest sees on history);
+    // prior = last completed day (what live trading would have known — no lookahead).
+    const vixVal = p.vixMode === "prior"
+      ? (vixIdx >= 0 && vixDays[vixIdx].day === t.day ? vixDays[vixIdx - 1]?.close : vixDays[vixIdx]?.close)
+      : vixDays[vixIdx]?.close;
+    const vixOK = Number.isFinite(vixVal) && vixVal >= p.vixMin && vixVal <= p.vixMax;
+    const inWindow = t.hour >= p.startHour && t.hour < p.endHour;
+
+    if (ema[i] != null && rsi[i] != null && atr[i] != null && inWindow && vixOK) {
+      const upper = ema[i] + p.atrMult * atr[i];
+      const lower = ema[i] - p.atrMult * atr[i];
+      const stop = atr[i] * p.stopAtr;
+      if (b.c < lower && rsi[i] < p.rsiOS) {
+        if (pos && pos.side > 0) { pos.sl = b.c - stop; pos.tp = b.c + stop * p.rr; } // re-arm bracket, no pyramiding
+        else entryOrder = { side: 1, sl: b.c - stop, tp: b.c + stop * p.rr };
+      } else if (b.c > upper && rsi[i] > p.rsiOB) {
+        if (pos && pos.side < 0) { pos.sl = b.c + stop; pos.tp = b.c - stop * p.rr; }
+        else entryOrder = { side: -1, sl: b.c + stop, tp: b.c - stop * p.rr };
+      }
+    }
+    // Faithful to the Pine: flat is forced at (endHour−1):21 ET — with endHour past 17 that clock
+    // time never prints inside the regular session, so trades ride until the bracket resolves.
+    if (pos && t.hour === p.endHour - 1 && t.minute >= 21) closeOrder = true;
+
+    const eq = realized + (pos ? pos.side * (b.c - pos.entryPx) * pos.qty : 0);
+    equity.push({ t: b.t, eq: Math.round(eq * 100) / 100 });
+    if (eq > peak) peak = eq;
+    const dd = peak - eq;
+    if (dd > maxDD) { maxDD = dd; maxDDPct = (dd / peak) * 100; }
+  }
+
+  if (pos) record(bars.length - 1, bars[bars.length - 1].c, "end");
+
+  const wins = trades.filter((tr) => tr.pnl > 0);
+  const grossProfit = wins.reduce((s, tr) => s + tr.pnl, 0);
+  const grossLoss = trades.reduce((s, tr) => s + Math.min(tr.pnl, 0), 0);
+  const netPnl = realized - BT_CAPITAL;
+  const stride = Math.max(1, Math.ceil(equity.length / 400));
+  const curve = equity.filter((_, i) => i % stride === 0 || i === equity.length - 1);
+
+  return {
+    meta: {
+      ...meta, capital: BT_CAPITAL, bars: bars.length,
+      from: bars[0].t, to: bars[bars.length - 1].t,
+      buyHoldPct: (bars[bars.length - 1].c / bars[0].c - 1) * 100,
+    },
+    params: p,
+    stats: {
+      netPnl, netPnlPct: (netPnl / BT_CAPITAL) * 100,
+      trades: trades.length, wins: wins.length,
+      winRate: trades.length ? (wins.length / trades.length) * 100 : null,
+      profitFactor: grossLoss < 0 ? grossProfit / -grossLoss : (grossProfit > 0 ? null : 0),
+      grossProfit, grossLoss,
+      maxDrawdown: maxDD, maxDrawdownPct: maxDDPct,
+      avgWin: wins.length ? grossProfit / wins.length : null,
+      avgLoss: trades.length - wins.length ? grossLoss / (trades.length - wins.length) : null,
+    },
+    curve, trades,
+  };
+};
+
+const runBacktest = async (raw = {}) => {
+  const symbol = String(raw.symbol || "SPY").toUpperCase();
+  if (!/^[A-Z][A-Z0-9.\-]{0,7}$/.test(symbol)) throw new Error("Unrecognized symbol");
+  const interval = BT_RANGES[raw.interval] ? raw.interval : "15m";
+  const p = {
+    emaLen: Math.round(btNum(raw.emaLen, 21, 2, 200)),
+    atrMult: btNum(raw.atrMult, 2.5, 0.1, 10),
+    rsiOS: btNum(raw.rsiOS, 30, 1, 99),
+    rsiOB: btNum(raw.rsiOB, 70, 1, 99),
+    rr: btNum(raw.rr, 3, 0.1, 20),
+    stopAtr: btNum(raw.stopAtr, 2, 0.1, 20),
+    startHour: Math.round(btNum(raw.startHour, 11, 0, 23)),
+    endHour: Math.round(btNum(raw.endHour, 16, 1, 24)),
+    vixMin: btNum(raw.vixMin, 15, 0, 200),
+    vixMax: btNum(raw.vixMax, 40, 0, 200),
+    qtyPct: btNum(raw.qtyPct, 10, 1, 100),
+    vixMode: raw.vixMode === "prior" ? "prior" : "sameday",
+  };
+  const [bars, vixDays] = await Promise.all([btFetchBars(symbol, interval), btFetchVix(interval)]);
+  if (bars.length < 60) throw new Error(`Not enough ${interval} history for ${symbol}`);
+  if (!vixDays.length) throw new Error("VIX history unavailable");
+  return btRun(bars, vixDays, p, { symbol, interval });
+};
+
 // --- Sector rotation (RRG-style) ------------------------------------------------------------
 // Weekly relative-rotation coordinates for the 11 Select Sector SPDRs vs SPY. For each sector:
 //   RS        = sector close / SPY close (weekly)
@@ -2465,6 +2716,7 @@ export default async function handler(req, res) {
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol, payload.period);
     else if (operation === "history") data = await fetchHistory(payload.symbol);
     else if (operation === "rotation") data = await fetchSectorRotation();
+    else if (operation === "backtest") data = await runBacktest(payload.params);
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {

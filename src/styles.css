@@ -804,6 +804,7 @@ input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radiu
 .seg button{
   flex:1;padding:8px 6px;border:none;background:none;color:var(--muted);font-weight:600;font-size:12px;
   cursor:pointer;font-family:'Inter',sans-serif;transition:all .13s;border-right:1px solid var(--line);
+  white-space:nowrap;
 }
 .seg button:last-child{border-right:none}
 .seg button:hover{color:var(--text)}
@@ -1072,3 +1073,28 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .bd-root.light .bd-session{background:var(--panel2);border-color:var(--line2)}
 .bd-root.light .skel{background:var(--panel3)}
 .bd-root.light .skel::after{background:linear-gradient(90deg,transparent,rgba(180,140,60,.1),transparent)}
+
+/* ---------- strategy lab ---------- */
+.algo-table-wrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:9px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
+.algo-table{width:100%;border-collapse:collapse}
+.algo-table th{
+  position:sticky;top:0;z-index:1;background:var(--panel2);
+  font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);text-align:left;padding:8px 11px;border-bottom:1px solid var(--line);
+}
+.algo-table td{
+  padding:7px 11px;border-bottom:1px solid var(--line);white-space:nowrap;
+  font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--muted);
+}
+.algo-table td b{color:var(--text);font-weight:600}
+.algo-table tbody tr:hover td{background:var(--panel2)}
+.algo-table tr:last-child td{border-bottom:none}
+.algo-side{font-size:9.5px;font-weight:700;letter-spacing:.1em;padding:2px 7px;border-radius:5px}
+.algo-side.long{background:var(--bull-dim);color:var(--bull)}
+.algo-side.short{background:var(--bear-dim);color:var(--bear)}
+.algo-reason{font-size:10px;color:var(--muted);background:var(--panel3);border:1px solid var(--line2);padding:2px 8px;border-radius:999px}
+/* seven bottom-nav tabs on a phone: shave the labels so LIBRARY/CHARTS don't clip */
+@media(max-width:430px){
+  .bd-bnav-btn{font-size:9.5px;letter-spacing:.03em;gap:3px}
+  .bd-bnav-btn svg{width:22px;height:22px}
+}
