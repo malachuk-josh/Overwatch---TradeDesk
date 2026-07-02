@@ -4353,7 +4353,8 @@ const useIsDesktop = (bp = 768) => {
 const CloudNewsletterList = ({ inSplit = false }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [previewId, setPreviewId] = useState(null);
+  // Persist the open newsletter so a refresh reopens the reader instead of dumping you back to the list.
+  const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
   const collapsedCount = useIsDesktop() ? 5 : 3;
