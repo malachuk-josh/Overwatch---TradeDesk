@@ -357,6 +357,10 @@ const C = {
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const ARCHIVE_KEY = "overwatch:archive";
+const TAB_KEY = "overwatch:tab";
+// Valid tab ids — layout restore is validated against these so a stale/bad id can't blank the view.
+const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "charts"];
+const safeTab = (id, fallback = "pulse") => (LAYOUT_TAB_IDS.includes(id) ? id : fallback);
 const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
 /* ---------------- formatting helpers ---------------- */
@@ -4973,7 +4977,8 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
 const IDLE = { status: "idle", data: null, error: null, at: null };
 
 export default function Overwatch() {
-  const [tab, setTab] = useState("pulse");
+  // Active tab — restored from storage so a refresh keeps the view you were on.
+  const [tab, setTab] = useState(() => { try { return safeTab(localStorage.getItem(TAB_KEY)); } catch { return "pulse"; } });
   // Split view: the right-pane tab id (null = single-tab mode). Restored from storage.
   const [splitTab, setSplitTab] = useState(() => { try { return localStorage.getItem("overwatch:split") || null; } catch { return null; } });
   const [winW, setWinW] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
@@ -5009,6 +5014,7 @@ export default function Overwatch() {
     return () => window.removeEventListener("resize", f);
   }, []);
   useEffect(() => { try { splitTab ? localStorage.setItem("overwatch:split", splitTab) : localStorage.removeItem("overwatch:split"); } catch {} }, [splitTab]);
+  useEffect(() => { try { localStorage.setItem(TAB_KEY, tab); } catch {} }, [tab]);
 
   // Split view is offered on desktop widths only; the right pane shows a second tab beside the main one.
   const splitEligible = winW >= 1024;
@@ -5032,6 +5038,17 @@ export default function Overwatch() {
   const cloudSaveTimer = useRef(null);
   const prevSignedIn = useRef(false); // to detect a sign-out transition (Phase 4 cache clear)
 
+  // Apply a persisted layout block (active tab, split pane, theme) — profile-synced so a refresh or
+  // a different device restores the view you left, in split or regular mode.
+  const applyLayout = useCallback((layout) => {
+    if (!layout || typeof layout !== "object") return;
+    if (typeof layout.tab === "string") setTab(safeTab(layout.tab));
+    if (layout.splitTab === null || layout.splitTab === undefined) { /* leave as-is if omitted */ }
+    if (typeof layout.splitTab === "string" && LAYOUT_TAB_IDS.includes(layout.splitTab)) setSplitTab(layout.splitTab);
+    if (layout.splitTab === null) setSplitTab(null);
+    if (typeof layout.lightMode === "boolean") setLightMode(layout.lightMode);
+  }, []);
+
   // Apply a settings blob (from local storage or the cloud) through the state setters.
   const applyLoadedSettings = useCallback((s) => {
     if (!s || typeof s !== "object") return;
@@ -5041,7 +5058,8 @@ export default function Overwatch() {
     if (s.lean) setLean(s.lean);
     if (s.risk) setRisk(s.risk);
     if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
-  }, []);
+    applyLayout(s.layout);
+  }, [applyLayout]);
 
   /* clock */
   useEffect(() => {
@@ -5060,6 +5078,7 @@ export default function Overwatch() {
         if (s.lean) setLean(s.lean);
         if (s.risk) setRisk(s.risk);
         if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
+        applyLayout(s.layout);
       }
       // Load archive. When auth is enabled the library is per-user (hydrated by the sign-in effect
       // below) or local-only when signed out — so we never touch the shared global archive here.
@@ -5087,8 +5106,8 @@ export default function Overwatch() {
 
   /* persist on change — always keep the local cache; the cloud is layered on top when signed in */
   useEffect(() => {
-    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk, deskTools });
-  }, [storageReady, watchlist, instrument, weights, lean, risk, deskTools]);
+    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } });
+  }, [storageReady, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
 
   /* on sign-in, hydrate settings from the account (source of truth); seed the account from this
      browser's settings the first time so nothing is lost migrating from local-only. */
@@ -5103,7 +5122,7 @@ export default function Overwatch() {
       if (cancelled) return;
       // Settings: account is source of truth; seed it from this browser the first time.
       if (cloudSettings) applyLoadedSettings(cloudSettings);
-      else await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
+      else await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } }).catch(() => {});
       // Thesis library: same — adopt the account's library, or seed it with the current one.
       if (Array.isArray(cloudArchive)) setArchiveHistory(cloudArchive);
       else await saveUserArchive(auth.getToken, archiveHistory).catch(() => {});
@@ -5119,10 +5138,10 @@ export default function Overwatch() {
     if (!storageReady || !auth.signedIn || !cloudHydrated.current) return;
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
     cloudSaveTimer.current = setTimeout(() => {
-      saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools }).catch(() => {});
+      saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } }).catch(() => {});
     }, 1200);
     return () => { if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current); };
-  }, [storageReady, auth.signedIn, watchlist, instrument, weights, lean, risk, deskTools]);
+  }, [storageReady, auth.signedIn, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
   useEffect(() => {
     if (!storageReady) return;
     saveStored(ARCHIVE_KEY, archiveHistory); // local cache always
@@ -5152,6 +5171,8 @@ export default function Overwatch() {
       setRisk("balanced");
       setDeskTools(DEFAULT_DESK_TOOLS);
       setArchiveHistory([]);
+      setTab("pulse");
+      setSplitTab(null);
     }
     prevSignedIn.current = auth.signedIn;
   }, [auth.ready, auth.signedIn]);
