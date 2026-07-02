@@ -94,8 +94,21 @@ const DEFAULT_WATCHLIST = [
   { symbol: "GOOGL", name: "Alphabet", off: true },
   { symbol: "META", name: "Meta Platforms", off: true },
   { symbol: "TSLA", name: "Tesla", off: true },
+  // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
+  // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
+  { symbol: "XLK", name: "Technology Sector SPDR", off: true },
+  { symbol: "XLF", name: "Financials Sector SPDR", off: true },
+  { symbol: "XLV", name: "Health Care Sector SPDR", off: true },
+  { symbol: "XLE", name: "Energy Sector SPDR", off: true },
+  { symbol: "XLY", name: "Consumer Discretionary Sector SPDR", off: true },
+  { symbol: "XLP", name: "Consumer Staples Sector SPDR", off: true },
+  { symbol: "XLI", name: "Industrials Sector SPDR", off: true },
+  { symbol: "XLB", name: "Materials Sector SPDR", off: true },
+  { symbol: "XLU", name: "Utilities Sector SPDR", off: true },
+  { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
+  { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 30;
+const WATCHLIST_CAP = 45;
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
@@ -1130,37 +1143,54 @@ const ConvictionPips = ({ n, bias }) => {
   );
 };
 
-const SectorHeatmap = ({ sectors }) => {
-  const [sortMode, setSortMode] = usePersistentState("overwatch:sector:sort", "perf");
-  const base = [...(sectors || [])].filter((s) => s && s.changePct != null);
-  if (!base.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector data in last sync.</div>;
-  const sorted = base.sort((a, b) =>
-    sortMode === "name" ? String(a.name).localeCompare(String(b.name))
-      : sortMode === "abs" ? Math.abs(b.changePct) - Math.abs(a.changePct)
-        : b.changePct - a.changePct
-  );
-  const maxAbs = Math.max(0.4, ...sorted.map((s) => Math.abs(s.changePct)));
+// Live sector-focus panel — the 11 Select Sector SPDR ETFs quoted real-time (Finnhub) and sorted
+// strongest → weakest. Pulls from the full fetched universe since these tickers are hidden from the
+// default board. Falls back gracefully when a sync hasn't landed the ETF quotes yet.
+const SectorFocus = ({ tickers = [] }) => {
+  const bySym = new Map(tickers.map((t) => [t.symbol, t]));
+  const rows = SECTOR_ETFS
+    .map(({ symbol, sector }) => {
+      const t = bySym.get(symbol);
+      return t && !t._stale && t.changePct != null ? { ...t, sector } : null;
+    })
+    .filter(Boolean);
+  if (!rows.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>;
+  const sorted = [...rows].sort((a, b) => b.changePct - a.changePct);
+  const maxAbs = Math.max(0.4, ...sorted.map((r) => Math.abs(r.changePct)));
+  const green = rows.filter((r) => r.changePct > 0).length;
+  const leader = sorted[0];
+  const laggard = sorted[sorted.length - 1];
   return (
-    <>
-    <div className="seg" style={{ maxWidth: 300, marginBottom: 11, fontSize: 11 }}>
-      {[["perf", "% change"], ["abs", "magnitude"], ["name", "name"]].map(([m, lbl]) => (
-        <button key={m} className={sortMode === m ? "on" : ""} onClick={() => setSortMode(m)}>{lbl}</button>
-      ))}
+    <div className="sector-focus">
+      <div className="sector-focus-head">
+        <span><b style={{ color: green >= rows.length - green ? C.bull : C.bear }}>{green}</b> of {rows.length} sectors green</span>
+        <span className="sector-focus-lead">
+          <span>Leader <b style={{ color: chgColor(leader.changePct) }}>{leader.symbol} {fmtSigned(leader.changePct, 2, "%")}</b></span>
+          <span>Laggard <b style={{ color: chgColor(laggard.changePct) }}>{laggard.symbol} {fmtSigned(laggard.changePct, 2, "%")}</b></span>
+        </span>
+      </div>
+      <div className="sector-focus-grid">
+        {sorted.map((r) => {
+          const a = clamp(Math.abs(r.changePct) / maxAbs, 0.12, 1);
+          const up = r.changePct >= 0;
+          const bg = up ? `rgba(34,197,94,${(0.05 + a * 0.16).toFixed(3)})` : `rgba(239,68,68,${(0.05 + a * 0.16).toFixed(3)})`;
+          const bc = up ? `rgba(34,197,94,${(0.22 + a * 0.4).toFixed(3)})` : `rgba(239,68,68,${(0.22 + a * 0.4).toFixed(3)})`;
+          return (
+            <div key={r.symbol} className="sf-tile" style={{ background: bg, borderColor: bc }} title={`${r.sector} · ${r.name}`}>
+              <div className="sf-top">
+                <span className="sf-sym">{r.symbol}</span>
+                <FreshTag delayed={r.delayed} open={symbolMarketOpen(r.symbol)} delaySec={r.delaySec} />
+              </div>
+              <div className="sf-name">{r.sector}</div>
+              <div className="sf-bottom">
+                <span className="sf-price">{fmtNum(r.price, 2)}</span>
+                <b className="sf-pct" style={{ color: chgColor(r.changePct) }}>{fmtSigned(r.changePct, 2, "%")}</b>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
-    <div className="hm">
-      {sorted.map((s) => {
-        const a = clamp(Math.abs(s.changePct) / maxAbs, 0.12, 1);
-        const bg = s.changePct >= 0 ? `rgba(34,197,94,${0.07 + a * 0.3})` : `rgba(239,68,68,${0.07 + a * 0.3})`;
-        const bc = s.changePct >= 0 ? `rgba(34,197,94,${0.25 + a * 0.45})` : `rgba(239,68,68,${0.25 + a * 0.45})`;
-        return (
-          <div key={s.name} className="hm-tile" style={{ background: bg, borderColor: bc }} title={`${s.name}: ${fmtSigned(s.changePct, 2, "%")}`}>
-            <div className="hm-name">{s.name}</div>
-            <div className="hm-val" style={{ color: chgColor(s.changePct) }}>{fmtSigned(s.changePct, 2, "%")}</div>
-          </div>
-        );
-      })}
-    </div>
-    </>
   );
 };
 
@@ -1784,8 +1814,25 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
 
 // Market snapshot grid filters. "all" shows the visible board; "mag7" reveals the Mag 7 even though
 // they're hidden by default. Sets are matched against ticker symbols.
+// Select Sector SPDR ETFs — the live sector-focus complex (ordered by GICS weight). Live-quoted via
+// Finnhub, hidden from the board by default, and surfaced in the Sector Focus panel on Market Pulse.
+const SECTOR_ETFS = [
+  { symbol: "XLK", sector: "Technology" },
+  { symbol: "XLF", sector: "Financials" },
+  { symbol: "XLV", sector: "Health Care" },
+  { symbol: "XLY", sector: "Consumer Discretionary" },
+  { symbol: "XLC", sector: "Communication Svcs" },
+  { symbol: "XLI", sector: "Industrials" },
+  { symbol: "XLP", sector: "Consumer Staples" },
+  { symbol: "XLE", sector: "Energy" },
+  { symbol: "XLU", sector: "Utilities" },
+  { symbol: "XLRE", sector: "Real Estate" },
+  { symbol: "XLB", sector: "Materials" },
+];
+const SECTOR_ETF_META = new Map(SECTOR_ETFS.map((s) => [s.symbol, s.sector]));
+
 const SNAP_FUTURES_SET = new Set(["ES", "NQ", "YM", "RTY"]);
-const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG"]);
+const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", ...SECTOR_ETFS.map((s) => s.symbol)]);
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
@@ -2075,15 +2122,13 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
-      <div className="grid g-2">
-        <Card icon={Activity} title="Sector tape" sub="Today's GICS sector performance, sorted">
-          <SectorHeatmap sectors={data?.sectors} />
-        </Card>
-        <Card icon={Gauge} title="Market breadth" sub="Sector participation & distribution">
-          <MarketBreadth data={points} />
-        </Card>
-      </div>
+      <Card icon={Gauge} title="Market breadth" sub="Sector participation & distribution">
+        <MarketBreadth data={points} />
+      </Card>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
+      <Card icon={Layers} title="Sector focus" sub="Live Select Sector SPDR ETFs, strongest first">
+        <SectorFocus tickers={data?.tickers || []} />
+      </Card>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn" onClick={onGoThesis}>Build today's thesis <ArrowRight size={14} /></button>
       </div>
