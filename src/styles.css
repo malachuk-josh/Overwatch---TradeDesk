@@ -1088,6 +1088,10 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .bd-root.light .card{
   background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,.35) 42%),var(--glass);
 }
+/* Candle wicks (level-map strips + Market snapshot ticker cards) use a white gradient tuned for the
+   dark glass — invisible against light mode's near-white cards. Swap to a dark slate gradient so the
+   high/low tails read clearly. The bull/bear/flat bodies are saturated enough to keep as-is. */
+.bd-root.light .candle-wick{background:linear-gradient(180deg,rgba(51,65,85,.9),rgba(51,65,85,.5))}
 .bd-root.light .internals-hero{
   background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.08),transparent 55%),linear-gradient(135deg,rgba(56,189,248,.04),transparent),var(--panel2);
 }
