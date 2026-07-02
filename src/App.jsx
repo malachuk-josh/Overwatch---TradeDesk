@@ -2628,10 +2628,31 @@ const VolStructureMap = ({ detail = {} }) => {
     { label: "Stress", min: 27, max: 40 },
   ];
   const vix = Number(detail.vix);
-  const max = Math.max(...bands.map((band) => band.max || 40), 40);
-  const marker = Number.isFinite(vix) ? clamp((vix / max) * 100, 0, 100) : null;
+  // The bands render as equal-width columns, so position the marker by the band VIX falls into and
+  // its fraction within that band — not a raw vix/40 scale (which misaligned the marker with the
+  // bands and barely moved across the realistic VIX range, making it look frozen).
+  const n = bands.length;
+  const slot = 100 / n;
+  let marker = null;
+  if (Number.isFinite(vix)) {
+    if (vix <= bands[0].min) marker = 0;
+    else if (vix >= bands[n - 1].max) marker = 100;
+    else {
+      let i = bands.findIndex((b) => vix >= b.min && vix < b.max);
+      if (i === -1) i = n - 1;
+      const b = bands[i];
+      const frac = clamp((vix - b.min) / ((b.max - b.min) || 1), 0, 1);
+      marker = (i + frac) * slot;
+    }
+    marker = clamp(marker, 0, 100);
+  }
+  const zone = detail.zone || (Number.isFinite(vix) ? bands.find((b) => vix >= b.min && vix < b.max)?.label?.toLowerCase() : null);
   return (
     <div className="vol-map">
+      <div className="vol-map-top">
+        <span className="vol-map-vix">VIX <b>{Number.isFinite(vix) ? fmtNum(vix, 1) : "—"}</b></span>
+        {zone && <span className="vol-map-zone">{zone}</span>}
+      </div>
       <div className="vol-bands">
         {bands.map((band) => (
           <span key={band.label} className={`vol-band vol-${band.label.toLowerCase()}`}>
