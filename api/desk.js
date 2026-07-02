@@ -1257,17 +1257,45 @@ const indexLevels = (item, decimals = 0) => {
   };
 };
 
-// Real support/resistance/pivot for a single stock, computed from its live OHLC quote — gives
-// single-stock theses concrete levels the same way indexLevels() does for the index complex.
-const fetchStockLevels = async (symbol) => {
+// Current weekly OHLC bar (week-to-date) for a symbol, plus the prior week's close for change.
+const fetchWeeklyBar = async (symbol) => {
+  const ysym = YAHOO_SYMBOLS[symbol] || symbol;
+  const scale = YAHOO_SCALE[symbol] || 1;
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=3mo&interval=1wk`);
+  const result = payload?.chart?.result?.[0];
+  const bars = result?.indicators?.quote?.[0] || {};
+  const closes = bars.close || [];
+  let i = closes.length - 1;
+  while (i >= 0 && !Number.isFinite(closes[i])) i--;
+  if (i < 0) return null;
+  const o = bars.open?.[i], h = bars.high?.[i], l = bars.low?.[i], c = closes[i];
+  if (![o, h, l, c].every(Number.isFinite)) return null;
+  let p = i - 1;
+  while (p >= 0 && !Number.isFinite(closes[p])) p--;
+  const prevClose = p >= 0 ? closes[p] : c;
+  const s = (v) => v * scale;
+  return { o: s(o), h: s(h), l: s(l), c: s(c), prevClose: s(prevClose), changePct: prevClose ? ((c - prevClose) / prevClose) * 100 : 0 };
+};
+
+// Real support/resistance/pivot for any symbol, computed from its OHLC — daily (live session) or
+// weekly (week-to-date). Gives theses and the level maps concrete levels the same way indexLevels()
+// does for the index complex.
+const fetchStockLevels = async (symbol, period = "d") => {
   if (!symbol || typeof symbol !== "string") return null;
   try {
     const sym = symbol.toUpperCase();
+    const asOf = new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
+    if (period === "w") {
+      const w = await fetchWeeklyBar(sym);
+      if (!w) return null;
+      const levels = indexLevels({ price: w.c, dayHigh: w.h, dayLow: w.l, changePct: w.changePct }, 2);
+      if (!levels) return null;
+      return { symbol: sym, period: "w", ...levels, ohlc: { o: round(w.o, 2), h: round(w.h, 2), l: round(w.l, 2), c: round(w.prevClose, 2) }, asOf };
+    }
     const q = await quote(sym);
     const levels = indexLevels({ price: q.price, dayHigh: q.dayHigh, dayLow: q.dayLow, changePct: q.changePct }, 2);
     if (!levels) return null;
-    const asOf = new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
-    return { symbol: sym, ...levels, asOf };
+    return { symbol: sym, period: "d", ...levels, ohlc: { o: round(q.dayOpen, 2), h: round(q.dayHigh, 2), l: round(q.dayLow, 2), c: round(q.previousClose, 2) }, asOf };
   } catch {
     return null;
   }
@@ -2138,7 +2166,7 @@ export default async function handler(req, res) {
     if (operation === "market") data = await fetchMarket(payload.watchlist);
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
-    else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol);
+    else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol, payload.period);
     else if (operation === "history") data = await fetchHistory(payload.symbol);
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
