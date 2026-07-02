@@ -1074,6 +1074,16 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .bd-root.light .bd-mark{
   background:linear-gradient(135deg,#DDE4EF,#C8D2E4);
 }
+/* Mobile bottom nav: the dark-mode glass pill uses white icon/text, which reads fine against a dark
+   translucent background but disappears against light mode's near-white glass. Give it a brushed
+   "silver" metallic finish instead — a cool steel-gray gradient + inset highlight — with slate-gray
+   inactive icons/labels so they read clearly; the active tab stays the same blue accent as dark mode. */
+.bd-root.light .bd-bottom-nav{
+  background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(216,223,235,.82));
+  border-color:rgba(100,116,139,.3);
+  box-shadow:0 14px 34px rgba(15,23,42,.16), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(148,163,184,.35);
+}
+.bd-root.light .bd-bnav-btn{color:#4B5768}
 .bd-root.light .bd-flow{background:var(--panel)}
 .bd-root.light .card{
   background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,.35) 42%),var(--glass);
