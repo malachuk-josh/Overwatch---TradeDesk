@@ -1761,22 +1761,27 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
               <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))}</small>
             </span>
           )}
-          <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
-            {!symbols.includes(active) && <option value={active}>{active}</option>}
-            {LM_PICKER_GROUPS.map(([label, test]) => {
-              const group = symbols.filter(test);
-              return group.length ? <optgroup key={label} label={label}>{group.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
-            })}
-            {(() => {
-              const rest = symbols.filter((s) => !LM_PICKER_GROUPS.some(([, test]) => test(s)));
-              return rest.length ? <optgroup label="Other">{rest.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
-            })()}
-          </select>
         </span>
       }
     >
       <div className="lm-map-wrap">
         <LevelsLadder spx={spxData} label={active} decimals={lmDecimals(active, tickers)} ohlc={ohlc} />
+      </div>
+      {/* Ticker picker + timeframe toggle live in a footer rather than the header, so they never
+          compete with the candle strip + change badge for width when a split-view pane compacts the
+          card — the header layout stays put regardless of pane width. */}
+      <div className="lm-controls">
+        <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
+          {!symbols.includes(active) && <option value={active}>{active}</option>}
+          {LM_PICKER_GROUPS.map(([label, test]) => {
+            const group = symbols.filter(test);
+            return group.length ? <optgroup key={label} label={label}>{group.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
+          })}
+          {(() => {
+            const rest = symbols.filter((s) => !LM_PICKER_GROUPS.some(([, test]) => test(s)));
+            return rest.length ? <optgroup label="Other">{rest.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
+          })()}
+        </select>
         <div className="lm-period" role="group" aria-label="Level timeframe">
           {["d", "w"].map((p) => (
             <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)} title={p === "d" ? "Daily levels" : "Weekly levels"}>{p.toUpperCase()}</button>
