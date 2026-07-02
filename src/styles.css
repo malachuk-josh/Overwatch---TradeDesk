@@ -630,6 +630,10 @@ html,body{max-width:100vw;overflow-x:hidden;background:#0B0F14;color-scheme:dark
 .internals-components{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .internals-components span{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--text);border:1px solid var(--line);background:var(--panel3);border-radius:999px;padding:3px 7px}
 .vol-map{margin-top:5px}
+.vol-map-top{display:flex;align-items:baseline;gap:9px;margin-bottom:2px}
+.vol-map-vix{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.vol-map-vix b{font-size:16px;letter-spacing:0;color:var(--text);margin-left:3px}
+.vol-map-zone{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--brass)}
 .vol-bands{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding-top:10px}
 .vol-band{min-height:48px;border:1px solid var(--line);border-radius:7px;background:var(--panel3);padding:8px 7px;text-align:center}
 .vol-band b{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text)}
