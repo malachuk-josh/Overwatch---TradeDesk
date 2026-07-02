@@ -873,21 +873,35 @@ When session is PRE-MARKET, AFTER-HOURS, or CLOSED, explicitly account for the p
    PRIMITIVES
    ================================================================ */
 
-const Card = ({ icon: Ic, title, sub, tools, children, className = "", style, onClick }) => (
-  <div className={`card ${className}`} style={style} onClick={onClick}>
-    {(title || tools) && (
-      <div className="card-head">
-        {Ic && <Ic size={15} className="ic" />}
-        <div className="card-title">
-          {title}
-          {sub && <small>{sub}</small>}
+const Card = ({ icon: Ic, title, sub, tools, children, className = "", style, onClick, collapsible = false, open = true, onToggle }) => {
+  const headToggles = collapsible && typeof onToggle === "function";
+  return (
+    <div className={`card ${className}`} style={style} onClick={onClick}>
+      {(title || tools || collapsible) && (
+        <div
+          className={`card-head${headToggles ? " card-head-toggle" : ""}`}
+          {...(headToggles && {
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": open,
+            onClick: onToggle,
+            onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } },
+          })}
+        >
+          {Ic && <Ic size={15} className="ic" />}
+          <div className="card-title">
+            {title}
+            {sub && <small>{sub}</small>}
+          </div>
+          {/* Keep interactive tools from toggling the section when the header is a collapse button. */}
+          {tools && <div className="card-tools" onClick={headToggles ? (e) => e.stopPropagation() : undefined}>{tools}</div>}
+          {collapsible && <span className="card-chevron">{open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</span>}
         </div>
-        <div className="card-tools">{tools}</div>
-      </div>
-    )}
-    {children}
-  </div>
-);
+      )}
+      {children}
+    </div>
+  );
+};
 
 const Freshness = ({ at }) => {
   if (!at) return null;
@@ -4662,7 +4676,9 @@ const ArchiveTab = ({
         icon={Mail}
         title="Jacks Journal"
         sub="Market wraps delivered by the Overwatch automation — stored in the cloud"
-        tools={<button className="btn btn-ghost btn-sm" onClick={() => setJournalOpen((o) => !o)} title={journalOpen ? "Collapse" : "Expand"}>{journalOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>}
+        collapsible
+        open={journalOpen}
+        onToggle={() => setJournalOpen((o) => !o)}
       >
         {journalOpen && <CloudNewsletterList inSplit={inSplit} />}
       </Card>
@@ -4671,7 +4687,9 @@ const ArchiveTab = ({
         icon={History}
         title="Thesis Library"
         sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
-        tools={<button className="btn btn-ghost btn-sm" onClick={() => setLibraryOpen((o) => !o)} title={libraryOpen ? "Collapse" : "Expand"}>{libraryOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}</button>}
+        collapsible
+        open={libraryOpen}
+        onToggle={() => setLibraryOpen((o) => !o)}
       >
         {libraryOpen && (<>
         {!archiveHistory.length && (
