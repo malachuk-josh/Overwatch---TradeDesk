@@ -46,6 +46,7 @@ import GripVertical from "lucide-react/dist/esm/icons/grip-vertical.mjs";
 import Calculator from "lucide-react/dist/esm/icons/calculator.mjs";
 import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Gauge from "lucide-react/dist/esm/icons/gauge.mjs";
+import Orbit from "lucide-react/dist/esm/icons/orbit.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
 import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
@@ -2152,6 +2153,9 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
       <Card icon={Gauge} title="Market breadth" sub="Sector participation, distribution & live SPDR sectors">
         <MarketBreadth data={points} tickers={data?.tickers || []} />
       </Card>
+      <Card icon={Orbit} title="Sector rotation" sub="Where money is rotating — weekly relative strength vs SPY (RRG)">
+        <SectorRotation />
+      </Card>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button className="btn" onClick={onGoThesis}>Build today's thesis <ArrowRight size={14} /></button>
@@ -2616,6 +2620,148 @@ const MarketBreadth = ({ data, tickers = [] }) => {
       </div>
       <BreadthDistribution distribution={breadth.distribution} total={total} />
       <SectorFocus tickers={tickers} />
+    </div>
+  );
+};
+
+/* ================================================================
+   SECTOR ROTATION — RRG-style relative rotation graph
+   ================================================================ */
+const RRG_QUADRANTS = {
+  leading: { label: "Leading", color: C.bull, blurb: "outperforming & accelerating" },
+  weakening: { label: "Weakening", color: "#EAB308", blurb: "outperforming but slowing" },
+  lagging: { label: "Lagging", color: C.bear, blurb: "underperforming & decelerating" },
+  improving: { label: "Improving", color: C.brass, blurb: "underperforming but turning up" },
+};
+
+// RRG plot: each sector's weekly (RS-ratio, RS-momentum) trail vs SPY. Center (100,100) splits the
+// four quadrants; sectors typically rotate clockwise Improving → Leading → Weakening → Lagging.
+const RotationGraph = ({ sectors, focus, onFocus }) => {
+  const W = 640, H = 430, P = { t: 26, r: 20, b: 36, l: 46 };
+  const pts = sectors.flatMap((s) => s.tail);
+  const extX = Math.max(3, ...pts.map((p) => Math.abs(p.ratio - 100))) * 1.18;
+  const extY = Math.max(1.6, ...pts.map((p) => Math.abs(p.momentum - 100))) * 1.18;
+  const x = (v) => P.l + ((v - (100 - extX)) / (2 * extX)) * (W - P.l - P.r);
+  const y = (v) => P.t + (((100 + extY) - v) / (2 * extY)) * (H - P.t - P.b);
+  const cx = x(100), cy = y(100);
+  const quadFill = {
+    leading: { x: cx, y: P.t, w: W - P.r - cx, h: cy - P.t },
+    weakening: { x: cx, y: cy, w: W - P.r - cx, h: H - P.b - cy },
+    lagging: { x: P.l, y: cy, w: cx - P.l, h: H - P.b - cy },
+    improving: { x: P.l, y: P.t, w: cx - P.l, h: cy - P.t },
+  };
+  const corner = {
+    leading: { x: W - P.r - 8, y: P.t + 15, anchor: "end" },
+    weakening: { x: W - P.r - 8, y: H - P.b - 8, anchor: "end" },
+    lagging: { x: P.l + 8, y: H - P.b - 8, anchor: "start" },
+    improving: { x: P.l + 8, y: P.t + 15, anchor: "start" },
+  };
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="rrg-plot" role="img" aria-label="Sector rotation graph: relative strength vs momentum by sector">
+      {Object.entries(quadFill).map(([key, r]) => (
+        <rect key={key} x={r.x} y={r.y} width={Math.max(r.w, 0)} height={Math.max(r.h, 0)} fill={RRG_QUADRANTS[key].color} opacity="0.055" />
+      ))}
+      {Object.entries(corner).map(([key, c]) => (
+        <text key={key} x={c.x} y={c.y} textAnchor={c.anchor} className="rrg-quad-label" fill={RRG_QUADRANTS[key].color}>
+          {RRG_QUADRANTS[key].label.toUpperCase()}
+        </text>
+      ))}
+      <line x1={cx} y1={P.t} x2={cx} y2={H - P.b} className="rrg-axis" />
+      <line x1={P.l} y1={cy} x2={W - P.r} y2={cy} className="rrg-axis" />
+      <text x={W - P.r} y={H - 10} textAnchor="end" className="rrg-axis-label">relative strength vs SPY →</text>
+      <text x={14} y={P.t + 4} className="rrg-axis-label" transform={`rotate(-90 14 ${P.t + 4})`} textAnchor="end">RS momentum →</text>
+      {sectors.map((s) => {
+        const color = RRG_QUADRANTS[s.quadrant].color;
+        const head = s.tail[s.tail.length - 1];
+        const dimmed = focus && focus !== s.symbol;
+        const path = s.tail.map((p, i) => `${i ? "L" : "M"}${x(p.ratio).toFixed(1)} ${y(p.momentum).toFixed(1)}`).join(" ");
+        const labelLeft = x(head.ratio) > W - P.r - 58;
+        return (
+          <g
+            key={s.symbol}
+            className={`rrg-sector${dimmed ? " rrg-dim" : ""}`}
+            onClick={() => onFocus(focus === s.symbol ? null : s.symbol)}
+            style={{ cursor: "pointer" }}
+          >
+            <title>{`${s.name} (${s.symbol}) — ${RRG_QUADRANTS[s.quadrant].label}: RS ${fmtNum(head.ratio, 1)}, momentum ${fmtNum(head.momentum, 1)}`}</title>
+            <path d={path} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" opacity="0.55" />
+            {s.tail.slice(0, -1).map((p, i) => (
+              <circle key={p.t} cx={x(p.ratio)} cy={y(p.momentum)} r={1.6 + i * 0.5} fill={color} opacity={0.25 + (i / s.tail.length) * 0.45} />
+            ))}
+            <circle cx={x(head.ratio)} cy={y(head.momentum)} r="5.5" fill={color} stroke="var(--panel2)" strokeWidth="1.5" />
+            <text
+              x={x(head.ratio) + (labelLeft ? -9 : 9)}
+              y={y(head.momentum) + 4}
+              textAnchor={labelLeft ? "end" : "start"}
+              className="rrg-sym"
+              fill={color}
+            >
+              {s.symbol}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+};
+
+let _rotationClientCache = null;
+const SectorRotation = () => {
+  const [state, setState] = useState({ status: "loading", data: null });
+  const [focus, setFocus] = useState(null);
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    let dead = false;
+    if (_rotationClientCache && Date.now() - _rotationClientCache.ts < 10 * 60 * 1000) {
+      setState({ status: "ready", data: _rotationClientCache.data });
+      return () => { dead = true; };
+    }
+    setState({ status: "loading", data: null });
+    callDesk("rotation")
+      .then((data) => {
+        if (dead) return;
+        _rotationClientCache = { ts: Date.now(), data };
+        setState({ status: "ready", data });
+      })
+      .catch(() => { if (!dead) setState({ status: "error", data: null }); });
+    return () => { dead = true; };
+  }, [nonce]);
+
+  if (state.status === "loading") return <LoadingBlock lines={4} msg="Charting weekly sector rotation vs SPY…" />;
+  if (state.status === "error" || !state.data?.sectors?.length)
+    return <ErrBlock msg="Sector rotation history is unavailable right now." onRetry={() => { _rotationClientCache = null; setNonce((n) => n + 1); }} />;
+
+  const { sectors, counts, read, weeks } = state.data;
+  const focused = focus ? sectors.find((s) => s.symbol === focus) : null;
+  return (
+    <div className="rrg">
+      <div className="rrg-legend">
+        {Object.entries(RRG_QUADRANTS).map(([key, q]) => (
+          <span key={key} className="rrg-key" title={q.blurb}>
+            <i style={{ background: q.color }} />{q.label}<b>{counts?.[key] ?? 0}</b>
+          </span>
+        ))}
+      </div>
+      <RotationGraph sectors={sectors} focus={focus} onFocus={setFocus} />
+      <div className="rrg-chips">
+        {sectors.map((s) => (
+          <button
+            key={s.symbol}
+            className={`rrg-chip${focus === s.symbol ? " on" : ""}`}
+            style={{ "--rrg-c": RRG_QUADRANTS[s.quadrant].color }}
+            onClick={() => setFocus(focus === s.symbol ? null : s.symbol)}
+            title={`${s.name} — ${RRG_QUADRANTS[s.quadrant].label}`}
+          >
+            {s.symbol}
+          </button>
+        ))}
+      </div>
+      <div className="rrg-read">
+        {focused
+          ? `${focused.name} (${focused.symbol}) is ${RRG_QUADRANTS[focused.quadrant].label.toLowerCase()} — ${RRG_QUADRANTS[focused.quadrant].blurb}${focused.heading !== focused.quadrant ? `, and its ${weeks}-week path points toward ${RRG_QUADRANTS[focused.heading].label.toLowerCase()}` : ""}.`
+          : read}
+      </div>
+      <div className="rrg-hint">Each trail is {weeks} weeks of relative strength vs SPY. Sectors normally rotate clockwise: Improving → Leading → Weakening → Lagging. Tap a sector to isolate its path.</div>
     </div>
   );
 };
