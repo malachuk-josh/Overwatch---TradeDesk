@@ -1600,6 +1600,15 @@ const FactorRadarChart = ({ weights, onChange }) => {
 // instrument via the header dropdown. Levels come from the points feed when the symbol is part of
 // the index complex, otherwise from the stocklevels endpoint (cached briefly client-side).
 const LEVEL_MAP_DEFAULTS = ["SPY", "QQQ", "DIA"];
+// Dropdown sub-groups for the level-map ticker picker. Sets referenced lazily so definition order
+// relative to SNAP_*_SET doesn't matter. Anything unmatched falls into a trailing "Other" group.
+const LM_INDEX_SET = new Set(["SPX", "NDX", "DJI", "RUT", "VIX"]);
+const LM_PICKER_GROUPS = [
+  ["ETFs", (s) => SNAP_ETF_SET.has(s)],
+  ["Futures", (s) => SNAP_FUTURES_SET.has(s)],
+  ["Mag 7", (s) => THESIS_STOCK_SET.has(s)],
+  ["Indices", (s) => LM_INDEX_SET.has(s)],
+];
 const _lmLevelsCache = new Map();
 const fetchLevelsCached = async (symbol, period = "d") => {
   const key = `${symbol}:${period}`;
@@ -1712,9 +1721,16 @@ const LevelMapCard = ({ defaultSymbol, points, tickers }) => {
       tools={
         <span className="lm-tools">
           <LevelMapCandles symbol={active} tickers={tickers} />
-          <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any watchlist instrument">
+          <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
             {!symbols.includes(active) && <option value={active}>{active}</option>}
-            {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
+            {LM_PICKER_GROUPS.map(([label, test]) => {
+              const group = symbols.filter(test);
+              return group.length ? <optgroup key={label} label={label}>{group.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
+            })}
+            {(() => {
+              const rest = symbols.filter((s) => !LM_PICKER_GROUPS.some(([, test]) => test(s)));
+              return rest.length ? <optgroup label="Other">{rest.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup> : null;
+            })()}
           </select>
         </span>
       }
@@ -1835,6 +1851,9 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
   const hideSet = hiddenSymbols || THESIS_STOCK_SET;
   const tickers = useMemo(() => (data?.tickers || []).filter((t) => !hideSet.has(t.symbol)), [data, hideSet]);
   const orderedTickers = useMemo(() => orderAssetCards(tickers), [tickers]);
+  // Level maps can target the full fetched universe (incl. the Mag 7 that are hidden from the grid),
+  // grouped in the picker by type.
+  const levelTickers = useMemo(() => orderAssetCards(data?.tickers || []), [data]);
   // Any instrument in the watchlist currently trading? Drives the live pulse on the snapshot icon.
   const anyMarketOpen = useMemo(() => orderedTickers.some((t) => symbolMarketOpen(t.symbol)), [orderedTickers]);
   const session = useMemo(() => buildSessionRead({ market: data, points, news }), [data, points, news]);
@@ -1989,11 +2008,11 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
           <div style={{ padding: "0 12px 12px" }}>
             <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
               {LEVEL_MAP_DEFAULTS.map((sym) => (
-                <LevelMapCard key={sym} defaultSymbol={sym} points={points} tickers={tickers} />
+                <LevelMapCard key={sym} defaultSymbol={sym} points={points} tickers={levelTickers} />
               ))}
             </div>
             <div className="pulse-levels-mobile">
-              <LevelMapCard defaultSymbol="SPY" points={points} tickers={tickers} />
+              <LevelMapCard defaultSymbol="SPY" points={points} tickers={levelTickers} />
             </div>
           </div>
         )}
