@@ -19,6 +19,7 @@ import Trash2 from "lucide-react/dist/esm/icons/trash-2.mjs";
 import Copy from "lucide-react/dist/esm/icons/copy.mjs";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import Zap from "lucide-react/dist/esm/icons/zap.mjs";
+import Sunrise from "lucide-react/dist/esm/icons/sunrise.mjs";
 import TrendingUp from "lucide-react/dist/esm/icons/trending-up.mjs";
 import TrendingDown from "lucide-react/dist/esm/icons/trending-down.mjs";
 import AlertTriangle from "lucide-react/dist/esm/icons/triangle-alert.mjs";
@@ -477,6 +478,42 @@ const parseFirstPrice = (text) => {
   const m = String(text || "").replace(/,/g, "").match(/\d{1,6}(?:\.\d+)?/);
   const n = m ? Number(m[0]) : null;
   return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/* ---------------- morning snapshot diff ---------------- */
+
+// The last sync of each ET day is persisted; the first sync of the NEXT day diffs against it to
+// produce the "what changed since you left" card on Market Pulse.
+const DAYSNAP_KEY = "overwatch:daysnap";
+const buildDaySnap = (marketData) => {
+  const px = (sym) => {
+    const n = Number((marketData?.tickers || []).find((t) => t.symbol === sym)?.price);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const sectors = (marketData?.sectors || []).filter((s) => s && Number.isFinite(Number(s.changePct)));
+  return {
+    spx: px("SPX"), ndx: px("NDX"), es: px("ES"), vix: px("VIX"),
+    green: sectors.length ? sectors.filter((s) => s.changePct > 0).length : null,
+    total: sectors.length || null,
+    label: dateShort(),
+  };
+};
+const daySnapDiff = (prev, cur) => {
+  const lines = [];
+  [["SPX", "spx"], ["NDX", "ndx"], ["ES", "es"]].forEach(([label, key]) => {
+    if (prev[key] > 0 && cur[key] > 0) {
+      const pct = ((cur[key] - prev[key]) / prev[key]) * 100;
+      lines.push({ text: `${label} ${fmtNum(prev[key], 0)} → ${fmtNum(cur[key], 0)} (${fmtSigned(pct, 2, "%")})`, tone: pct > 0.05 ? "up" : pct < -0.05 ? "down" : "flat" });
+    }
+  });
+  if (prev.vix > 0 && cur.vix > 0) {
+    const d = cur.vix - prev.vix;
+    lines.push({ text: `VIX ${fmtNum(prev.vix, 1)} → ${fmtNum(cur.vix, 1)} (${fmtSigned(d, 1)} pts)`, tone: d > 0.3 ? "down" : d < -0.3 ? "up" : "flat" });
+  }
+  if (prev.green != null && cur.green != null && prev.total && cur.total) {
+    lines.push({ text: `Breadth ${prev.green}/${prev.total} → ${cur.green}/${cur.total} sectors green`, tone: cur.green > prev.green ? "up" : cur.green < prev.green ? "down" : "flat" });
+  }
+  return lines;
 };
 
 const extractTime = (value) => String(value || "").match(/\b\d{1,2}:\d{2}\s*(?:AM|PM)(?:\s*ET)?\b/i)?.[0]?.replace(/\s*ET$/i, " ET") || "";
@@ -1723,7 +1760,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen }) => {
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, onRefresh, onGoThesis }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -1771,6 +1808,20 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, o
   const vix = tickers.find((t) => t.symbol === "VIX");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {morningDiff && (
+        <div className="card morning-diff">
+          <div className="morning-diff-head">
+            <Sunrise size={14} />
+            <span>Since {morningDiff.from}</span>
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onDismissDiff} title="Dismiss"><X size={13} /></button>
+          </div>
+          <div className="morning-diff-lines">
+            {morningDiff.lines.map((l, i) => (
+              <span className={`morning-diff-line ${l.tone}`} key={i}>{l.text}</span>
+            ))}
+          </div>
+        </div>
+      )}
       <Card
         icon={Activity}
         title="Session read"
@@ -2901,7 +2952,7 @@ const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
 // Numeric snapshot of the fed desk structures for the thesis output's Trade structure card. Computed
 // deterministically from the same Black-Scholes math, so it renders concrete entry / risk / exits
 // whether or not the AI narrative mentions the trade. Stored on the thesis entry at generation time.
-const buildTradeStructures = ({ deskTools, market, points, instrument }) => {
+const buildTradeStructures = ({ deskTools, market, points, instrument, thesisLevels = null }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
   const out = [];
@@ -2912,11 +2963,16 @@ const buildTradeStructures = ({ deskTools, market, points, instrument }) => {
     const entry = bs.price;
     const breakeven = type === "call" ? K + entry : K - entry;
     // Payoff ladder — reprice the contract across a spread of underlying moves at the same DTE.
-    const ladder = [-0.05, -0.025, 0, 0.025, 0.05].map((m) => {
-      const sp = S * (1 + m);
+    const rowAt = (sp, label = null) => {
       const val = blackScholes({ S: sp, K, T, r, q, sigma, type }).price;
-      return { movePct: m * 100, spot: sp, val, pnlPct: entry > 0 ? ((val - entry) / entry) * 100 : 0 };
+      return { movePct: ((sp - S) / S) * 100, spot: sp, val, pnlPct: entry > 0 ? ((val - entry) / entry) * 100 : 0, label };
+    };
+    const ladder = [-0.05, -0.025, 0, 0.025, 0.05].map((m) => rowAt(S * (1 + m)));
+    // Land extra rows exactly on the thesis's own levels so the exits map to the call.
+    [["Target", thesisLevels?.up], ["Invalidation", thesisLevels?.down]].forEach(([label, lv]) => {
+      if (lv > S * 0.5 && lv < S * 1.5 && Math.abs(lv - S) / S > 0.0005) ladder.push(rowAt(lv, label));
     });
+    ladder.sort((a, b) => a.spot - b.spot);
     out.push({
       kind: "option", symbol: live.cfg.symbol, type, strike: K, days, spot: S, iv: sigma * 100,
       entry, cost: entry * 100, breakeven, maxRisk: entry * 100,
@@ -3000,8 +3056,11 @@ const TradeStructureCard = ({ structures, bias }) => {
                 <div className="tstruct-ladder">
                   <div className="tstruct-ladder-row tstruct-ladder-head"><span>{s.symbol} move</span><span>Contract</span><span>P/L</span></div>
                   {s.ladder.map((row, j) => (
-                    <div className="tstruct-ladder-row" key={j}>
-                      <span>{fmtSigned(row.movePct, 1, "%")} → {fmtNum(row.spot, 2)}</span>
+                    <div className={`tstruct-ladder-row${row.label ? " tstruct-ladder-level" : ""}`} key={j}>
+                      <span>
+                        {fmtSigned(row.movePct, 1, "%")} → {fmtNum(row.spot, 2)}
+                        {row.label && <span className={`tstruct-lvl-tag ${row.label === "Target" ? "ok" : "warn"}`}>{row.label}</span>}
+                      </span>
                       <span>${fmtNum(row.val, 2)}</span>
                       <span style={{ color: row.pnlPct >= 0 ? C.bull : C.bear, fontWeight: 600 }}>{fmtSigned(row.pnlPct, 0, "%")}</span>
                     </div>
@@ -5157,6 +5216,51 @@ export default function Overwatch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageReady, market.data, points.data]);
 
+  /* Level alert — while a thesis is on the tape, watch its action level against the focus
+     instrument's live price on every refresh; fire a banner + toast when price crosses it. */
+  const [levelAlert, setLevelAlert] = useState(null);
+  const levelWatch = useRef({ key: null, prevSpot: null, lastFired: 0 });
+  useEffect(() => {
+    const t = thesis.data;
+    if (!market.data || !t) return;
+    const level = parseFirstPrice(t.levels?.action);
+    const sym = t._instrument || t.instrument;
+    if (!level || !sym) return;
+    const spot = deskLiveContext(market.data, points.data, sym).spot;
+    if (!(spot > 0)) return;
+    const key = `${t._id}:${level}`;
+    const w = levelWatch.current;
+    if (w.key !== key) { levelWatch.current = { key, prevSpot: spot, lastFired: 0 }; return; }
+    const crossed = (w.prevSpot < level && spot >= level) || (w.prevSpot > level && spot <= level);
+    w.prevSpot = spot;
+    if (crossed && Date.now() - w.lastFired > 5 * 60 * 1000) {
+      w.lastFired = Date.now();
+      const msg = `${sym} crossed the action level ${fmtNum(level, 2)} — now ${fmtNum(spot, 2)}`;
+      setLevelAlert({ msg, ts: Date.now() });
+      notify(`⚡ ${msg}`, "ok");
+    }
+  }, [market.data, points.data, thesis.data, notify]);
+
+  /* Morning diff — persist the last sync of each ET day; on the first sync of a later day, show
+     "what changed since you left" on Market Pulse, then roll the snapshot forward. */
+  const [morningDiff, setMorningDiff] = useState(null);
+  const morningDiffChecked = useRef(false);
+  useEffect(() => {
+    if (!storageReady || !market.data) return;
+    (async () => {
+      const today = etDateKey();
+      const snap = buildDaySnap(market.data);
+      const prev = await loadStored(DAYSNAP_KEY, null);
+      if (!morningDiffChecked.current && prev?.date && prev.date !== today) {
+        morningDiffChecked.current = true;
+        const lines = daySnapDiff(prev, snap);
+        if (lines.length) setMorningDiff({ from: prev.label || prev.date, lines });
+      }
+      morningDiffChecked.current = true;
+      saveStored(DAYSNAP_KEY, { date: today, ...snap });
+    })();
+  }, [storageReady, market.data]);
+
   /* Trade journal — attach (or clear) a logged trade on an archived thesis, mirrored into any
      live/viewing copy of the same entry. */
   const logTrade = (id, trade) => {
@@ -5221,7 +5325,10 @@ export default function Overwatch() {
           ? deskStructureLabels({ deskTools, market: market.data, points: points.data, instrument })
           : null,
         _tradeStructures: deskContext
-          ? buildTradeStructures({ deskTools, market: market.data, points: points.data, instrument })
+          ? buildTradeStructures({
+            deskTools, market: market.data, points: points.data, instrument,
+            thesisLevels: { up: parseFirstPrice(data.levels?.upside), down: parseFirstPrice(data.levels?.downside) },
+          })
           : null,
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
@@ -5280,7 +5387,7 @@ export default function Overwatch() {
   const renderTab = (id) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} onRefresh={syncAll} onGoThesis={() => setTab("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
@@ -5339,6 +5446,13 @@ export default function Overwatch() {
 
       {!online && (
         <div className="offline-banner"><WifiOff size={13} /> You're offline — data shown is the last successful sync.</div>
+      )}
+      {levelAlert && (
+        <div className="level-alert-banner">
+          <Zap size={13} />
+          <span>{levelAlert.msg}</span>
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => setLevelAlert(null)} title="Dismiss"><X size={13} /></button>
+        </div>
       )}
 
       <header className="bd-header">
