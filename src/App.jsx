@@ -5443,30 +5443,82 @@ const EquityCurve = ({ curve, capital }) => {
   );
 };
 
-const StrategyLabTab = () => {
+const StrategyLabTab = ({ notify = null }) => {
   const [saved, setSaved] = usePersistentState(ALGO_PARAMS_KEY, ALGO_DEFAULTS);
   const p = { ...ALGO_DEFAULTS, ...saved };
   const set = (k, v) => setSaved((prev) => ({ ...ALGO_DEFAULTS, ...prev, [k]: v }));
   const [bt, setBt] = useState({ status: "idle", data: null, error: null });
   const dirty = Object.keys(ALGO_DEFAULTS).some((k) => String(p[k]) !== String(ALGO_DEFAULTS[k]));
 
+  const buildParams = () => ({
+    symbol: p.symbol, interval: p.interval, vixMode: p.vixMode,
+    emaLen: numOr(p.emaLen, ALGO_DEFAULTS.emaLen), atrMult: numOr(p.atrMult, ALGO_DEFAULTS.atrMult),
+    rsiOS: numOr(p.rsiOS, ALGO_DEFAULTS.rsiOS), rsiOB: numOr(p.rsiOB, ALGO_DEFAULTS.rsiOB),
+    rr: numOr(p.rr, ALGO_DEFAULTS.rr), stopAtr: numOr(p.stopAtr, ALGO_DEFAULTS.stopAtr),
+    startHour: numOr(p.startHour, ALGO_DEFAULTS.startHour), endHour: numOr(p.endHour, ALGO_DEFAULTS.endHour),
+    vixMin: numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vixMax: numOr(p.vixMax, ALGO_DEFAULTS.vixMax),
+    qtyPct: numOr(p.qtyPct, ALGO_DEFAULTS.qtyPct),
+  });
+
   const runNow = async () => {
     setBt((prev) => ({ ...prev, status: "loading", error: null }));
     try {
-      const params = {
-        symbol: p.symbol, interval: p.interval, vixMode: p.vixMode,
-        emaLen: numOr(p.emaLen, ALGO_DEFAULTS.emaLen), atrMult: numOr(p.atrMult, ALGO_DEFAULTS.atrMult),
-        rsiOS: numOr(p.rsiOS, ALGO_DEFAULTS.rsiOS), rsiOB: numOr(p.rsiOB, ALGO_DEFAULTS.rsiOB),
-        rr: numOr(p.rr, ALGO_DEFAULTS.rr), stopAtr: numOr(p.stopAtr, ALGO_DEFAULTS.stopAtr),
-        startHour: numOr(p.startHour, ALGO_DEFAULTS.startHour), endHour: numOr(p.endHour, ALGO_DEFAULTS.endHour),
-        vixMin: numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vixMax: numOr(p.vixMax, ALGO_DEFAULTS.vixMax),
-        qtyPct: numOr(p.qtyPct, ALGO_DEFAULTS.qtyPct),
-      };
-      const data = await callDesk("backtest", "", { params });
+      const data = await callDesk("backtest", "", { params: buildParams() });
       setBt({ status: "done", data, error: null });
     } catch (e) {
       setBt({ status: "error", data: null, error: e.message });
     }
+  };
+
+  // --- live signal monitor + forward journal ---
+  // Params re-poll after a short debounce (so typing doesn't spam the API), then every 60s while
+  // the tab is open. Signals are detected server-side on completed bars and journaled to Redis.
+  const [live, setLive] = useState({ status: "idle", data: null, error: null });
+  const [pollSeq, setPollSeq] = useState(0);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const toastRef = useRef(null);
+  const liveParamStr = JSON.stringify(buildParams());
+  const [liveKey, setLiveKey] = useState(liveParamStr);
+  useEffect(() => {
+    const t = setTimeout(() => setLiveKey(liveParamStr), 700);
+    return () => clearTimeout(t);
+  }, [liveParamStr]);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      try {
+        const data = await callDesk("algolive", "", { params: JSON.parse(liveKey) });
+        if (!alive) return;
+        setLive({ status: "done", data, error: null });
+        const sig = data?.state?.signal;
+        if (sig && typeof notify === "function") {
+          const sigId = `${data.state.barTs}|${sig}`;
+          if (toastRef.current !== sigId) {
+            toastRef.current = sigId;
+            notify(`Scalper ${sig.toUpperCase()} setup live on ${JSON.parse(liveKey).symbol}`, "ok");
+          }
+        }
+      } catch (e) {
+        if (alive) setLive((prev) => ({ status: "error", data: prev.data, error: e.message }));
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 60000);
+    return () => { alive = false; clearInterval(iv); };
+  }, [liveKey, pollSeq, notify]);
+
+  const clearJournal = async () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 4000);
+      return;
+    }
+    setConfirmClear(false);
+    try {
+      await callDesk("algolive", "", { action: "clear", params: buildParams() });
+      setPollSeq((n) => n + 1);
+    } catch { /* next poll re-syncs the journal either way */ }
   };
 
   const s = bt.data?.stats, m = bt.data?.meta;
@@ -5565,6 +5617,119 @@ const StrategyLabTab = () => {
           )}
         </Card>
       </div>
+
+      {(() => {
+        const st = live.data?.state;
+        const journal = live.data?.journal;
+        const OS = numOr(p.rsiOS, ALGO_DEFAULTS.rsiOS), OB = numOr(p.rsiOB, ALGO_DEFAULTS.rsiOB);
+        const vMin = numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vMax = numOr(p.vixMax, ALGO_DEFAULTS.vixMax);
+        const sH = numOr(p.startHour, ALGO_DEFAULTS.startHour), eH = numOr(p.endHour, ALGO_DEFAULTS.endHour);
+        const outside = st && st.lowerKC != null && (st.price < st.lowerKC || st.price > st.upperKC);
+        const rsiHit = st && st.rsi != null && (st.rsi < OS || st.rsi > OB);
+        const rows = journal ? [...journal].sort((a, b) => b.signalTs - a.signalTs) : [];
+        const closed = rows.filter((e) => e.pnlPct != null);
+        const openN = rows.filter((e) => e.status === "open").length;
+        const hits = closed.filter((e) => e.status === "target").length;
+        const cum = closed.reduce((s, e) => s + e.pnlPct, 0);
+        const check = (state, label, reading) => (
+          <div className="algo-check" key={label}>
+            <span className={`algo-check-dot ${state}`} />
+            <span className="algo-check-label">{label}</span>
+            <span className="algo-check-read">{reading}</span>
+          </div>
+        );
+        return (
+          <div className="grid g-2" style={{ alignItems: "start" }}>
+            <Card
+              icon={Zap}
+              title="Live signal monitor"
+              sub={`Evaluates completed ${p.interval} bars · auto-refreshes every 60s while this tab is open`}
+              tools={<button className="btn btn-ghost btn-sm" title="Re-check the latest bar now" onClick={() => setPollSeq((n) => n + 1)}><RefreshCw size={12} className={live.status === "idle" || (live.status !== "error" && !live.data) ? "spin" : undefined} /> Refresh</button>}
+            >
+              {!st && live.status !== "error" && <LoadingBlock lines={3} msg="Reading the latest bars…" />}
+              {live.status === "error" && !st && <ErrBlock msg={live.error} onRetry={() => setPollSeq((n) => n + 1)} />}
+              {st && (
+                <>
+                  <div className="algo-hero" style={st.signal ? { borderColor: st.signal === "long" ? "rgba(34,197,94,.45)" : "rgba(239,68,68,.45)" } : undefined}>
+                    <span className="algo-hero-badge" style={{ color: st.signal === "long" ? C.bull : st.signal === "short" ? C.bear : "var(--muted)" }}>
+                      {st.signal === "long" ? "LONG SETUP" : st.signal === "short" ? "SHORT SETUP" : "NO SETUP"}
+                    </span>
+                    <span className="algo-jmeta">
+                      {st.signal
+                        ? `stop ${fmtNum(st.sl, 2)} · target ${fmtNum(st.tp, 2)} · ${algoTime(st.barTs)} bar`
+                        : `last completed bar ${algoTime(st.barTs)} ET · close ${fmtNum(st.price, 2)}`}
+                    </span>
+                  </div>
+                  <div>
+                    {check(outside ? "pass" : "wait", "Keltner band", st.lowerKC == null ? "warming up" : `close ${fmtNum(st.price, 2)} · bands ${fmtNum(st.lowerKC, 2)} – ${fmtNum(st.upperKC, 2)}`)}
+                    {check(rsiHit ? "pass" : "wait", "RSI-14", st.rsi == null ? "warming up" : `${fmtNum(st.rsi, 1)} · needs <${OS} long or >${OB} short`)}
+                    {check(st.vixOK ? "pass" : "fail", "VIX regime", st.vix == null ? "unavailable" : `${fmtNum(st.vix, 2)} · gate ${vMin} – ${vMax}`)}
+                    {check(st.inWindow ? "pass" : "fail", "Session window", `bar ${st.etHour}:${String(st.etMinute).padStart(2, "0")} ET · trades ${sH}:00 → ${eH}:00`)}
+                  </div>
+                  <div style={{ marginTop: 11, fontSize: 11.5, color: "var(--faint)", lineHeight: 1.5 }}>
+                    Signals fire on bar close, never mid-bar. Detection runs while the desk is open — signals that print while it's closed
+                    aren't journaled.
+                  </div>
+                </>
+              )}
+            </Card>
+
+            <Card
+              icon={NotebookPen}
+              title="Forward journal"
+              sub="Every signal the desk saw live, resolved with the backtester's fill model"
+              tools={rows.length > 0 ? (
+                <button className={`btn btn-sm ${confirmClear ? "btn-danger" : "btn-ghost"}`} title="Wipe the forward-test journal" onClick={clearJournal}>
+                  {confirmClear ? "Really clear?" : <><Trash2 size={12} /> Clear</>}
+                </button>
+              ) : null}
+            >
+              {journal === null && live.data && (
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+                  Journal persistence needs the Upstash Redis env vars (<span className="mono">KV_REST_API_URL</span> / <span className="mono">KV_REST_API_TOKEN</span>) —
+                  the same store the archive uses. Signals will still show live above, they just won't be recorded.
+                </div>
+              )}
+              {journal !== null && rows.length === 0 && (
+                <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+                  Nothing journaled yet. When the monitor catches a setup on a completed bar it's logged here with its bracket, then marked
+                  target / stop / flat as later bars resolve it — a live forward test of the strategy.
+                </div>
+              )}
+              {rows.length > 0 && (
+                <>
+                  <div className="algo-journal">
+                    {rows.map((e) => (
+                      <div className="algo-jrow" key={e.id}>
+                        <span className={`algo-side ${e.side}`}>{e.side.toUpperCase()}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, color: "var(--text)" }}>{e.symbol} · {e.interval} · {algoTime(e.signalTs)}</div>
+                          <div className="algo-jmeta">
+                            {e.fillPx == null && e.status === "open" && `signal ${fmtNum(e.signalPx, 2)} · awaiting fill`}
+                            {e.fillPx == null && e.status === "void" && `signal ${fmtNum(e.signalPx, 2)} · fill unavailable`}
+                            {e.fillPx != null && e.status === "open" && `fill ${fmtNum(e.fillPx, 2)} · SL ${fmtNum(e.sl, 2)} · TP ${fmtNum(e.tp, 2)}`}
+                            {e.fillPx != null && e.status !== "open" && `fill ${fmtNum(e.fillPx, 2)} → ${fmtNum(e.exitPx, 2)} · ${algoTime(e.exitTs)}`}
+                          </div>
+                        </div>
+                        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+                          {e.pnlPct != null && <b className="mono" style={{ fontSize: 11.5, color: chgColor(e.pnlPct) }}>{fmtSigned(e.pnlPct, 2, "%")}</b>}
+                          <span className={`algo-jstatus ${e.status}`}>{e.status.toUpperCase()}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 15, marginTop: 11, fontSize: 11.5, color: C.muted, flexWrap: "wrap" }}>
+                    <span>Open <b style={{ color: "var(--text)" }}>{openN}</b></span>
+                    <span>Closed <b style={{ color: "var(--text)" }}>{closed.length}</b></span>
+                    <span>Hit rate <b style={{ color: "var(--text)" }}>{closed.length ? `${fmtNum((hits / closed.length) * 100, 0)}%` : "—"}</b></span>
+                    <span>Cumulative <b className="mono" style={{ color: chgColor(cum) }}>{fmtSigned(cum, 2, "%")}</b></span>
+                  </div>
+                </>
+              )}
+            </Card>
+          </div>
+        );
+      })()}
 
       {bt.data && bt.data.trades.length > 0 && (
         <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · oldest first`}>
@@ -6165,7 +6330,7 @@ export default function Overwatch() {
           />
         );
       case "algo":
-        return <StrategyLabTab />;
+        return <StrategyLabTab notify={notify} />;
       case "charts":
         return <ChartsTab lightMode={lightMode} compact={splitOn} focusSymbol={THESIS_CHART_SYMBOL[instrument] || null} />;
       case "archives":
