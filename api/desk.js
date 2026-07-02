@@ -20,6 +20,20 @@ const SYMBOLS = {
   HG: "COMEX:HG1!",
   BTC: "COINBASE:BTCUSD",
   ETH: "COINBASE:ETHUSD",
+  SMH: "AMEX:SMH",
+  HYG: "AMEX:HYG",
+  // Select Sector SPDR ETFs — the live sector-focus complex.
+  XLK: "AMEX:XLK",
+  XLF: "AMEX:XLF",
+  XLV: "AMEX:XLV",
+  XLE: "AMEX:XLE",
+  XLY: "AMEX:XLY",
+  XLP: "AMEX:XLP",
+  XLI: "AMEX:XLI",
+  XLB: "AMEX:XLB",
+  XLU: "AMEX:XLU",
+  XLRE: "AMEX:XLRE",
+  XLC: "AMEX:XLC",
 };
 
 const SECTORS = [
@@ -853,7 +867,12 @@ const quote = async (symbol) => {
 // Symbols we can get real-time for free: US equities/ETFs via Finnhub's free tier, plus 24/7 crypto
 // (Coinbase feed via the scanner). Everything else — cash indices, futures, rates, FX, commodities —
 // is delayed on free feeds because real-time requires paid exchange entitlements.
-const FINNHUB_RT_SYMBOLS = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA"]);
+const FINNHUB_RT_SYMBOLS = new Set([
+  "SPY", "QQQ", "DIA", "IWM", "SMH", "HYG",
+  // Select Sector SPDR ETFs — Finnhub's free /quote covers US-listed ETFs in real time.
+  "XLK", "XLF", "XLV", "XLE", "XLY", "XLP", "XLI", "XLB", "XLU", "XLRE", "XLC",
+  "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA",
+]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 
 // Real-time US equity/ETF quote from Finnhub's free tier. Returns null (→ fall back) when there's no
