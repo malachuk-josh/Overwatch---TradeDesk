@@ -469,6 +469,16 @@ const calendarDateLabel = (dateIso, { weekday = false } = {}) => {
 const stampNow = () =>
   new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
 
+// Sortable ET calendar-date key (YYYY-MM-DD) for same-day / past-day comparisons.
+const etDateKey = (d = new Date()) => d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+// First price-like number in a free-text level line ("5900 then 5940" → 5900).
+const parseFirstPrice = (text) => {
+  const m = String(text || "").replace(/,/g, "").match(/\d{1,6}(?:\.\d+)?/);
+  const n = m ? Number(m[0]) : null;
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 const extractTime = (value) => String(value || "").match(/\b\d{1,2}:\d{2}\s*(?:AM|PM)(?:\s*ET)?\b/i)?.[0]?.replace(/\s*ET$/i, " ET") || "";
 
 const archiveStamp = (entry = {}) => {
@@ -3064,6 +3074,74 @@ const TradeStructureCard = ({ structures, bias }) => {
   );
 };
 
+// Trade journal — log the trade actually taken against a thesis (entry/exit/size/note). P/L is
+// (exit − entry) × size, sign-flipped for shorts; stored on the archive entry and rolled up in
+// the Library scoreboard.
+const TradeLogCard = ({ entry, onLogTrade }) => {
+  const t = entry?._trade;
+  const [editing, setEditing] = useState(false);
+  const [side, setSide] = useState(t?.side || "long");
+  const [entryPx, setEntryPx] = useState(t?.entry ?? "");
+  const [exitPx, setExitPx] = useState(t?.exit ?? "");
+  const [size, setSize] = useState(t?.size ?? "1");
+  const [note, setNote] = useState(t?.note || "");
+  if (!entry?._id) return null;
+  const pnl = (Number(exitPx) - Number(entryPx)) * (Number(size) || 0) * (side === "short" ? -1 : 1);
+  const valid = Number(entryPx) > 0 && Number(exitPx) > 0 && Number(size) > 0;
+  const save = () => {
+    onLogTrade(entry._id, { side, entry: Number(entryPx), exit: Number(exitPx), size: Number(size), note: note.trim(), pnl, ts: Date.now() });
+    setEditing(false);
+  };
+  if (!t && !editing) {
+    return (
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 15px" }}>
+        <NotebookPen size={14} color={C.brass} />
+        <span style={{ fontSize: 12.5, color: C.muted, flex: 1 }}>Took this trade? Log it to grade your own execution in the Library scoreboard.</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Log trade</button>
+      </div>
+    );
+  }
+  if (t && !editing) {
+    return (
+      <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 15px", flexWrap: "wrap" }}>
+        <NotebookPen size={14} color={C.brass} />
+        <span style={{ fontSize: 12.5, color: "var(--text)", fontWeight: 600 }}>
+          {t.side === "short" ? "Short" : "Long"} {fmtNum(t.size, 2)} @ {fmtNum(t.entry, 2)} → {fmtNum(t.exit, 2)}
+        </span>
+        <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: t.pnl >= 0 ? C.bull : C.bear }}>{t.pnl >= 0 ? "+" : "−"}{fmtUsd(Math.abs(t.pnl), 2)}</span>
+        {t.note && <span style={{ fontSize: 12, color: C.muted, flex: 1, minWidth: 120 }}>{t.note}</span>}
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
+          <button className="btn btn-ghost btn-sm" title="Remove trade log" onClick={() => onLogTrade(entry._id, null)}><Trash2 size={12} /></button>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <Card icon={NotebookPen} title="Log trade" sub="Record what you actually did against this thesis">
+      <div className="seg" style={{ maxWidth: 220, marginBottom: 12 }}>
+        {["long", "short"].map((s) => (
+          <button key={s} className={`${side === s ? "on" : ""} ${s === "long" ? "sg-bull" : "sg-bear"}`} onClick={() => setSide(s)}>{s}</button>
+        ))}
+      </div>
+      <div className="grid g-3" style={{ gap: 10 }}>
+        <NumField label="Entry" value={entryPx} placeholder="fill price" onChange={setEntryPx} />
+        <NumField label="Exit" value={exitPx} placeholder="fill price" onChange={setExitPx} />
+        <NumField label="Size" hint="shares / contracts×100" value={size} placeholder="1" onChange={setSize} />
+      </div>
+      <div className="lab-field">
+        <span className="lab-label">Note — optional</span>
+        <textarea className="bd-ta" style={{ minHeight: 54 }} placeholder="e.g. took the retest, out on the theta clock" value={note} onChange={(e) => setNote(e.target.value)} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+        <button className="btn btn-brass" disabled={!valid} onClick={save}><Check size={14} /> Save trade</button>
+        <button className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
+        {valid && <span className="mono" style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: pnl >= 0 ? C.bull : C.bear }}>P/L {pnl >= 0 ? "+" : "−"}{fmtUsd(Math.abs(pnl), 2)}</span>}
+      </div>
+    </Card>
+  );
+};
+
 /* ---------- small shared tool UI primitives ---------- */
 
 const NumField = ({ label, hint, value, onChange, step = "any", suffix, placeholder }) => (
@@ -3506,7 +3584,7 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   // "Inputs changed — regenerate": compare the live controls against the inputs the displayed
@@ -3802,6 +3880,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
               </div>
             </Card>
             {(t._tradeStructures || []).length > 0 && <TradeStructureCard structures={t._tradeStructures} bias={t.bias} />}
+            <TradeLogCard key={t._id || "trade"} entry={t} onLogTrade={onLogTrade} />
             <div className="grid g-2">
               <div className="guard g-red"><b><AlertTriangle size={12} /> Thesis invalidation</b>{t.invalidation}</div>
               <div className="guard g-amber"><b><Shield size={12} /> Stand-aside conditions</b>{t.standAside}</div>
@@ -4236,6 +4315,83 @@ const CloudNewsletterList = ({ inSplit = false }) => {
   );
 };
 
+// Library scoreboard — rolls graded thesis calls and logged trades into hit rates and P/L, so the
+// library answers "are my calls any good?" instead of just storing them.
+const OUTCOME_META = {
+  hit: { label: "HIT", color: "#22C55E" },
+  miss: { label: "MISS", color: "#EF4444" },
+  flat: { label: "FLAT", color: "#94A3B8" },
+};
+const ThesisScoreboard = ({ history }) => {
+  const graded = history.filter((e) => (!e._type || e._type === "thesis") && e._outcome);
+  const trades = history.filter((e) => e._trade && Number.isFinite(e._trade.pnl));
+  if (!graded.length && !trades.length) return null;
+  const hitRate = (list) => {
+    const h = list.filter((e) => e._outcome.result === "hit").length;
+    const m = list.filter((e) => e._outcome.result === "miss").length;
+    return h + m ? Math.round((h / (h + m)) * 100) : null;
+  };
+  const overall = hitRate(graded);
+  const byBias = ["bullish", "bearish", "neutral"]
+    .map((b) => ({ key: b, list: graded.filter((e) => e.bias === b) }))
+    .filter((g) => g.list.length);
+  const convBand = (c) => (c >= 8 ? "8–10" : c >= 5 ? "5–7" : "1–4");
+  const byConv = ["8–10", "5–7", "1–4"]
+    .map((band) => ({ key: `conviction ${band}`, list: graded.filter((e) => Number.isFinite(Number(e.conviction)) && convBand(Number(e.conviction)) === band) }))
+    .filter((g) => g.list.length);
+  const byInst = Object.values(graded.reduce((acc, e) => {
+    const sym = e._instrument || e.instrument || "—";
+    (acc[sym] ||= { key: sym, list: [] }).list.push(e);
+    return acc;
+  }, {})).sort((a, b) => b.list.length - a.list.length).slice(0, 4);
+  const totalPnl = trades.reduce((s, e) => s + e._trade.pnl, 0);
+  const wins = trades.filter((e) => e._trade.pnl > 0).length;
+  const rateColor = (r) => (r == null ? C.muted : r >= 55 ? C.bull : r <= 45 ? C.bear : C.brass);
+  const Row = ({ group }) => {
+    const r = hitRate(group.list);
+    return (
+      <div className="sb-row">
+        <span className="sb-row-k">{group.key}</span>
+        <span className="sb-row-n">{group.list.length} call{group.list.length === 1 ? "" : "s"}</span>
+        <span className="sb-row-v" style={{ color: rateColor(r) }}>{r == null ? "all flat" : `${r}%`}</span>
+      </div>
+    );
+  };
+  return (
+    <Card icon={Crosshair} title="Desk scoreboard" sub="Graded calls and logged trades — the feedback loop">
+      <div className="sb-tiles">
+        <div className="sb-tile">
+          <span>Calls graded</span>
+          <b>{graded.length}</b>
+        </div>
+        <div className="sb-tile">
+          <span>Hit rate</span>
+          <b style={{ color: rateColor(overall) }}>{overall == null ? "—" : `${overall}%`}</b>
+          <small>flat pushes excluded</small>
+        </div>
+        <div className="sb-tile">
+          <span>Trades logged</span>
+          <b>{trades.length}</b>
+          {trades.length > 0 && <small>{wins} win{wins === 1 ? "" : "s"}</small>}
+        </div>
+        <div className="sb-tile">
+          <span>Trade P/L</span>
+          <b style={{ color: trades.length ? (totalPnl >= 0 ? C.bull : C.bear) : C.muted }}>
+            {trades.length ? `${totalPnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(totalPnl), 0)}` : "—"}
+          </b>
+        </div>
+      </div>
+      {(byBias.length > 0 || byConv.length > 0 || byInst.length > 0) && (
+        <div className="sb-breakdown">
+          {byBias.length > 0 && <div className="sb-col"><div className="sb-col-h">By bias</div>{byBias.map((g) => <Row group={g} key={g.key} />)}</div>}
+          {byConv.length > 0 && <div className="sb-col"><div className="sb-col-h">By conviction</div>{byConv.map((g) => <Row group={g} key={g.key} />)}</div>}
+          {byInst.length > 0 && <div className="sb-col"><div className="sb-col-h">By instrument</div>{byInst.map((g) => <Row group={g} key={g.key} />)}</div>}
+        </div>
+      )}
+    </Card>
+  );
+};
+
 const ArchiveTab = ({
   archiveHistory,
   viewing,
@@ -4267,6 +4423,7 @@ const ArchiveTab = ({
       >
         {journalOpen && <CloudNewsletterList inSplit={inSplit} />}
       </Card>
+      <ThesisScoreboard history={archiveHistory} />
       <Card
         icon={History}
         title="Thesis Library"
@@ -4297,6 +4454,16 @@ const ArchiveTab = ({
                 <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
                 <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
+                {entry._outcome && OUTCOME_META[entry._outcome.result] && (
+                  <span className="chip" title={`Graded ${fmtSigned(entry._outcome.changePct, 2, "%")} vs the call`} style={{ color: OUTCOME_META[entry._outcome.result].color, borderColor: OUTCOME_META[entry._outcome.result].color + "66", flex: "none", fontSize: 10 }}>
+                    {OUTCOME_META[entry._outcome.result].label}
+                  </span>
+                )}
+                {entry._trade && Number.isFinite(entry._trade.pnl) && (
+                  <span className="mono chip" style={{ flex: "none", fontSize: 10, color: entry._trade.pnl >= 0 ? C.bull : C.bear, borderColor: (entry._trade.pnl >= 0 ? C.bull : C.bear) + "66" }}>
+                    {entry._trade.pnl >= 0 ? "+" : "−"}${fmtNum(Math.abs(entry._trade.pnl), 0)}
+                  </span>
+                )}
                 <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
                 <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
                   {entry.headline || t?.headline || "—"}
@@ -4962,6 +5129,43 @@ export default function Overwatch() {
     // Set up once per Pulse entry; latest state is read from the ref inside maybeRefresh.
   }, [storageReady, tab]);
 
+  /* Outcome grading — once a thesis's session date has passed, grade its directional call against
+     the instrument's current price (first sync of a later ET day). Deterministic, no API cost. */
+  useEffect(() => {
+    if (!storageReady || !market.data) return;
+    const today = etDateKey();
+    let changed = false;
+    const graded = archiveHistory.map((e) => {
+      if (e._type && e._type !== "thesis") return e;
+      if (e._outcome || !(e._spotAtGen > 0)) return e;
+      const key = e._dateKey || (e._ts ? etDateKey(new Date(e._ts)) : null);
+      if (!key || key >= today) return e;
+      const spot = deskLiveContext(market.data, points.data, e._instrument || e.instrument).spot;
+      if (!(spot > 0)) return e;
+      const changePct = ((spot - e._spotAtGen) / e._spotAtGen) * 100;
+      // Directional grade: did price move the called way? ±0.2% is a flat push; a neutral call
+      // is a hit when the move stayed inside ±0.35%.
+      const result = e.bias === "neutral"
+        ? (Math.abs(changePct) <= 0.35 ? "hit" : "miss")
+        : Math.abs(changePct) <= 0.2 ? "flat"
+          : (changePct > 0) === (e.bias === "bullish") ? "hit" : "miss";
+      changed = true;
+      return { ...e, _outcome: { gradedAt: Date.now(), refSpot: e._spotAtGen, evalSpot: spot, changePct, result } };
+    });
+    if (changed) setArchiveHistory(graded);
+    // archiveHistory intentionally not a dep — this only reacts to fresh prices; grading writes back once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageReady, market.data, points.data]);
+
+  /* Trade journal — attach (or clear) a logged trade on an archived thesis, mirrored into any
+     live/viewing copy of the same entry. */
+  const logTrade = (id, trade) => {
+    setArchiveHistory((h) => h.map((e) => (e._id === id ? { ...e, _trade: trade || undefined } : e)));
+    setThesis((s) => (s.data && s.data._id === id ? { ...s, data: { ...s.data, _trade: trade || undefined } } : s));
+    setViewing((v) => (v && v._id === id ? { ...v, _trade: trade || undefined } : v));
+    notify(trade ? "Trade logged to the library" : "Trade log removed", "ok");
+  };
+
   const generateThesis = async () => {
     setViewing(null);
     setThesis((s) => ({ ...s, status: "loading", error: null }));
@@ -5001,6 +5205,8 @@ export default function Overwatch() {
         timingNote: data.timingNote || timing.timingNote,
         _id: uid(),
         _date: dateShort(),
+        _dateKey: etDateKey(),
+        _spotAtGen: focusSpot || null,
         _time: timing.generatedAtShort || stampNow(),
         _ts: Date.now(),
         _generatedAt: timing.generatedAt,
@@ -5088,7 +5294,7 @@ export default function Overwatch() {
             lean={lean} setLean={setLean}
             risk={risk} setRisk={setRisk}
             notes={notes} setNotes={setNotes}
-            thesis={thesis} onGenerate={generateThesis}
+            thesis={thesis} onGenerate={generateThesis} onLogTrade={logTrade}
             history={thesisHistory} viewing={viewing} setViewing={setViewing}
             onDeleteHist={deleteArchiveEntry} anyData={anyData}
             deskTools={deskTools} setDeskTools={setDeskTools}
