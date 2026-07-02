@@ -1635,11 +1635,11 @@ const lmDecimals = (symbol, tickers) => {
 // Five mini daily candlesticks for the level-map header (today's partial candle is the last one).
 const CandleStrip = ({ candles, decimals = 2, live = false }) => {
   if (!candles?.length) return null;
-  const W = 96, H = 34, n = candles.length;
+  const W = 132, H = 56, n = candles.length, pad = 5;
   const min = Math.min(...candles.map((c) => c.l));
   const max = Math.max(...candles.map((c) => c.h));
-  const y = (v) => 3 + ((max - v) / (max - min || 1)) * (H - 6);
-  const bw = 7, gap = (W - n * bw) / n;
+  const y = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
+  const bw = 12, gap = (W - n * bw) / n;
   return (
     <svg width={W} height={H} className="lm-candles" aria-label={`Last ${n} daily candles`}>
       {candles.map((c, i) => {
@@ -1651,8 +1651,8 @@ const CandleStrip = ({ candles, decimals = 2, live = false }) => {
         return (
           <g key={c.t}>
             <title>{`${dateLabel} — O ${fmtNum(c.o, decimals)} H ${fmtNum(c.h, decimals)} L ${fmtNum(c.l, decimals)} C ${fmtNum(c.c, decimals)}`}</title>
-            <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1" />
-            <rect x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 1.5)} fill={col} rx="1" opacity={i === n - 1 && live ? 1 : 0.8} />
+            <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1.4" />
+            <rect x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 2)} fill={col} rx="1.5" opacity={i === n - 1 && live ? 1 : 0.82} />
           </g>
         );
       })}
