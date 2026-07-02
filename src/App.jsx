@@ -5492,8 +5492,8 @@ export default function Overwatch() {
   // Ordered to mirror the desk workflow: read continuity in the Library first, establish the regime on
   // Market Pulse, screen the News, confirm event risk on the Calendar, then build in the Thesis Lab.
   const TABS = [
-    { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !hiddenSymbols.has(t.symbol)).length || null },
+    { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
