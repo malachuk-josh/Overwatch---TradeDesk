@@ -1753,6 +1753,12 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
       tools={
         <span className="lm-tools">
           <LevelMapCandles symbol={active} tickers={tickers} />
+          {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
+            <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
+              <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
+              <small style={{ color: chgColor(liveT.change) }}>{fmtSigned(liveT.change, lmDecimals(active, tickers))}</small>
+            </span>
+          )}
           <select className="bd-in lm-select" value={active} onChange={(e) => setActive(e.target.value)} title="Map any instrument — grouped by type">
             {!symbols.includes(active) && <option value={active}>{active}</option>}
             {LM_PICKER_GROUPS.map(([label, test]) => {
@@ -4988,8 +4994,9 @@ const ArchiveTab = ({
    SETTINGS DRAWER + TOASTS
    ================================================================ */
 
-const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, storageOk, notify, auth }) => {
+const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, onResetAll, storageOk, notify, auth }) => {
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
   if (!open) return null;
@@ -5070,6 +5077,20 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
             <button className="btn btn-sm" onClick={() => setConfirmClear(false)}>Keep it</button>
           </div>
         )}
+
+        <div style={{ borderTop: "1px solid var(--line)", margin: "22px 0 18px" }} />
+        <span className="lab-label">Reset desk</span>
+        {!confirmReset ? (
+          <button className="btn btn-ghost btn-sm" onClick={() => setConfirmReset(true)}><RotateCcw size={13} /> Reset all to defaults</button>
+        ) : (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button className="btn btn-sm btn-danger" onClick={() => onResetAll?.()}><AlertTriangle size={13} /> Confirm — reset everything</button>
+            <button className="btn btn-sm" onClick={() => setConfirmReset(false)}>Cancel</button>
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: C.muted, marginTop: 7, lineHeight: 1.5 }}>
+          Restores every toggle, filter, watchlist and layout to desk defaults and reloads. Your saved thesis archive is kept.
+        </div>
 
         <div style={{ borderTop: "1px solid var(--line)", margin: "22px 0 14px" }} />
         <div className="mono" style={{ fontSize: 10.5, color: C.muted, lineHeight: 1.8, letterSpacing: ".03em" }}>
@@ -5856,6 +5877,32 @@ export default function Overwatch() {
     setViewing(null);
     notify("Archive cleared", "ok");
   };
+
+  // Master reset: every feature toggle, filter, watchlist and layout back to desk defaults. Wipes all
+  // persisted UI keys (but keeps the thesis archive), pushes defaults to the account when signed in so
+  // a re-hydrate can't restore old settings, then reloads so every persisted-state hook re-inits clean.
+  const resetAll = useCallback(async () => {
+    try {
+      if (auth.signedIn) {
+        await saveUserSettings(auth.getToken, {
+          watchlist: DEFAULT_WATCHLIST,
+          instrument: DEFAULT_THESIS_INSTRUMENT,
+          weights: DEFAULT_WEIGHTS,
+          lean: "auto",
+          risk: "balanced",
+          deskTools: DEFAULT_DESK_TOOLS,
+          layout: { tab: "pulse", splitTab: null, lightMode: false },
+        }).catch(() => {});
+      }
+      const drop = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith("overwatch:") && k !== HISTORY_KEY) drop.push(k);
+      }
+      drop.forEach((k) => localStorage.removeItem(k));
+    } catch { /* storage unavailable — the state resets below still apply before reload */ }
+    window.location.reload();
+  }, [auth.signedIn, auth.getToken]);
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
   const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
@@ -6043,7 +6090,7 @@ export default function Overwatch() {
       <SettingsDrawer
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
         watchlist={watchlist} setWatchlist={setWatchlist}
-        onClearHistory={clearHistory} storageOk={storageOk} notify={notify}
+        onClearHistory={clearHistory} onResetAll={resetAll} storageOk={storageOk} notify={notify}
         auth={auth}
       />
       <Toasts items={toasts} />
