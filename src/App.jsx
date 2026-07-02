@@ -2565,8 +2565,8 @@ const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
     <div className="breadth-dist" aria-label="Sector breadth distribution">
       <div className="breadth-dist-track">
         {counted === 0
-          ? <span style={{ width: "100%", background: "var(--panel3)" }} />
-          : segments.map((segment) => (
+          ? <span className="breadth-dist-empty" style={{ width: "100%" }} />
+          : segments.filter((s) => s.value > 0).map((segment) => (
               <span
                 key={segment.key}
                 title={`${segment.label}: ${segment.value} sector${segment.value === 1 ? "" : "s"}`}
@@ -2576,11 +2576,10 @@ const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
       </div>
       <div className="breadth-dist-legend">
         {segments.map((s) => (
-          <span key={s.key} className={`breadth-dist-key${s.value ? "" : " empty"}`} title={`${s.label}: ${s.value}`}>
-            <i style={{ background: s.color }} />
-            <span>{s.short}</span>
+          <div key={s.key} className={`bdk${s.value ? "" : " empty"}`} title={`${s.label}: ${s.value} sector${s.value === 1 ? "" : "s"}`}>
+            <span className="bdk-name"><i style={{ background: s.color }} />{s.short}</span>
             <b>{s.value}</b>
-          </span>
+          </div>
         ))}
       </div>
     </div>
