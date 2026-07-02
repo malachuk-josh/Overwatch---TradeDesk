@@ -6489,6 +6489,10 @@ export default function Overwatch() {
             <div className="bd-title">OVERWATCH <em>//</em> DAILY BIAS DESK</div>
             <div className="bd-sub">{dateShort()} · Overwatch Intelligence</div>
           </div>
+          {/* Below 760px the avatar renders here, on the title's own row, right-aligned — so it sits
+              directly above the settings button (which stays in the row below) instead of competing
+              for space with the clock/session/sync/theme cluster and getting wrapped onto its own line. */}
+          {winW <= 760 && CLERK_ENABLED && <span className="bd-logo-avatar"><AuthControl /></span>}
         </div>
         <div className="bd-hright">
           <span className="bd-clock">{clock}<span>ET</span></span>
@@ -6502,10 +6506,8 @@ export default function Overwatch() {
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
-          <span className="bd-acct-stack">
-            {CLERK_ENABLED && <AuthControl />}
-            <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
-          </span>
+          <button className="btn btn-ghost" onClick={() => setSettingsOpen(true)} title="Desk settings"><Settings size={16} /></button>
+          {winW > 760 && CLERK_ENABLED && <AuthControl />}
         </div>
       </header>
 
