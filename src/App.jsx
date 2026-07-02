@@ -1674,7 +1674,12 @@ const CandleStrip = ({ candles, decimals = 2, live = false }) => {
           <g key={c.t}>
             <title>{`${dateLabel} — O ${fmtNum(c.o, decimals)} H ${fmtNum(c.h, decimals)} L ${fmtNum(c.l, decimals)} C ${fmtNum(c.c, decimals)}`}</title>
             <line x1={x} x2={x} y1={y(c.h)} y2={y(c.l)} stroke={col} strokeWidth="1.4" />
-            <rect x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 2)} fill={col} rx="1.5" opacity={i === n - 1 && live ? 1 : 0.82} />
+            <rect
+              className={i === n - 1 && live ? "lm-candle-live" : undefined}
+              style={i === n - 1 && live ? { "--candle-glow": col } : undefined}
+              x={x - bw / 2} y={top} width={bw} height={Math.max(bot - top, 2)} fill={col} rx="1.5"
+              opacity={i === n - 1 && live ? 1 : 0.82}
+            />
           </g>
         );
       })}
