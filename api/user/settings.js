@@ -4,6 +4,17 @@ import { json, redisCmd, authUserId, kvUrl, kvToken } from "../_userStore.js";
 // authenticated Clerk user id in Upstash. Signed-out clients never reach here — they keep using
 // browser storage — so this endpoint always requires a valid Clerk session token.
 
+// Persisted layout prefs — active tab, split-pane tab, theme — so the desk restores across devices.
+const TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "charts"];
+const pickLayout = (layout) => {
+  if (!layout || typeof layout !== "object") return null;
+  return {
+    tab: TAB_IDS.includes(layout.tab) ? layout.tab : null,
+    splitTab: TAB_IDS.includes(layout.splitTab) ? layout.splitTab : null,
+    lightMode: typeof layout.lightMode === "boolean" ? layout.lightMode : null,
+  };
+};
+
 // Only these fields are persisted, so a client can't stuff arbitrary data into the record.
 const pickSettings = (body) => ({
   watchlist: Array.isArray(body.watchlist) ? body.watchlist : [],
@@ -12,6 +23,7 @@ const pickSettings = (body) => ({
   lean: typeof body.lean === "string" ? body.lean : null,
   risk: typeof body.risk === "string" ? body.risk : null,
   deskTools: body.deskTools && typeof body.deskTools === "object" ? body.deskTools : null,
+  layout: pickLayout(body.layout),
   updatedAt: Date.now(),
 });
 
