@@ -2576,7 +2576,7 @@ const BreadthDistribution = ({ distribution = {}, total = 11 }) => {
       </div>
       <div className="breadth-dist-legend">
         {segments.map((s) => (
-          <div key={s.key} className={`bdk${s.value ? "" : " empty"}`} title={`${s.label}: ${s.value} sector${s.value === 1 ? "" : "s"}`}>
+          <div key={s.key} className={`bdk${s.value ? "" : " bdk-empty"}`} title={`${s.label}: ${s.value} sector${s.value === 1 ? "" : "s"}`}>
             <span className="bdk-name"><i style={{ background: s.color }} />{s.short}</span>
             <b>{s.value}</b>
           </div>
