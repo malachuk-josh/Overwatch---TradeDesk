@@ -22,6 +22,8 @@ const SYMBOLS = {
   ETH: "COINBASE:ETHUSD",
   SMH: "AMEX:SMH",
   HYG: "AMEX:HYG",
+  TLT: "NASDAQ:TLT",
+  USO: "AMEX:USO",
   // Select Sector SPDR ETFs — the live sector-focus complex.
   XLK: "AMEX:XLK",
   XLF: "AMEX:XLF",
@@ -868,7 +870,7 @@ const quote = async (symbol) => {
 // (Coinbase feed via the scanner). Everything else — cash indices, futures, rates, FX, commodities —
 // is delayed on free feeds because real-time requires paid exchange entitlements.
 const FINNHUB_RT_SYMBOLS = new Set([
-  "SPY", "QQQ", "DIA", "IWM", "SMH", "HYG",
+  "SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "TLT", "USO",
   // Select Sector SPDR ETFs — Finnhub's free /quote covers US-listed ETFs in real time.
   "XLK", "XLF", "XLV", "XLE", "XLY", "XLP", "XLI", "XLB", "XLU", "XLRE", "XLC",
   "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA",
