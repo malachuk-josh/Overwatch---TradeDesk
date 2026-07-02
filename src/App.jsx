@@ -4365,7 +4365,8 @@ const CloudNewsletterList = ({ inSplit = false }) => {
   const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
-  const collapsedCount = useIsDesktop() ? 5 : 3;
+  const isDesktop = useIsDesktop();
+  const collapsedCount = isDesktop ? 7 : 3;
 
   useEffect(() => {
     fetch("/api/archive?limit=50")
@@ -4464,7 +4465,7 @@ const CloudNewsletterList = ({ inSplit = false }) => {
           </div>
         ))}
       </div>
-      {!query && filtered.length > collapsedCount && (
+      {!isDesktop && !query && filtered.length > collapsedCount && (
         <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
           {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - collapsedCount} more</>}
         </button>
@@ -4568,7 +4569,8 @@ const ArchiveTab = ({
   const [expanded, setExpanded] = useState(false);
   const [journalOpen, setJournalOpen] = usePersistentState("overwatch:sec:journal", true);
   const [libraryOpen, setLibraryOpen] = usePersistentState("overwatch:sec:library", true);
-  const collapsedCount = useIsDesktop() ? 5 : 3;
+  const isDesktop = useIsDesktop();
+  const collapsedCount = isDesktop ? 7 : 3;
   const query = q.trim().toLowerCase();
   const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
     const t = entry._type === "newsletter" ? entry._thesis : entry;
@@ -4646,7 +4648,7 @@ const ArchiveTab = ({
             );
           })}
         </div>
-        {!query && filteredHistory.length > collapsedCount && (
+        {!isDesktop && !query && filteredHistory.length > collapsedCount && (
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
             {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - collapsedCount} more</>}
           </button>
