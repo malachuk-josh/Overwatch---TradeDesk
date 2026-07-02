@@ -1719,7 +1719,7 @@ const LevelMapCandles = ({ symbol, tickers }) => {
   );
 };
 
-const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = false }) => {
+const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
   // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
   const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
   const active = pref.sym || defaultSymbol;
@@ -1749,7 +1749,7 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, reorderable = 
   const ohlc = period === "w" ? (fetchedData?.ohlc || null) : ohlcForSymbol(tickers, active);
   return (
     <Card
-      icon={reorderable ? GripVertical : Crosshair}
+      icon={Crosshair}
       title={`${active} level map`}
       sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
       tools={
@@ -1937,25 +1937,6 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
     return [...set].filter((k) => SNAP_HIDEABLE.includes(k));
   }), [setHiddenGroups]);
   const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
-  // Level-map card order (drag-to-reorder). Persist the original-index order so each card keeps its own
-  // chosen ticker (stored per storeKey d0/d1/d2) while the user rearranges their left-to-right position.
-  const [lmOrder, setLmOrder] = usePersistentState("overwatch:lm:order", LEVEL_MAP_DEFAULTS.map((_, i) => i));
-  const [lmDragPos, setLmDragPos] = useState(null);
-  const [lmOverPos, setLmOverPos] = useState(null);
-  const lmSafeOrder = useMemo(() => {
-    const base = LEVEL_MAP_DEFAULTS.map((_, i) => i);
-    return Array.isArray(lmOrder) && lmOrder.length === base.length && base.every((i) => lmOrder.includes(i)) ? lmOrder : base;
-  }, [lmOrder]);
-  const moveLm = useCallback((from, to) => {
-    if (from == null || to == null || from === to) return;
-    setLmOrder((prev) => {
-      const base = LEVEL_MAP_DEFAULTS.map((_, i) => i);
-      const next = Array.isArray(prev) && prev.length === base.length && base.every((i) => prev.includes(i)) ? [...prev] : base;
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
-      return next;
-    });
-  }, [setLmOrder]);
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
   // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
@@ -2140,25 +2121,9 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
         </button>
         {levelsOpen && (
           <div style={{ padding: "0 12px 12px" }}>
-            <div className="grid g-data pulse-levels-desktop">
-              {lmSafeOrder.map((origIdx, pos) => (
-                <div
-                  key={origIdx}
-                  className={`lm-slot${lmDragPos === pos ? " dragging" : ""}${lmOverPos === pos && lmDragPos !== null && lmDragPos !== pos ? " over" : ""}`}
-                  draggable
-                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setLmDragPos(pos); }}
-                  onDragOver={(e) => { e.preventDefault(); if (lmOverPos !== pos) setLmOverPos(pos); }}
-                  onDrop={(e) => { e.preventDefault(); moveLm(lmDragPos, pos); setLmDragPos(null); setLmOverPos(null); }}
-                  onDragEnd={() => { setLmDragPos(null); setLmOverPos(null); }}
-                >
-                  <LevelMapCard
-                    defaultSymbol={LEVEL_MAP_DEFAULTS[origIdx]}
-                    storeKey={`d${origIdx}`}
-                    points={points}
-                    tickers={levelTickers}
-                    reorderable
-                  />
-                </div>
+            <div className="grid g-data pulse-levels-desktop" style={{ alignItems: "start" }}>
+              {LEVEL_MAP_DEFAULTS.map((sym, i) => (
+                <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} />
               ))}
             </div>
             <div className="pulse-levels-mobile">
