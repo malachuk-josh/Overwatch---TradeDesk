@@ -2843,7 +2843,15 @@ let _rotationClientCache = null;
 const SectorRotation = () => {
   const [state, setState] = useState({ status: "loading", data: null });
   const [focus, setFocus] = useState(null);
+  const [hidden, setHidden] = useState(() => new Set());
   const [nonce, setNonce] = useState(0);
+  const toggleQuad = (key) =>
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   useEffect(() => {
     let dead = false;
     if (_rotationClientCache && Date.now() - _rotationClientCache.ts < 10 * 60 * 1000) {
@@ -2866,19 +2874,29 @@ const SectorRotation = () => {
     return <ErrBlock msg="Sector rotation history is unavailable right now." onRetry={() => { _rotationClientCache = null; setNonce((n) => n + 1); }} />;
 
   const { sectors, counts, read, weeks } = state.data;
-  const focused = focus ? sectors.find((s) => s.symbol === focus) : null;
+  const visibleSectors = sectors.filter((s) => !hidden.has(s.quadrant));
+  const focusedRaw = focus ? sectors.find((s) => s.symbol === focus) : null;
+  const focused = focusedRaw && !hidden.has(focusedRaw.quadrant) ? focusedRaw : null;
   return (
     <div className="rrg">
       <div className="rrg-legend">
         {Object.entries(RRG_QUADRANTS).map(([key, q]) => (
-          <span key={key} className="rrg-key" style={{ "--rrg-c": q.color }} title={q.blurb}>
+          <button
+            key={key}
+            type="button"
+            className={`rrg-key${hidden.has(key) ? " off" : ""}`}
+            style={{ "--rrg-c": q.color }}
+            title={`${q.blurb} — tap to ${hidden.has(key) ? "show" : "hide"}`}
+            aria-pressed={!hidden.has(key)}
+            onClick={() => toggleQuad(key)}
+          >
             <i style={{ background: q.color }} />{q.label}<b>{counts?.[key] ?? 0}</b>
-          </span>
+          </button>
         ))}
       </div>
-      <RotationGraph sectors={sectors} focus={focus} onFocus={setFocus} />
+      <RotationGraph sectors={visibleSectors} focus={focus} onFocus={setFocus} />
       <div className="rrg-chips">
-        {sectors.map((s) => (
+        {visibleSectors.map((s) => (
           <button
             key={s.symbol}
             className={`rrg-chip${focus === s.symbol ? " on" : ""}`}
@@ -5534,10 +5552,10 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
 // TradingView strategy one-for-one and the replay itself runs server-side (`backtest` operation).
 const ALGO_PARAMS_KEY = "overwatch:algo:params";
 const ALGO_DEFAULTS = {
-  symbol: "SPY", interval: "15m",
+  symbol: "SPY", interval: "1h",
   emaLen: 21, atrMult: 2.5, rsiOS: 30, rsiOB: 70,
-  rr: 3, stopAtr: 2, startHour: 11, endHour: 16,
-  vixMin: 15, vixMax: 40, qtyPct: 10, vixMode: "sameday",
+  rr: 3, stopAtr: 1, startHour: 11, endHour: 16,
+  vixMin: 10, vixMax: 40, qtyPct: 10, vixMode: "sameday",
 };
 const ALGO_SYMBOL_GROUPS = [
   ["Index ETFs", ["SPY", "QQQ", "DIA", "IWM", "SMH"]],
