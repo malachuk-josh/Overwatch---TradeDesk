@@ -985,15 +985,15 @@ const primeFinnhubQuotes = async (symbols) => {
   return out;
 };
 
-// Last 10 daily OHLC candles for one symbol (includes today's partial candle during the session).
-// Pull ~1 month so weekends/holidays still leave 10 completed trading sessions.
+// Last 5 daily OHLC candles for one symbol (includes today's partial candle during the session).
+// Pull ~15 calendar days so weekends/holidays still leave 5 completed trading sessions.
 const fetchHistory = async (symbol) => {
   if (!symbol || typeof symbol !== "string") return null;
   try {
     const sym = symbol.toUpperCase();
     const ysym = YAHOO_SYMBOLS[sym] || sym;
     const scale = YAHOO_SCALE[sym] || 1;
-    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=1mo&interval=1d`);
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=15d&interval=1d`);
     const result = payload?.chart?.result?.[0];
     const ts = result?.timestamp || [];
     const bars = result?.indicators?.quote?.[0] || {};
@@ -1001,7 +1001,7 @@ const fetchHistory = async (symbol) => {
       .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
       .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
       .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
-      .slice(-10);
+      .slice(-5);
     return candles.length ? { symbol: sym, candles } : null;
   } catch {
     return null;
