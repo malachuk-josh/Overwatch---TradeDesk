@@ -23,6 +23,17 @@
     <!-- iOS home-screen icon (iOS ignores the SVG favicon + manifest for "Add to Home Screen") -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
     <link rel="manifest" href="/site.webmanifest" />
+    <!-- Warm the DNS + TLS handshake to TradingView's hosts up front so the embedded charts and
+         economic calendar (loaded lazily when those tabs open) don't pay a cold connection on top
+         of their download + iframe boot. preconnect for the origins actually used; dns-prefetch as a
+         cheap fallback for engines that ignore preconnect. -->
+    <link rel="preconnect" href="https://s3.tradingview.com" crossorigin />
+    <link rel="preconnect" href="https://s.tradingview.com" crossorigin />
+    <link rel="preconnect" href="https://www.tradingview.com" crossorigin />
+    <link rel="dns-prefetch" href="https://s3.tradingview.com" />
+    <link rel="dns-prefetch" href="https://s.tradingview.com" />
+    <link rel="dns-prefetch" href="https://www.tradingview.com" />
+    <link rel="dns-prefetch" href="https://data.tradingview.com" />
     <title>Overwatch // Daily Bias Desk</title>
   </head>
   <body>

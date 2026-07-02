@@ -2251,9 +2251,16 @@ const calFig = (v) => (v == null ? "—" : fmtNum(Number(v), Math.abs(Number(v))
 // renders the same live calendar inside an iframe it injects into our container.
 const TradingViewCalendarWidget = ({ lightMode = false }) => {
   const containerRef = useRef(null);
+  // Mask the empty container while the embed script downloads and injects its iframe, so the panel
+  // shows a "loading" state instead of a dead blank (which reads as lag).
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    let cancelled = false;
+    let revealTimer = null;
+    let pollTimer = null;
+    setLoading(true);
     container.innerHTML = "";
     const widget = document.createElement("div");
     widget.className = "tradingview-widget-container__widget";
@@ -2275,9 +2282,32 @@ const TradingViewCalendarWidget = ({ lightMode = false }) => {
       height: "100%",
     });
     container.appendChild(script);
-    return () => { container.innerHTML = ""; };
+    // Reveal once the widget's iframe exists (plus a short beat for first paint); hard fallback so the
+    // skeleton never sticks if detection misses.
+    const start = Date.now();
+    const poll = () => {
+      if (cancelled) return;
+      if (container.querySelector("iframe")) {
+        revealTimer = setTimeout(() => !cancelled && setLoading(false), 400);
+        return;
+      }
+      if (Date.now() - start > 12000) { setLoading(false); return; }
+      pollTimer = setTimeout(poll, 150);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(revealTimer);
+      clearTimeout(pollTimer);
+      container.innerHTML = "";
+    };
   }, [lightMode]);
-  return <div className="tradingview-widget-container" ref={containerRef} style={{ height: "100%", width: "100%" }} />;
+  return (
+    <div style={{ position: "relative", height: "100%", width: "100%" }}>
+      <div className="tradingview-widget-container" ref={containerRef} style={{ height: "100%", width: "100%" }} />
+      {loading && <div className="tv-skeleton" aria-hidden="true"><RefreshCw size={16} className="spin" /> Loading calendar…</div>}
+    </div>
+  );
 };
 
 const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
@@ -5551,6 +5581,30 @@ export default function Overwatch() {
     autoSyncStarted.current = true;
     syncAll();
   }, [storageReady]);
+
+  // Pre-warm the heavy TradingView embeds during idle time after first render, so opening the Charts
+  // or Calendar tab later is near-instant instead of paying the full script download then. tv.js just
+  // defines window.TradingView (no side effects), so we execute it early; the economic-calendar embed
+  // script auto-runs and needs a container, so we only prefetch it into cache (rel=preload).
+  useEffect(() => {
+    let warmed = false;
+    const warm = () => {
+      if (warmed) return;
+      warmed = true;
+      loadTvScript().catch(() => {});
+      if (!document.querySelector('link[data-tv-events]')) {
+        const l = document.createElement("link");
+        l.rel = "preload";
+        l.as = "script";
+        l.href = "https://s3.tradingview.com/external-embedding/embed-widget-events.js";
+        l.setAttribute("data-tv-events", "1");
+        document.head.appendChild(l);
+      }
+    };
+    const ric = window.requestIdleCallback;
+    const id = ric ? ric(warm, { timeout: 4000 }) : setTimeout(warm, 2500);
+    return () => { if (ric && window.cancelIdleCallback) window.cancelIdleCallback(id); else clearTimeout(id); };
+  }, []);
 
   // Keep the latest live state in a ref so the auto-refresh loop below can read it without listing
   // every field as an effect dependency (which used to tear down and rebuild the interval + listeners
