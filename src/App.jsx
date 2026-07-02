@@ -1635,7 +1635,7 @@ const lmDecimals = (symbol, tickers) => {
 // Five mini daily candlesticks for the level-map header (today's partial candle is the last one).
 const CandleStrip = ({ candles, decimals = 2, live = false }) => {
   if (!candles?.length) return null;
-  const W = 90, H = 56, n = candles.length, pad = 5;
+  const W = 90, H = 72, n = candles.length, pad = 5;
   const min = Math.min(...candles.map((c) => c.l));
   const max = Math.max(...candles.map((c) => c.h));
   const y = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
