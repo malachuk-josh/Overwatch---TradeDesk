@@ -1232,6 +1232,37 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
   );
 };
 
+// Compact 5-session candle strip for the top-center of each ticker card. All candles share ONE
+// price scale (window min-low … max-high) so the strip reads as the recent path, not five loose
+// boxes. The newest candle carries a "now" marker (and a live pulse when the market's open) to tie
+// it to the live day candle on the right. Same bull/bear/flat colours as the day candle.
+const MiniStrip = ({ candles, live = false }) => {
+  if (!Array.isArray(candles) || candles.length < 2) return null;
+  const lo = Math.min(...candles.map((c) => c.l));
+  const hi = Math.max(...candles.map((c) => c.h));
+  const span = (hi - lo) || 1;
+  const PAD = 8; // % breathing room top/bottom so extremes don't touch the edges
+  const y = (v) => PAD + ((hi - v) / span) * (100 - PAD * 2);
+  return (
+    <div className="tk-strip" aria-hidden="true">
+      {candles.map((c, i) => {
+        const yHi = y(c.h), yLo = y(c.l);
+        let bodyTop = Math.min(y(c.o), y(c.c));
+        const bodyH = Math.max(Math.abs(y(c.c) - y(c.o)), 10); // floor so a doji stays visible
+        bodyTop = clamp(bodyTop, PAD, 100 - PAD - bodyH);
+        const tone = Math.abs(c.c - c.o) < span * 0.03 ? "flat" : c.c >= c.o ? "bull" : "bear";
+        const now = i === candles.length - 1;
+        return (
+          <div className={`msk${now ? " now" : ""}${now && live ? " msk-live" : ""}`} key={i}>
+            <div className="msk-wick" style={{ top: `${yHi}%`, height: `${Math.max(yLo - yHi, 1)}%` }} />
+            <div className={`msk-body ${tone}`} style={{ top: `${bodyTop}%`, height: `${bodyH}%` }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // Compact header candle for the level maps — same visual language as the ticker-card candle,
 // shrunk to a single wick+body so it tucks into the card's top-right corner.
 const MiniCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, live = false }) => {
@@ -1964,6 +1995,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
   const [tickersOpen, setTickersOpen] = usePersistentState("overwatch:sec:snapshot", false); // Market snapshot — collapsed by default
   const [marketFilter, setMarketFilter] = usePersistentState("overwatch:snap:filter", "all"); // snapshot "Markets" dropdown (expanded only)
   const [hiddenGroups, setHiddenGroups] = usePersistentState("overwatch:snap:hidden", []); // groups excluded from the "All markets" view
+  const [showStrip, setShowStrip] = usePersistentState("overwatch:snap:strip", true); // 5-session candle strip on each card
   const toggleHiddenGroup = useCallback((key) => setHiddenGroups((prev) => {
     const set = new Set(Array.isArray(prev) ? prev : []);
     if (set.has(key)) set.delete(key); else set.add(key);
@@ -2128,6 +2160,16 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
               </span>
             )}
             {tickersOpen && (
+              <button
+                className={`snap-strip-toggle${showStrip ? " on" : ""}`}
+                onClick={(e) => { e.stopPropagation(); setShowStrip((s) => !s); }}
+                title={showStrip ? "Hide the 5-session candle strip on each card" : "Show the 5-session candle strip on each card"}
+                aria-pressed={showStrip}
+              >
+                <CandlestickChart size={13} /> 5d
+              </button>
+            )}
+            {tickersOpen && (
               <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} hidden={hiddenGroups} onToggleHide={toggleHiddenGroup} />
             )}
             {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
@@ -2177,6 +2219,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                         })()}
                   </span>
                 </div>
+                {showStrip && !t._stale && <MiniStrip candles={t.hist} live={symbolMarketOpen(t.symbol)} />}
                 <div className="tk-body">
                   <div className="tk-left">
                     <div className="tk-name" title={t.name}>{t.name}</div>
