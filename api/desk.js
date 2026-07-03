@@ -2335,8 +2335,7 @@ const cleanModelJson = (text) => {
   }
 };
 
-const callAnthropic = async (prompt) => {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+const callAnthropicOnce = async (prompt, timeoutMs) => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -2358,15 +2357,30 @@ const callAnthropic = async (prompt) => {
       max_tokens: 6000,
       messages: [{ role: "user", content: prompt }],
     }),
-    // A real thesis (reasoning pass + full JSON) runs ~15-35s; give it a wide single window,
-    // well inside the 60s function budget. A retry doesn't fit alongside a generation this long,
-    // and would only split the budget into two windows too short to ever complete.
-    signal: AbortSignal.timeout(50000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Anthropic returned ${response.status}`);
   const payload = await response.json();
   const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
   return cleanModelJson(text);
+};
+
+const callAnthropic = async (prompt) => {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  // A full thesis (reasoning pass + large JSON) generates in ~15-35s, so the first attempt gets
+  // a wide window. Haiku also *occasionally* returns an empty/unparseable body — that fails fast
+  // (a few seconds), leaving room to retry within the 60s function budget. So: retry ONCE, but
+  // only on a fast non-timeout failure (bad output / transient non-2xx) and only if enough of the
+  // budget remains — a timeout means the model was mid-generation, where a retry can't fit.
+  const startedAt = Date.now();
+  try {
+    return await callAnthropicOnce(prompt, 42000);
+  } catch (err) {
+    const isTimeout = err?.name === "TimeoutError" || err?.name === "AbortError";
+    const remainingMs = 52000 - (Date.now() - startedAt); // keep ~8s headroom under maxDuration
+    if (isTimeout || remainingMs < 15000) throw err;
+    return await callAnthropicOnce(prompt, remainingMs);
+  }
 };
 
 const avgChangeForSymbols = (tickers, symbols) => {
