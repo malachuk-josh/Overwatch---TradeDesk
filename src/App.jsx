@@ -4784,7 +4784,6 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
   const [loading, setLoading] = useState(true);
   // Persist the open newsletter so a refresh reopens the reader instead of dumping you back to the list.
   const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
-  const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
   const collapsedCount = isDesktop ? 7 : 3;
@@ -4846,10 +4845,8 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
 
   const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
   const rowDate = (sentAt) => `${new Date(sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })} ${new Date(sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}`;
-  const query = q.trim().toLowerCase();
-  const filtered = !query ? items : items.filter((item) =>
-    [item.type, item.bias, item.instrument, item.title, rowDate(item.sentAt)].filter(Boolean).join(" ").toLowerCase().includes(query));
-  const effectiveExpanded = expanded || !!query;
+  const filtered = items;
+  const effectiveExpanded = expanded;
   // Desktop scrolls the full archive inside a fixed-height pane; mobile keeps the show-more collapse.
   const showAll = isDesktop || effectiveExpanded;
   const shown = showAll ? filtered : filtered.slice(0, collapsedCount);
@@ -4884,8 +4881,6 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
 
   return (
     <>
-      <input className="bd-in" style={{ marginBottom: 8 }} placeholder="Search newsletters — title, ticker, bias or date…" value={q} onChange={(e) => setQ(e.target.value)} />
-      {!filtered.length && <div style={{ color: C.muted, fontSize: 12.5 }}>No newsletters match “{q}”.</div>}
       <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 380 : "none", overflowY: showAll ? "auto" : "visible" }}>
         {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
@@ -4926,7 +4921,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
           </div>
         ))}
       </div>
-      {!isDesktop && !query && filtered.length > collapsedCount && (
+      {!isDesktop && filtered.length > collapsedCount && (
         <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
           {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - collapsedCount} more</>}
         </button>
@@ -5027,19 +5022,13 @@ const ArchiveTab = ({
   inSplit = false,
   auth = null,
 }) => {
-  const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [journalOpen, setJournalOpen] = usePersistentState("overwatch:sec:journal", true);
   const [libraryOpen, setLibraryOpen] = usePersistentState("overwatch:sec:library", true);
   const isDesktop = useIsDesktop();
   const collapsedCount = isDesktop ? 7 : 3;
-  const query = q.trim().toLowerCase();
-  const filteredHistory = !query ? archiveHistory : archiveHistory.filter((entry) => {
-    const t = entry._type === "newsletter" ? entry._thesis : entry;
-    return [entry.instrument, t?.instrument, t?.bias, entry.headline, t?.headline, entry._date, archiveStamp(entry)]
-      .filter(Boolean).join(" ").toLowerCase().includes(query);
-  });
-  const effectiveExpanded = expanded || !!query;
+  const filteredHistory = archiveHistory;
+  const effectiveExpanded = expanded;
   // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
   const showAll = isDesktop || effectiveExpanded;
   const shownHistory = showAll ? filteredHistory : filteredHistory.slice(0, collapsedCount);
@@ -5067,12 +5056,6 @@ const ArchiveTab = ({
         {libraryOpen && (<>
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
-        )}
-        {archiveHistory.length > 0 && (
-          <input className="bd-in" style={{ marginBottom: 8 }} placeholder="Search saved theses — ticker, bias, headline or date…" value={q} onChange={(e) => setQ(e.target.value)} />
-        )}
-        {archiveHistory.length > 0 && !filteredHistory.length && (
-          <div style={{ color: C.muted, fontSize: 12.5 }}>No saved theses match “{q}”.</div>
         )}
         <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 380 : "none", overflowY: showAll ? "auto" : "visible" }}>
           {shownHistory.map((entry) => {
@@ -5116,7 +5099,7 @@ const ArchiveTab = ({
             );
           })}
         </div>
-        {!isDesktop && !query && filteredHistory.length > collapsedCount && (
+        {!isDesktop && filteredHistory.length > collapsedCount && (
           <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
             {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - collapsedCount} more</>}
           </button>
