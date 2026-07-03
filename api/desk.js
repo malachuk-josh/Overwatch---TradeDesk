@@ -2347,12 +2347,17 @@ const callAnthropic = async (prompt) => {
     body: JSON.stringify({
       // Haiku keeps the per-thesis API call fast and cheap; ANTHROPIC_MODEL still overrides.
       model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
-      // The thesis JSON must never be cut off mid-output — a truncated response fails to parse
-      // and silently drops the desk to the template fallback (no jackRead, no AI voice).
-      max_tokens: 3000,
+      // Extended thinking: let Jack actually reason through the weighted pillars, flows and
+      // journal before writing — a real depth lift over one-shot Haiku for little cost.
+      // (Haiku 4.5 is pre-4.6, so it uses the budget_tokens form, not adaptive.)
+      thinking: { type: "enabled", budget_tokens: 3000 },
+      // max_tokens must exceed the thinking budget AND leave room for the JSON output — a
+      // truncated response fails to parse and silently drops the desk to the template fallback.
+      max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(25000),
+    // Reasoning adds latency; give the call room so a slower pass isn't aborted mid-flight.
+    signal: AbortSignal.timeout(40000),
   });
   if (!response.ok) throw new Error(`Anthropic returned ${response.status}`);
   const payload = await response.json();
@@ -2853,6 +2858,11 @@ async function saveSharedThesis(html) {
   });
   return { id, url: `/api/thesis/${id}` };
 }
+
+// The thesis op now runs an extended-thinking synthesis call, which can outrun the platform's
+// default function timeout. Pin an explicit ceiling (well within the Hobby 60s cap) so the
+// reasoning pass isn't killed by the runtime before the 40s client abort would even fire.
+export const maxDuration = 45;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
