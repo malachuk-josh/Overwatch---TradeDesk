@@ -4169,6 +4169,22 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const inputsDirty = !viewing && thesis.status === "ready" && !!thesis.data && currentSig !== thesisSig;
   const activeInstrument = thesisInstrumentConfig(instrument);
   const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "synthesis");
+  // Thesis Lab sub-nav: Algo Lab first → Synthesis last, each with its own icon.
+  const TOOL_TABS = [
+    { id: "algo", label: "Algo Lab", Icon: Bot },
+    { id: "options", label: "Options Calc", Icon: Calculator },
+    { id: "hedge", label: "Hedge & Spreads", Icon: Shield },
+    { id: "synthesis", label: "Synthesis", Icon: Sparkles },
+  ];
+  const toolSeg = (
+    <div className="seg" style={{ maxWidth: 720 }}>
+      {TOOL_TABS.map((t) => (
+        <button key={t.id} className={toolView === t.id ? "on" : ""} onClick={() => setToolView(t.id)}>
+          <t.Icon size={13} /> {t.label}
+        </button>
+      ))}
+    </div>
+  );
   const [copied, setCopied] = useState(false);
   const copyThesis = (thesisObj) => {
     const text = buildThesisText(thesisObj);
@@ -4233,12 +4249,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   if (toolView !== "synthesis") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div className="seg" style={{ maxWidth: 720 }}>
-          <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
-          <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
-          <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
-          <button className={toolView === "algo" ? "on" : ""} onClick={() => setToolView("algo")}>Strategy Lab</button>
-        </div>
+        {toolSeg}
         {(toolView === "options" || toolView === "hedge") && <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />}
         {toolView === "algo" && <StrategyLabTab notify={notify} />}
         {toolView === "options" && (
@@ -4258,12 +4269,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div className="seg" style={{ maxWidth: 720 }}>
-        <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
-        <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
-        <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
-        <button className={toolView === "algo" ? "on" : ""} onClick={() => setToolView("algo")}>Strategy Lab</button>
-      </div>
+      {toolSeg}
       {deskTools.feedToThesis && (
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
           <Scale size={14} color={C.brass} />

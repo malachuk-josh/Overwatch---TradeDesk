@@ -868,8 +868,9 @@ input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radiu
 .seg button{
   flex:1;padding:8px 6px;border:none;background:none;color:var(--muted);font-weight:600;font-size:12px;
   cursor:pointer;font-family:'Inter',sans-serif;transition:all .13s;border-right:1px solid var(--line);
-  white-space:nowrap;
+  white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px;
 }
+.seg button svg{flex:none}
 .seg button:last-child{border-right:none}
 .seg button:hover{color:var(--text)}
 .seg button.on{background:var(--brass-dim);color:var(--brass)}
