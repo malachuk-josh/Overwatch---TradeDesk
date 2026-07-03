@@ -4173,6 +4173,15 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
 const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points, onGoLibrary, notify }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
+  // Up/down nav across the saved thesis archive (newest first), mirroring the newsletter reader.
+  // Index 0 is the live latest — stepping onto it drops back to the live card (setViewing(null)).
+  const navIdx = t?._id ? history.findIndex((e) => e._id === t._id) : -1;
+  const goThesis = (delta) => {
+    if (navIdx < 0) return;
+    const next = history[navIdx + delta];
+    if (!next) return;
+    setViewing(thesis.data && next._id === thesis.data._id ? null : next);
+  };
   // "Inputs changed — regenerate": compare the live controls against the inputs the displayed
   // thesis was actually generated from, so a stale output after tweaking a control is signalled.
   const inputSig = (o) => JSON.stringify({
@@ -4393,6 +4402,13 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         {t && (
           <>
             <div className="th-hero">
+              {history.length > 1 && navIdx >= 0 && (
+                <div className="th-nav">
+                  <span className="th-nav-pos">{navIdx + 1} / {history.length}</span>
+                  <button className="btn btn-ghost btn-sm" disabled={navIdx <= 0} onClick={() => goThesis(-1)} title="Newer thesis"><ChevronUp size={15} /></button>
+                  <button className="btn btn-ghost btn-sm" disabled={navIdx >= history.length - 1} onClick={() => goThesis(1)} title="Older thesis"><ChevronDown size={15} /></button>
+                </div>
+              )}
               <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 230 }}>
                   <div className="th-bias" style={{ color: biasColor, textShadow: `0 0 28px ${biasColor}44` }}>{(t.bias || "").toUpperCase()}</div>

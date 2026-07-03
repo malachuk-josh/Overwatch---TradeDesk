@@ -889,6 +889,9 @@ textarea.bd-ta:focus{border-color:var(--brass)}
   border:1px solid var(--line2);border-radius:12px;padding:22px;position:relative;overflow:hidden;
   background:radial-gradient(120% 150% at 50% -20%,rgba(59,130,246,.07),transparent 55%),var(--panel);
 }
+/* Up/down nav across the saved thesis archive — mirrors the newsletter reader's newer/older step. */
+.th-nav{display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-bottom:12px}
+.th-nav-pos{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.04em;color:var(--muted)}
 .th-bias{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:38px;letter-spacing:.02em;line-height:1}
 .th-head{font-family:'Lora',serif;font-size:17px;font-style:italic;color:var(--text);margin-top:10px;opacity:.92}
 .th-summary{font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:11px}
