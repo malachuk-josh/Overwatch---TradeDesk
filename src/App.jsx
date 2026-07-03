@@ -289,7 +289,7 @@ const HISTORY_KEY = "overwatch:history";
 const ARCHIVE_KEY = "overwatch:archive";
 const TAB_KEY = "overwatch:tab";
 // Valid tab ids — layout restore is validated against these so a stale/bad id can't blank the view.
-const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "algo", "charts"];
+const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "charts"];
 const safeTab = (id, fallback = "pulse") => (LAYOUT_TAB_IDS.includes(id) ? id : fallback);
 const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
@@ -4153,7 +4153,7 @@ const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points, onGoLibrary }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points, onGoLibrary, notify }) => {
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   // "Inputs changed — regenerate": compare the live controls against the inputs the displayed
@@ -4233,12 +4233,14 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   if (toolView !== "synthesis") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div className="seg" style={{ maxWidth: 560 }}>
+        <div className="seg" style={{ maxWidth: 720 }}>
           <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
           <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
           <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
+          <button className={toolView === "algo" ? "on" : ""} onClick={() => setToolView("algo")}>Strategy Lab</button>
         </div>
-        <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />
+        {(toolView === "options" || toolView === "hedge") && <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />}
+        {toolView === "algo" && <StrategyLabTab notify={notify} />}
         {toolView === "options" && (
           hasSecondary ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -4256,10 +4258,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div className="seg" style={{ maxWidth: 560 }}>
+      <div className="seg" style={{ maxWidth: 720 }}>
         <button className={toolView === "synthesis" ? "on" : ""} onClick={() => setToolView("synthesis")}>Synthesis</button>
         <button className={toolView === "options" ? "on" : ""} onClick={() => setToolView("options")}>Options Calc</button>
         <button className={toolView === "hedge" ? "on" : ""} onClick={() => setToolView("hedge")}>Hedge &amp; Spreads</button>
+        <button className={toolView === "algo" ? "on" : ""} onClick={() => setToolView("algo")}>Strategy Lab</button>
       </div>
       {deskTools.feedToThesis && (
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
@@ -6381,7 +6384,6 @@ export default function Overwatch() {
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
-    { id: "algo", label: "Strategy Lab", short: "Algo", icon: Bot },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
   ];
 
@@ -6410,10 +6412,9 @@ export default function Overwatch() {
             deskTools={deskTools} setDeskTools={setDeskTools}
             market={market.data} points={points.data}
             onGoLibrary={() => nav("archives")}
+            notify={notify}
           />
         );
-      case "algo":
-        return <StrategyLabTab notify={notify} />;
       case "charts":
         return <ChartsTab lightMode={lightMode} compact={splitOn} focusSymbol={THESIS_CHART_SYMBOL[instrument] || null} />;
       case "archives":
