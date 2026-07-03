@@ -401,18 +401,18 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 .candle-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.96),rgba(239,68,68,.28));box-shadow:0 0 0 1px rgba(239,68,68,.14) inset, 0 0 10px rgba(239,68,68,.14)}
 .candle-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.96),rgba(59,130,246,.28));box-shadow:0 0 0 1px rgba(59,130,246,.16) inset, 0 0 10px rgba(59,130,246,.12)}
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
-/* 5-session history strip, top-center of the card (roomy). Same candle colour language as the day
-   candle; all five share one price scale so the strip reads as the recent path. */
-.tk-strip{display:flex;justify-content:center;align-items:flex-end;gap:4px;height:32px;margin-top:9px}
-.msk{position:relative;width:9px;height:100%}
-.msk-wick{position:absolute;left:50%;width:1.5px;border-radius:999px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.08))}
-.msk-body{position:absolute;left:50%;width:5px;border-radius:1.5px;transform:translateX(-50%)}
+/* 7-session history strip, top-center of the card. Same candle colour language as the day candle;
+   all seven share one price scale so the strip reads as the recent path. */
+.tk-strip{display:flex;justify-content:center;align-items:flex-end;gap:5px;height:46px;margin-top:10px}
+.msk{position:relative;width:12px;height:100%}
+.msk-wick{position:absolute;left:50%;width:2px;border-radius:999px;transform:translateX(-50%);background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.08))}
+.msk-body{position:absolute;left:50%;width:7px;border-radius:2px;transform:translateX(-50%)}
 .msk-body.bull{background:linear-gradient(180deg,rgba(34,197,94,.98),rgba(34,197,94,.32));box-shadow:0 0 0 .5px rgba(34,197,94,.2) inset}
 .msk-body.bear{background:linear-gradient(180deg,rgba(239,68,68,.98),rgba(239,68,68,.32));box-shadow:0 0 0 .5px rgba(239,68,68,.2) inset}
 .msk-body.flat{background:linear-gradient(180deg,rgba(59,130,246,.98),rgba(59,130,246,.32))}
 .msk.now .msk-body{outline:1px solid rgba(148,163,184,.4);outline-offset:1px}
 .msk-live .msk-body{animation:miniCandlePulse 2s ease-in-out infinite}
-/* 5-session strip on/off toggle in the snapshot header */
+/* 7-session strip on/off toggle in the snapshot header */
 .snap-strip-toggle{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line2);background:var(--panel2);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;letter-spacing:.06em;padding:3px 8px;border-radius:8px;cursor:pointer;transition:color .12s,background .12s,border-color .12s}
 .snap-strip-toggle:hover{color:var(--text)}
 .snap-strip-toggle.on{color:var(--brass);border-color:rgba(59,130,246,.4);background:var(--brass-dim)}

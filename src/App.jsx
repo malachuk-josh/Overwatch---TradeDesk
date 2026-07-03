@@ -1232,7 +1232,7 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
   );
 };
 
-// Compact 5-session candle strip for the top-center of each ticker card. All candles share ONE
+// Compact 7-session candle strip for the top-center of each ticker card. All candles share ONE
 // price scale (window min-low … max-high) so the strip reads as the recent path, not five loose
 // boxes. The newest candle carries a "now" marker (and a live pulse when the market's open) to tie
 // it to the live day candle on the right. Same bull/bear/flat colours as the day candle.
@@ -1995,7 +1995,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
   const [tickersOpen, setTickersOpen] = usePersistentState("overwatch:sec:snapshot", false); // Market snapshot — collapsed by default
   const [marketFilter, setMarketFilter] = usePersistentState("overwatch:snap:filter", "all"); // snapshot "Markets" dropdown (expanded only)
   const [hiddenGroups, setHiddenGroups] = usePersistentState("overwatch:snap:hidden", []); // groups excluded from the "All markets" view
-  const [showStrip, setShowStrip] = usePersistentState("overwatch:snap:strip", true); // 5-session candle strip on each card
+  const [showStrip, setShowStrip] = usePersistentState("overwatch:snap:strip", true); // 7-session candle strip on each card
   const toggleHiddenGroup = useCallback((key) => setHiddenGroups((prev) => {
     const set = new Set(Array.isArray(prev) ? prev : []);
     if (set.has(key)) set.delete(key); else set.add(key);
@@ -2163,10 +2163,10 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
               <button
                 className={`snap-strip-toggle${showStrip ? " on" : ""}`}
                 onClick={(e) => { e.stopPropagation(); setShowStrip((s) => !s); }}
-                title={showStrip ? "Hide the 5-session candle strip on each card" : "Show the 5-session candle strip on each card"}
+                title={showStrip ? "Hide the 7-session candle strip on each card" : "Show the 7-session candle strip on each card"}
                 aria-pressed={showStrip}
               >
-                <CandlestickChart size={13} /> 5d
+                <CandlestickChart size={13} /> 7d
               </button>
             )}
             {tickersOpen && (
