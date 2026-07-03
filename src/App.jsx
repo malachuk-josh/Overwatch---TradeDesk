@@ -6621,6 +6621,7 @@ export default function Overwatch() {
         </div>
       )}
 
+      <div className="bd-topbar">
       <header className="bd-header">
         <div className="bd-logo">
           <div className="bd-mark" title="Overwatch">
@@ -6676,6 +6677,7 @@ export default function Overwatch() {
           )}
         </nav>
       )}
+      </div>
 
       <div className="bd-bottom-nav">
         <div className="bd-bottom-nav-inner">
