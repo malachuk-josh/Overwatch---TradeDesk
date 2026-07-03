@@ -1153,6 +1153,13 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .bd-root.light .btn:hover{background:var(--panel2);border-color:var(--line)}
 .bd-root.light .btn-ghost{background:transparent;border-color:transparent}
 .bd-root.light .btn-ghost:hover{background:var(--panel3);border-color:transparent}
+/* Keep the primary CTA buttons (Sync, Generate thesis, Run backtest) bright blue in light mode —
+   the generic .bd-root.light .btn rule above out-specifies plain .btn-brass and would grey them out. */
+.bd-root.light .btn-brass{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
+.bd-root.light .btn-brass:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
+/* Preserve the amber "inputs changed" state (Generate thesis) in light mode too */
+.bd-root.light .btn-dirty{background:linear-gradient(135deg,#D4A048,#B8842F);color:#fff;border-color:#9A6E26}
+.bd-root.light .btn-dirty:hover{background:linear-gradient(135deg,#E0AE56,#C28F36);border-color:#B8842F}
 .bd-root.light .bd-session{background:var(--panel2);border-color:var(--line2)}
 .bd-root.light .skel{background:var(--panel3)}
 .bd-root.light .skel::after{background:linear-gradient(90deg,transparent,rgba(180,140,60,.1),transparent)}
