@@ -253,10 +253,15 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
   .split-pane .hist-title{flex:1 1 100%;white-space:normal;overflow:visible;text-overflow:clip}
 }
 @media(max-width:1023px){.bd-main-split{grid-template-columns:1fr}}
-/* Split view: pin each pane under the sticky header and scroll its body independently, so the two
-   sides move on their own instead of scrolling the whole page together. */
+/* Split view (desktop): the two panes fill the viewport under the sticky header and each scrolls its
+   own body independently. The split container is sized to exactly the space below the 71px header and
+   clips its own overflow, so the *page* never scrolls — which keeps each pane's nav bar pinned right
+   under the sticky header instead of sliding up beneath it. (The footer is hidden in split view in
+   App.jsx for the same reason — it would add page height and reintroduce that scroll.) */
 @media(min-width:1024px){
-  .bd-main-split .split-pane{position:sticky;top:78px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+  .bd-main.bd-main-split{height:calc(100vh - 71px);overflow:hidden;align-items:stretch;padding-top:16px;padding-bottom:16px}
+  .bd-main-split .split-pane{min-height:0;max-height:100%;display:flex;flex-direction:column}
+  .bd-main-split .split-pane-bar{flex:none}
   .bd-main-split .split-pane-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding-right:6px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
   .bd-main-split .split-pane-body::-webkit-scrollbar{width:9px}
   .bd-main-split .split-pane-body::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px}

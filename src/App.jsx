@@ -6568,9 +6568,14 @@ export default function Overwatch() {
         <main className="bd-main">{renderTab(tab, setTab)}</main>
       )}
 
-      <footer className="bd-foot">
-        OVERWATCH DAILY BIAS DESK · DELAYED PUBLIC MARKET DATA (~15 MIN) + OPTIONAL AI SYNTHESIS — VERIFY LEVELS ON YOUR PLATFORM BEFORE TRADING · NOT FINANCIAL ADVICE
-      </footer>
+      {/* Hidden in split view: the fixed-height split panes fill the viewport under the header, and a
+          footer here would add page height, reintroducing the scroll that tucks the pane nav bars
+          under the sticky header. */}
+      {!splitOn && (
+        <footer className="bd-foot">
+          OVERWATCH DAILY BIAS DESK · DELAYED PUBLIC MARKET DATA (~15 MIN) + OPTIONAL AI SYNTHESIS — VERIFY LEVELS ON YOUR PLATFORM BEFORE TRADING · NOT FINANCIAL ADVICE
+        </footer>
+      )}
 
       <SettingsDrawer
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
