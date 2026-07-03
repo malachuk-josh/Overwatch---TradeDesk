@@ -985,6 +985,75 @@ const primeFinnhubQuotes = async (symbols) => {
   return out;
 };
 
+// --- Daily history strip (5-session OHLC per board symbol) --------------------------------------
+// Powers the ticker-card mini candle strip. Live prices come from Finnhub/scanner, which carry no
+// history, so the strip's bars come from Yahoo independently. Daily bars change at most once per
+// session, so we refresh at most once per FRESH window across ALL instances (shared Redis blob +
+// warm mirror + a short lock) — mirroring the Finnhub quote cache. Yahoo is hit a few times an hour
+// at most, not once per market sync. Fail-soft: a missing symbol just renders no strip on its card.
+const HIST_FRESH_MS = 20 * 60_000;
+const HIST_CACHE_KEY = "overwatch:hist:v1";
+const HIST_LOCK_KEY = "overwatch:hist:lock";
+let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
+
+const _histFetchOne = async (symbol) => {
+  const ysym = YAHOO_SYMBOLS[symbol] || symbol;
+  const scale = YAHOO_SCALE[symbol] || 1;
+  // 10 calendar days guarantees >=5 completed sessions after weekends/holidays; keep the last 5
+  // (the newest is today's forming candle during the session, tying it to the live day candle).
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=10d&interval=1d`);
+  const result = payload?.chart?.result?.[0];
+  const bars = result?.indicators?.quote?.[0] || {};
+  const ts = result?.timestamp || [];
+  const rows = ts
+    .map((t, i) => ({ o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
+    .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+    .map((b) => ({ o: round(b.o * scale, 4), h: round(b.h * scale, 4), l: round(b.l * scale, 4), c: round(b.c * scale, 4) }))
+    .slice(-5);
+  return rows.length >= 2 ? rows : null;
+};
+
+const primeBoardHistory = async (symbols) => {
+  const wanted = [...new Set(symbols)];
+  if (!wanted.length) return {};
+  const kvOn = !!(_kvUrl() && _kvToken());
+  const isFresh = (sym) => _histWarm[sym] && Date.now() - _histWarm[sym].ts < HIST_FRESH_MS;
+
+  if (kvOn && !wanted.every(isFresh)) {
+    const blob = await _kvGetJson(HIST_CACHE_KEY);
+    if (blob && typeof blob === "object") {
+      for (const [sym, entry] of Object.entries(blob)) {
+        if (entry && Number.isFinite(entry.ts) && (!_histWarm[sym] || entry.ts > _histWarm[sym].ts)) _histWarm[sym] = entry;
+      }
+    }
+  }
+
+  const stale = wanted.filter((s) => !isFresh(s));
+  if (stale.length) {
+    // Only one instance refetches per window; others serve the cached bars (or none). With Redis
+    // off there's a single instance anyway, so just refetch.
+    const gotLock = kvOn ? (await _kvCmd(["SET", HIST_LOCK_KEY, String(Date.now()), "NX", "PX", "12000"])) === "OK" : true;
+    if (gotLock) {
+      const settled = await Promise.allSettled(stale.map(async (sym) => {
+        const bars = await _histFetchOne(sym);
+        if (!bars) throw new Error("empty history");
+        _histWarm[sym] = { bars, ts: Date.now() };
+      }));
+      const failed = settled.filter((r) => r.status === "rejected").length;
+      if (failed) console.error(`primeBoardHistory: ${failed}/${stale.length} history fetches failed — the strip is skipped for those symbols.`);
+      if (kvOn && failed < stale.length) {
+        const persist = {};
+        for (const [sym, entry] of Object.entries(_histWarm)) persist[sym] = entry;
+        await _kvCmd(["SET", HIST_CACHE_KEY, JSON.stringify(persist), "EX", "3600"]);
+      }
+    }
+  }
+
+  const out = {};
+  for (const sym of wanted) if (_histWarm[sym]) out[sym] = _histWarm[sym].bars;
+  return out;
+};
+
 // Last 7 daily OHLC candles for one symbol (includes today's partial candle during the session).
 // Pull ~15 calendar days so weekends/holidays still leave 7 completed trading sessions.
 const fetchHistory = async (symbol) => {
@@ -1550,8 +1619,13 @@ const fetchMarket = async (watchlist = []) => {
   }
 
   // Refresh the whole Finnhub quote set once per sync (shared/lock-guarded cache), so the ticker loop
-  // below just looks each symbol up instead of firing 24 independent Finnhub calls every time.
-  const finnhubQuotes = await primeFinnhubQuotes(requested.map((i) => i.symbol));
+  // below just looks each symbol up instead of firing 24 independent Finnhub calls every time. The
+  // 5-session history for the card strip is primed alongside it (its own bounded/cached Yahoo pull).
+  const symbols = requested.map((i) => i.symbol);
+  const [finnhubQuotes, histMap] = await Promise.all([
+    primeFinnhubQuotes(symbols),
+    primeBoardHistory(symbols).catch(() => ({})),
+  ]);
 
   const tickerResults = await Promise.allSettled(
     requested.map(async (item) => {
@@ -1590,6 +1664,7 @@ const fetchMarket = async (watchlist = []) => {
         delaySec,
         delayed: delaySec >= 60,
         quoteTs: Number.isFinite(Number(result.asOf)) ? Number(result.asOf) : null,
+        hist: histMap[item.symbol] || null, // 5-session OHLC for the card's mini candle strip
       };
     }),
   );
@@ -1598,7 +1673,7 @@ const fetchMarket = async (watchlist = []) => {
   const tickers = tickerResults.map((result, i) => {
     if (result.status === "fulfilled") return result.value;
     const item = requested[i];
-    return { symbol: item.symbol, name: item.name, price: null, change: null, changePct: null, dayOpen: null, dayLow: null, dayHigh: null, previousClose: null, _stale: true, source: null, delaySec: null, delayed: true, quoteTs: null };
+    return { symbol: item.symbol, name: item.name, price: null, change: null, changePct: null, dayOpen: null, dayLow: null, dayHigh: null, previousClose: null, _stale: true, source: null, delaySec: null, delayed: true, quoteTs: null, hist: null };
   });
   const sectors = SECTORS.flatMap(([name, symbol]) => {
     const result = scan.get(symbol);
