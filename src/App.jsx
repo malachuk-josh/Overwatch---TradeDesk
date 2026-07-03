@@ -809,8 +809,39 @@ const PERSONAS = {
 };
 const DEFAULT_PERSONA = "jack";
 
+// Signature pillar emphasis per persona — how each trader's lens naturally weights the five
+// pillars. Folded on top of the trader's manual sliders (see personaWeights) so the persona shapes
+// the read while a slider dragged high still anchors it. Relative emphasis, roughly [-0.5, +0.9];
+// 0 = neutral. Keys match PILLAR_KEYS.
+const PERSONA_TILT = {
+  jack:    { technicals: 0.1,  macro: 0.5,  sentiment: -0.3, positioning: 0.6,  eventRisk: 0.0 },  // Druckenmiller — flows/macro
+  jesse:   { technicals: 0.8,  macro: -0.3, sentiment: 0.1,  positioning: -0.2, eventRisk: -0.2 }, // Livermore — tape/technicals
+  mike:    { technicals: -0.3, macro: 0.2,  sentiment: 0.5,  positioning: 0.7,  eventRisk: 0.3 },  // Burry — positioning/sentiment extremes
+  ptj:     { technicals: 0.4,  macro: 0.3,  sentiment: -0.2, positioning: 0.2,  eventRisk: 0.6 },  // Paul Tudor Jones — risk/vol + technicals
+  soros:   { technicals: -0.3, macro: 0.8,  sentiment: 0.3,  positioning: 0.5,  eventRisk: 0.0 },  // Soros — macro/reflexivity
+  seykota: { technicals: 0.9,  macro: -0.4, sentiment: -0.4, positioning: -0.3, eventRisk: -0.2 }, // Seykota — pure trend/technicals
+};
+const PILLAR_LABEL = { technicals: "Technicals", macro: "Macro/News", sentiment: "Sentiment", positioning: "Positioning/Flows", eventRisk: "Event Risk" };
+
+// Blend the trader's manual pillar weights with the persona's signature emphasis. Multiplicative,
+// so the persona TILTS the read but the manual sliders anchor it — a pillar the trader sets high
+// stays dominant for every persona. Renormalized to the 100-point budget. Returns { weights, top },
+// where top names the two pillars the persona leans on hardest (for the prompt's explanation line).
+const personaWeights = (weights, persona) => {
+  const tilt = PERSONA_TILT[persona] || {};
+  const raw = {}; let sum = 0;
+  for (const k of PILLAR_KEYS) { const v = Math.max(0, (Number(weights?.[k]) || 0) * (1 + (tilt[k] || 0))); raw[k] = v; sum += v; }
+  const out = {};
+  for (const k of PILLAR_KEYS) out[k] = sum > 0 ? Math.round((raw[k] / sum) * WEIGHT_TOTAL) : Math.round(WEIGHT_TOTAL / PILLAR_KEYS.length);
+  // Name only the pillars this persona genuinely leans INTO (positive tilt), hardest first, so the
+  // prompt's emphasis line never credits a pillar the persona actually de-weights.
+  const top = [...PILLAR_KEYS].filter((k) => (tilt[k] || 0) > 0).sort((a, b) => tilt[b] - tilt[a]).slice(0, 2).map((k) => PILLAR_LABEL[k]);
+  return { weights: out, emphasis: top.length >= 2 ? `${top[0]} and ${top[1]}` : (top[0] || "the weighted pillars") };
+};
+
 const thesisPrompt =({ market, news, points, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair, jackJournal = [], persona = DEFAULT_PERSONA }) => {
   const trader = PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA];
+  const eff = personaWeights(weights, persona);
   const focus = thesisInstrumentConfig(instrument);
   const isStock = focus.group === "stock";
   const journalBlock = jackJournal.length ? `
@@ -843,7 +874,8 @@ ${condensePoints(points)}
 ${condenseTiming(timing)}
 
 === DESK CONFIGURATION ===
-Pillar weights (0-100, higher = more influence on the call): Technicals ${weights.technicals}, Macro/News ${weights.macro}, Sentiment ${weights.sentiment}, Positioning/Flows ${weights.positioning}, Event Risk ${weights.eventRisk}.
+Pillar weights (0-100, higher = more influence on the call): Technicals ${eff.weights.technicals}, Macro/News ${eff.weights.macro}, Sentiment ${eff.weights.sentiment}, Positioning/Flows ${eff.weights.positioning}, Event Risk ${eff.weights.eventRisk}.
+These weights already fold ${trader.name}'s natural emphasis on ${eff.emphasis} into the desk's manual sliders — score with them, and let that emphasis show in which drivers you rank first.
 Directional lean: ${lean === "auto" ? "none — derive direction purely from the data" : `trader is leaning ${lean} — stress-test that lean against the data and push back if it is not justified`}.
 Risk appetite: ${risk}.
 Primary instrument focus: ${focus.symbol} (${focus.name})${focusSpot ? `, currently trading near ${fmtNum(focusSpot, 2)}` : ""} with ${focus.futures} futures as the ${isStock ? "index hedge" : "live execution"} proxy when relevant.
