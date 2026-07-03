@@ -2335,8 +2335,7 @@ const cleanModelJson = (text) => {
   }
 };
 
-const callAnthropic = async (prompt) => {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+const callAnthropicOnce = async (prompt, timeoutMs) => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -2356,13 +2355,25 @@ const callAnthropic = async (prompt) => {
       max_tokens: 5000,
       messages: [{ role: "user", content: prompt }],
     }),
-    // Reasoning adds latency; give the call room so a slower pass isn't aborted mid-flight.
-    signal: AbortSignal.timeout(40000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Anthropic returned ${response.status}`);
   const payload = await response.json();
   const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
   return cleanModelJson(text);
+};
+
+const callAnthropic = async (prompt) => {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  // The first synthesis after the lambda's been idle can be slow (cold boot + first reasoning
+  // pass) or hit a transient API blip, and a bare failure silently drops this flagship call to
+  // the template. Retry once — the second attempt runs warm and almost always lands the AI path.
+  // Two ~22s attempts stay comfortably inside the 45s function budget.
+  try {
+    return await callAnthropicOnce(prompt, 22000);
+  } catch {
+    return await callAnthropicOnce(prompt, 22000);
+  }
 };
 
 const avgChangeForSymbols = (tickers, symbols) => {
@@ -2859,10 +2870,10 @@ async function saveSharedThesis(html) {
   return { id, url: `/api/thesis/${id}` };
 }
 
-// The thesis op now runs an extended-thinking synthesis call, which can outrun the platform's
-// default function timeout. Pin an explicit ceiling (well within the Hobby 60s cap) so the
-// reasoning pass isn't killed by the runtime before the 40s client abort would even fire.
-export const maxDuration = 45;
+// The thesis op runs an extended-thinking synthesis call that retries once on a slow/failed
+// first pass — up to two ~22s attempts. Pin the function ceiling to the Hobby 60s cap so both
+// attempts fit and the runtime never kills the reasoning mid-flight.
+export const maxDuration = 60;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
