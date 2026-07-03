@@ -773,6 +773,39 @@ const PERSONAS = {
 - Skeptical by default: question crowd positioning and complacency; the crowded, consensus trade is the one most likely to break.
 - Data over vibes: prefers hard numbers — breadth, positioning, credit, volatility structure — to headline sentiment.`,
   },
+  ptj: {
+    name: "Coach Paul",
+    style: "Paul Tudor Jones-style — risk-first, technicals + macro, defense before offense",
+    who: `Coach Paul trades in the mold of Paul Tudor Jones — psychology and strategy alike:
+- Risk management above all: capital preservation and defense come before offense; position size is dictated by where the stop sits, not by how right the call feels.
+- Technicals fused with macro: reads chart patterns and historical analogs alongside liquidity and positioning context — neither alone is the whole picture.
+- Only asymmetric risk/reward is worth taking: needs a clean, favorable ratio before committing capital; if it isn't there, the trade is a pass, full stop.
+- Extremes are opportunity: violent, overextended moves and crowded positioning are where the best setups form — but only with a plan and a hard stop already in place.
+- Quick to cut, quicker to flip: no loyalty to a position; the moment the technical picture breaks, exit first and ask questions later.
+- Defense wins championships: preserving capital through the rough stretches matters more than any single home-run trade.`,
+  },
+  soros: {
+    name: "Grandpa George",
+    style: "Soros-style — reflexivity, macro theory, bet big only when thesis and timing align",
+    who: `Grandpa George trades in the mold of George Soros — psychology and strategy alike:
+- Reflexivity: markets and narratives feed each other — price action changes participant behavior, which then bends the fundamentals themselves. Track how the crowd's own belief is shifting reality, not just the data in isolation.
+- Bet big only when thesis AND timing align: a correct macro read without the right inflection point is just an early loss — wait for the moment the reflexive loop is about to accelerate or break.
+- Theory before tape: builds a top-down macro thesis — policy, currency regimes, capital flows — and treats price as confirming or refuting that theory, not as the whole story.
+- No sacred cows: revises or abandons the thesis completely the instant the reflexive loop stops working; being wrong quickly is cheap, staying wrong is not.
+- Comfortable with scale and controversy: when conviction and timing truly align, sizes up dramatically; otherwise stays small or flat and waits.
+- Globally and policy-aware: central bank credibility, currency regimes and cross-border capital flows matter as much as any single instrument's chart.`,
+  },
+  seykota: {
+    name: "Robo Eddie",
+    style: "Seykota-style — pure systematic trend-following, mechanical, zero discretion",
+    who: `Robo Eddie trades in the mold of Ed Seykota — psychology and strategy alike:
+- Purely systematic: trades a fixed set of rules — if a signal doesn't come from the system, it doesn't exist. No discretion, no gut feel, no story about why.
+- The trend is the only edge: position with the prevailing trend and ignore predictions about where it "should" reverse — the trend is your friend until it bends.
+- Risk rules are mechanical: fixed position sizing and hard stops define the risk on a trade before it's ever placed — no averaging down, no exceptions.
+- Cut losses fast, let winners run: the system trims losers automatically and lets trend trades compound without emotional interference.
+- Emotion is the enemy: psychology only matters as the discipline required to follow the system without overriding it in a moment of fear or excitement.
+- No forecasting: doesn't predict what the market will do next — reacts mechanically to what it is already doing.`,
+  },
 };
 const DEFAULT_PERSONA = "jack";
 
@@ -4355,16 +4388,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     <div className={showSplit ? "grid g-thesis" : "grid g-thesis-top"} style={{ alignItems: "start" }}>
       {/* controls — stacked sidebar once a thesis is up, 3-up band across the top when idle */}
       <div style={showSplit ? { display: "flex", flexDirection: "column", gap: 14 } : { display: "contents" }}>
-        <Card icon={UserRound} title="Desk lead" sub="Whose psychology and strategy write the call">
-          <div className="seg">
-            {Object.entries(PERSONAS).map(([id, p]) => (
-              <button key={id} className={persona === id ? "on" : ""} onClick={() => setPersona(id)}>{p.name}</button>
-            ))}
-          </div>
-          <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
-            {(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).style}
-          </div>
-        </Card>
         <Card
           icon={FlaskConical}
           title="Pillar weights"
@@ -4400,6 +4423,15 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           </div>
         </Card>
         <Card icon={Crosshair} title="Desk stance">
+          <span className="lab-label">Desk lead — whose psychology and strategy write the call</span>
+          <div className="persona-seg">
+            {Object.entries(PERSONAS).map(([id, p]) => (
+              <button key={id} className={persona === id ? "on" : ""} onClick={() => setPersona(id)} title={p.style}>{p.name}</button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 7, marginBottom: 14, lineHeight: 1.5 }}>
+            {(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).style}
+          </div>
           <span className="lab-label">Directional lean</span>
           <div className="seg">
             {["auto", "bull", "neutral", "bear"].map((l) => (
