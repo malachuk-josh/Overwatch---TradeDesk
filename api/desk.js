@@ -985,7 +985,7 @@ const primeFinnhubQuotes = async (symbols) => {
   return out;
 };
 
-// --- Daily history strip (5-session OHLC per board symbol) --------------------------------------
+// --- Daily history strip (7-session OHLC per board symbol) --------------------------------------
 // Powers the ticker-card mini candle strip. Live prices come from Finnhub/scanner, which carry no
 // history, so the strip's bars come from Yahoo independently. Daily bars change at most once per
 // session, so we refresh at most once per FRESH window across ALL instances (shared Redis blob +
@@ -999,9 +999,9 @@ let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
 const _histFetchOne = async (symbol) => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
-  // 10 calendar days guarantees >=5 completed sessions after weekends/holidays; keep the last 5
+  // 15 calendar days guarantees >=7 completed sessions after weekends/holidays; keep the last 7
   // (the newest is today's forming candle during the session, tying it to the live day candle).
-  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=10d&interval=1d`);
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=15d&interval=1d`);
   const result = payload?.chart?.result?.[0];
   const bars = result?.indicators?.quote?.[0] || {};
   const ts = result?.timestamp || [];
@@ -1009,7 +1009,7 @@ const _histFetchOne = async (symbol) => {
     .map((t, i) => ({ o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
     .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
     .map((b) => ({ o: round(b.o * scale, 4), h: round(b.h * scale, 4), l: round(b.l * scale, 4), c: round(b.c * scale, 4) }))
-    .slice(-5);
+    .slice(-7);
   return rows.length >= 2 ? rows : null;
 };
 
@@ -1620,7 +1620,7 @@ const fetchMarket = async (watchlist = []) => {
 
   // Refresh the whole Finnhub quote set once per sync (shared/lock-guarded cache), so the ticker loop
   // below just looks each symbol up instead of firing 24 independent Finnhub calls every time. The
-  // 5-session history for the card strip is primed alongside it (its own bounded/cached Yahoo pull).
+  // 7-session history for the card strip is primed alongside it (its own bounded/cached Yahoo pull).
   const symbols = requested.map((i) => i.symbol);
   const [finnhubQuotes, histMap] = await Promise.all([
     primeFinnhubQuotes(symbols),
@@ -1664,7 +1664,7 @@ const fetchMarket = async (watchlist = []) => {
         delaySec,
         delayed: delaySec >= 60,
         quoteTs: Number.isFinite(Number(result.asOf)) ? Number(result.asOf) : null,
-        hist: histMap[item.symbol] || null, // 5-session OHLC for the card's mini candle strip
+        hist: histMap[item.symbol] || null, // 7-session OHLC for the card's mini candle strip
       };
     }),
   );
