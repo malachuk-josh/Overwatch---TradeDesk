@@ -894,6 +894,9 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .th-summary{font-size:13.5px;color:var(--muted);line-height:1.65;margin-top:11px}
 .th-pairread{margin-top:11px;border:1px solid rgba(59,130,246,.35);background:linear-gradient(135deg,rgba(59,130,246,.08),transparent);border-radius:10px;padding:11px 13px;font-size:13px;line-height:1.6;color:var(--text)}
 .th-pairread b{display:flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--brass);margin-bottom:5px}
+/* Jack's read — the head trader's stamp on the call. Gold accent so it reads apart from the blue pair read. */
+.th-jackread{border-color:rgba(212,160,72,.45);background:linear-gradient(135deg,rgba(212,160,72,.09),transparent)}
+.th-jackread b{color:#D4A048}
 .timing-note{border:1px solid rgba(59,130,246,.28);background:rgba(59,130,246,.07);border-radius:8px;padding:10px 12px;margin-top:13px;font-size:12px;line-height:1.55;color:#F0D5A0}
 .timing-note b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-bottom:4px}
 .th-scorecard{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:12px 13px;margin-top:13px;display:flex;flex-direction:column;gap:10px}

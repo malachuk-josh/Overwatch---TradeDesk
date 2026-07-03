@@ -2345,7 +2345,8 @@ const callAnthropic = async (prompt) => {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
+      // Haiku keeps the per-thesis API call fast and cheap; ANTHROPIC_MODEL still overrides.
+      model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
       max_tokens: 1600,
       messages: [{ role: "user", content: prompt }],
     }),
