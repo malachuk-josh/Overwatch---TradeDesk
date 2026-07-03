@@ -816,7 +816,7 @@ const thesisPrompt =({ market, news, points, timing, weights, lean, risk, notes,
   const journalBlock = jackJournal.length ? `
 === ${trader.name.toUpperCase()}'S JOURNAL (your recent published desk notes, newest first) ===
 ${jackJournal.map((j) => `- ${j.when} · ${j.type}${j.instrument ? ` · ${j.instrument}` : ""}${j.bias ? ` · ${j.bias}` : ""}${j.title ? ` — "${j.title}"` : ""}`).join("\n")}
-These are YOUR recent calls. In "jackRead", reference them for continuity: say whether today's call continues, extends, or breaks from your recent lean — and if you're flipping, own it plainly (you never marry a position).
+These are YOUR recent calls. In "deskRead", reference them for continuity: name whether today's call continues, extends, or breaks from your recent lean, and handle a break the way YOU would (whether that means flipping fast or holding a thesis through the noise).
 ` : "";
   const stockLevelsLine = focusLevels
     ? `${focus.symbol} live levels (use these exact numbers for the action level and targets): spot ${fmtNum(focusLevels.spot, 2)}, pivot ${fmtNum(focusLevels.pivot, 2)}, supports ${(focusLevels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(focusLevels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"} (as of ${focusLevels.asOf || "now"}).`
@@ -830,7 +830,7 @@ In "pairRead", give a concise relative-value read: how ${focus.symbol} is likely
 
 === WHO YOU ARE ===
 ${trader.who}
-Write the summary, game plan and jackRead in ${trader.name}'s voice: direct, first-person where natural, zero hedging filler.
+Write the summary, game plan and deskRead in ${trader.name}'s voice and decision framework — not just a different accent on the same call: let your lens shape which evidence you privilege, how you size conviction, and how you express the levels (a rules-based trader states triggers, not forecasts). Direct, first-person where natural, zero hedging filler.
 ${journalBlock}
 === LIVE DESK DATA ===
 ${condenseMarket(market)}
@@ -855,9 +855,9 @@ ${deskContext}
 Weave these into the game plan with SPECIFICS: state whether each structure fits today's bias, conviction, and risk appetite; give concrete entry, profit-taking and stop/exit guidance for the priced option or hedge (reference the actual strike, premium and the thesis's own upside/downside levels); and flag any mismatch (e.g. paying for downside puts into a high-conviction bullish call).
 ` : ""}${pairBlock}
 Respond with ONLY a raw JSON object — no markdown fences, no commentary. Exact schema:
-{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","jackRead":"<2-3 sentences, first person, ${trader.name}'s gut read in ${trader.name}'s own voice and framework: what the picture says, how much conviction to put behind this call, and how it squares with the recent journal calls (continuity or a flip — name it)>","pairRead":${pair ? `"<relative-value read: ${focus.symbol} vs ${pair.symbol}, the lean (which leg long/short), correlation/divergence to watch, and the key level on each leg>"` : '""'},"drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside targets>","downside":"<downside targets>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that kills this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
+{"bias":"bullish|bearish|neutral","score":<integer -100 to 100>,"conviction":<integer 1-10>,"timestamp":"<generated time and ET session>","timingNote":"<one short timestamp/data-freshness note; mention stale cash-index risk when relevant>","headline":"<punchy 6-12 word thesis headline>","summary":"<4-5 sentence thesis grounded in the data, weights, and stance>","pillarRead":"<one sentence explaining which weighted pillars drove the call>","stanceRead":"<one sentence explaining how directional lean and risk appetite changed or constrained the call>","deskRead":"<2-3 sentences, first person, in ${trader.name}'s own voice and decision framework: your read on the setup, how much conviction to put behind the call and why (in the terms YOUR style cares about), and how it squares with your recent journal calls (continuity, extension, or a break — name it)>","pairRead":${pair ? `"<relative-value read: ${focus.symbol} vs ${pair.symbol}, the lean (which leg long/short), correlation/divergence to watch, and the key level on each leg>"` : '""'},"drivers":["<5-7 ranked key drivers, including top weighted pillars and stance impact>"],"bullCase":["<2-3 bullets>"],"bearCase":["<2-3 bullets>"],"levels":{"action":"<the single level that matters most today and why>","upside":"<upside target(s), or the level that confirms/extends the move for a rules-based read>","downside":"<downside target(s), or the level that flips or invalidates the setup>"},"gamePlan":"<2-3 sentences: concrete approach for ${focus.symbol} (and ${focus.futures} where relevant) given this bias and risk appetite>","invalidation":"<the specific price or condition that ends this thesis>","standAside":"<conditions under which the best trade today is NO trade>"}
 
-Every field in the schema is REQUIRED — never omit "jackRead". Keep string values tight so the full JSON always completes.
+Every field in the schema is REQUIRED — never omit "deskRead". Keep string values tight so the full JSON always completes.
 Be specific — use actual numbers from the data. The sign of score must match bias. Conviction should reflect how aligned the weighted pillars are.
 Treat the pillar weights as a scoring model, not decoration: high-weight pillars must have more influence than low-weight pillars and the drivers must name the highest-weight/highest-impact inputs.
 Treat the desk stance as a constraint: directional lean may tilt the score, but you must push back if the weighted data disagrees; risk appetite must alter conviction, sizing language, and stand-aside conditions.
@@ -4509,10 +4509,10 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                 </div>
               )}
               <div className="th-summary">{t.summary}</div>
-              {t.jackRead && (
+              {(t.deskRead || t.jackRead) && (
                 <div className="th-pairread th-jackread">
                   <b><UserRound size={12} /> {t._personaName || "Jack"}'s read</b>
-                  <span>{t.jackRead}</span>
+                  <span>{t.deskRead || t.jackRead}</span>
                 </div>
               )}
               {t.pairRead && (
@@ -4635,7 +4635,7 @@ const buildThesisText = (t) => {
     t.headline ? `\n"${t.headline}"` : "",
     t.summary ? `\n${t.summary}` : "",
   ];
-  if (t.jackRead) lines.push(`\n${(t._personaName || "JACK").toUpperCase()}'S READ\n${t.jackRead}`);
+  if (t.deskRead || t.jackRead) lines.push(`\n${(t._personaName || "JACK").toUpperCase()}'S READ\n${t.deskRead || t.jackRead}`);
   if ((t.bullCase || []).length) lines.push(`\nBULL CASE\n${t.bullCase.map((b) => `• ${b}`).join("\n")}`);
   if ((t.bearCase || []).length) lines.push(`\nBEAR CASE\n${t.bearCase.map((b) => `• ${b}`).join("\n")}`);
   const lv = t.levels || {};
@@ -4679,7 +4679,7 @@ const buildThesisPrintHTML = (t) => {
     <div class="headline">"${t.headline}"</div>
     <p>${t.summary || ""}</p>
 
-    ${t.jackRead ? `<div class="callout"><b>${t._personaName || "Jack"}'s read:</b> ${t.jackRead}</div>` : ""}
+    ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${t._personaName || "Jack"}'s read:</b> ${t.deskRead || t.jackRead}</div>` : ""}
 
     ${(t._deskStructures || []).length ? `<div class="callout"><b>Structures fed into this call:</b> ${t._deskStructures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
 
@@ -6431,7 +6431,7 @@ export default function Overwatch() {
         }));
       } catch { jackJournal = []; }
       const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair, jackJournal, persona });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels, secondary: pair ? pair.symbol : "" });
+      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels, secondary: pair ? pair.symbol : "", persona, personaName: (PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).name });
       const entry = {
         ...data,
         instrument,
