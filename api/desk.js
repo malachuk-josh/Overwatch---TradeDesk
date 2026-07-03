@@ -2335,7 +2335,8 @@ const cleanModelJson = (text) => {
   }
 };
 
-const callAnthropicOnce = async (prompt, timeoutMs) => {
+const callAnthropic = async (prompt) => {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -2346,34 +2347,26 @@ const callAnthropicOnce = async (prompt, timeoutMs) => {
     body: JSON.stringify({
       // Haiku keeps the per-thesis API call fast and cheap; ANTHROPIC_MODEL still overrides.
       model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
-      // Extended thinking: let Jack actually reason through the weighted pillars, flows and
-      // journal before writing — a real depth lift over one-shot Haiku for little cost.
-      // (Haiku 4.5 is pre-4.6, so it uses the budget_tokens form, not adaptive.)
-      thinking: { type: "enabled", budget_tokens: 3000 },
-      // max_tokens must exceed the thinking budget AND leave room for the JSON output — a
-      // truncated response fails to parse and silently drops the desk to the template fallback.
-      max_tokens: 5000,
+      // Extended thinking: let Jack reason through the weighted pillars, flows and journal
+      // before writing — a real depth lift for little cost. (Haiku 4.5 is pre-4.6, so it uses
+      // the budget_tokens form, not adaptive.) The budget is kept modest: a full thesis is a
+      // large JSON payload, and a bigger thinking pass pushes total generation past the
+      // function timeout — which silently drops the desk to the template fallback.
+      thinking: { type: "enabled", budget_tokens: 1600 },
+      // Comfortably above thinking budget + the largest real thesis output so the JSON never
+      // truncates (a truncated response fails to parse and falls back).
+      max_tokens: 6000,
       messages: [{ role: "user", content: prompt }],
     }),
-    signal: AbortSignal.timeout(timeoutMs),
+    // A real thesis (reasoning pass + full JSON) runs ~15-35s; give it a wide single window,
+    // well inside the 60s function budget. A retry doesn't fit alongside a generation this long,
+    // and would only split the budget into two windows too short to ever complete.
+    signal: AbortSignal.timeout(50000),
   });
   if (!response.ok) throw new Error(`Anthropic returned ${response.status}`);
   const payload = await response.json();
   const text = (payload.content || []).filter((item) => item.type === "text").map((item) => item.text).join("\n");
   return cleanModelJson(text);
-};
-
-const callAnthropic = async (prompt) => {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
-  // The first synthesis after the lambda's been idle can be slow (cold boot + first reasoning
-  // pass) or hit a transient API blip, and a bare failure silently drops this flagship call to
-  // the template. Retry once — the second attempt runs warm and almost always lands the AI path.
-  // Two ~22s attempts stay comfortably inside the 45s function budget.
-  try {
-    return await callAnthropicOnce(prompt, 22000);
-  } catch {
-    return await callAnthropicOnce(prompt, 22000);
-  }
 };
 
 const avgChangeForSymbols = (tickers, symbols) => {
@@ -2896,7 +2889,10 @@ export default async function handler(req, res) {
       const fallback = makeThesis(payload);
       try {
         data = await callAnthropic(prompt);
-      } catch {
+      } catch (err) {
+        // Surface WHY the AI synthesis fell back (timeout, non-2xx, JSON parse) — otherwise the
+        // desk silently serves the template and the cause is invisible in the logs.
+        console.error("thesis synthesis fell back to template:", err?.name, err?.message);
         data = null;
       }
       data = data
