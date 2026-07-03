@@ -992,7 +992,7 @@ const primeFinnhubQuotes = async (symbols) => {
 // warm mirror + a short lock) — mirroring the Finnhub quote cache. Yahoo is hit a few times an hour
 // at most, not once per market sync. Fail-soft: a missing symbol just renders no strip on its card.
 const HIST_FRESH_MS = 20 * 60_000;
-const HIST_CACHE_KEY = "overwatch:hist:v1";
+const HIST_CACHE_KEY = "overwatch:hist:v2"; // v2: 7-session bars (v1 held 5, discard on deploy)
 const HIST_LOCK_KEY = "overwatch:hist:lock";
 let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
 
