@@ -257,114 +257,24 @@ const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
 const THESIS_STOCK_TICKERS = THESIS_INSTRUMENTS.filter((i) => i.group === "stock").map((i) => ({ symbol: i.symbol, name: i.name }));
 const THESIS_STOCK_SET = new Set(THESIS_STOCK_TICKERS.map((i) => i.symbol));
 
-const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel }) => (
+// Grouped native <select> for picking a thesis instrument — the standard picker used across the app.
+// `exclude` omits one symbol (e.g. the other options-calculator leg) from the list.
+const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel, exclude }) => (
   <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
     {noneLabel && <option value="">{noneLabel}</option>}
-    {INSTRUMENT_GROUPS.map((g) => (
-      <optgroup key={g.group} label={g.label}>
-        {THESIS_INSTRUMENTS.filter((it) => it.group === g.group).map((it) => (
-          <option key={it.symbol} value={it.symbol}>{it.symbol} — {it.name}</option>
-        ))}
-      </optgroup>
-    ))}
+    {INSTRUMENT_GROUPS.map((g) => {
+      const items = THESIS_INSTRUMENTS.filter((it) => it.group === g.group && it.symbol !== exclude);
+      if (!items.length) return null;
+      return (
+        <optgroup key={g.group} label={g.label}>
+          {items.map((it) => (
+            <option key={it.symbol} value={it.symbol}>{it.symbol} — {it.name}</option>
+          ))}
+        </optgroup>
+      );
+    })}
   </select>
 );
-
-// Toggle-style ticker picker with a search filter and a scrollable, grouped instrument list. Portaled
-// to <body> so a card's overflow can't clip it; closes on outside click / Escape. `exclude` omits a
-// symbol (e.g. the other leg) from the list.
-const TickerPicker = ({ value, onChange, exclude, title = "Change the instrument being priced" }) => {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [pos, setPos] = useState(null);
-  const btnRef = useRef(null);
-  const menuRef = useRef(null);
-  const inputRef = useRef(null);
-  const cur = thesisInstrumentConfig(value);
-  useEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const r = btnRef.current?.getBoundingClientRect();
-      if (r) setPos({ top: r.bottom + 6, left: r.left, width: Math.max(r.width, 240) });
-    };
-    place();
-    const onDoc = (e) => {
-      if (btnRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    const focusTimer = setTimeout(() => inputRef.current?.focus(), 0);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-      clearTimeout(focusTimer);
-    };
-  }, [open]);
-  const needle = q.trim().toLowerCase();
-  const match = (it) => !needle || it.symbol.toLowerCase().includes(needle) || it.name.toLowerCase().includes(needle);
-  const anyMatch = THESIS_INSTRUMENTS.some((it) => it.symbol !== exclude && match(it));
-  return (
-    <span className="tkr-picker">
-      <button
-        ref={btnRef}
-        type="button"
-        className="bd-in tkr-picker-btn"
-        onClick={() => { setOpen((o) => !o); setQ(""); }}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        title={title}
-      >
-        <span className="tkr-picker-sym">{cur.symbol}</span>
-        <span className="tkr-picker-name">{cur.name}</span>
-        <ChevronDown size={13} style={{ opacity: 0.7, marginLeft: "auto", flex: "none" }} />
-      </button>
-      {open && pos && createPortal(
-        <div ref={menuRef} className="tkr-picker-menu" style={{ top: pos.top, left: pos.left, width: pos.width }} role="listbox" onClick={(e) => e.stopPropagation()}>
-          <input
-            ref={inputRef}
-            className="tkr-picker-search"
-            placeholder="Filter tickers…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="tkr-picker-scroll">
-            {INSTRUMENT_GROUPS.map((g) => {
-              const items = THESIS_INSTRUMENTS.filter((it) => it.group === g.group && it.symbol !== exclude && match(it));
-              if (!items.length) return null;
-              return (
-                <div className="tkr-picker-group" key={g.group}>
-                  <div className="tkr-picker-glabel">{g.label}</div>
-                  {items.map((it) => (
-                    <button
-                      key={it.symbol}
-                      type="button"
-                      role="option"
-                      aria-selected={it.symbol === value}
-                      className={`tkr-picker-item${it.symbol === value ? " on" : ""}`}
-                      onClick={() => { onChange(it.symbol); setOpen(false); }}
-                    >
-                      <span className="tkr-picker-isym">{it.symbol}</span>
-                      <span className="tkr-picker-iname">{it.name}</span>
-                      {it.symbol === value && <Check size={13} style={{ marginLeft: "auto", flex: "none" }} />}
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
-            {!anyMatch && <div className="tkr-picker-empty">No tickers match “{q}”.</div>}
-          </div>
-        </div>,
-        document.body,
-      )}
-    </span>
-  );
-};
 
 const C = {
   bull: "#22C55E",
@@ -3945,7 +3855,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
         {onPickTicker && (
           <div className="lab-field" style={{ marginBottom: 14 }}>
             <span className="lab-label">Ticker</span>
-            <TickerPicker value={symbol} onChange={onPickTicker} exclude={pickExclude} />
+            <InstrumentSelect value={symbol} onChange={onPickTicker} exclude={pickExclude} />
           </div>
         )}
         <div className="seg" style={{ marginBottom: 14 }}>
