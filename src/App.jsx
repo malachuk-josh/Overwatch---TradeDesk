@@ -1929,7 +1929,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen, hidden = [], onToggl
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, setWatchlist, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -1976,6 +1976,64 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
     const tests = hiddenGroups.map((g) => SNAP_FILTER_TEST[g]).filter(Boolean);
     return orderedTickers.filter((t) => !tests.some((test) => test(t)));
   }, [marketFilter, hiddenGroups, orderedTickers, data]);
+
+  // Drag-to-reorder the snapshot cards with live reshuffle. Only the default board ("all" filter) is
+  // reorderable — the filtered lenses (Live/Mag7/Sectors) are a view, not the board. Committing
+  // rewrites the shared watchlist order (the single source of truth used everywhere), so the new
+  // arrangement persists and syncs, and only the shown cards move — hidden/off names keep their slots.
+  const canReorder = marketFilter === "all" && typeof setWatchlist === "function";
+  const [dragSym, setDragSym] = useState(null);
+  const dragSymRef = useRef(null); // mirror of dragSym readable synchronously inside drag handlers
+  const [liveOrder, setLiveOrder] = useState(null); // symbols in their live (mid-drag) order
+  // Clear any stale drag order if the visible set changes out from under a drag (e.g. a sync lands).
+  const shownTickers = useMemo(() => {
+    if (!liveOrder) return displayTickers;
+    const bySym = new Map(displayTickers.map((t) => [t.symbol, t]));
+    const seq = liveOrder.map((s) => bySym.get(s)).filter(Boolean);
+    displayTickers.forEach((t) => { if (!liveOrder.includes(t.symbol)) seq.push(t); });
+    return seq;
+  }, [liveOrder, displayTickers]);
+  const onCardDragStart = (sym) => (e) => {
+    if (!canReorder) return;
+    dragSymRef.current = sym;
+    setDragSym(sym);
+    setLiveOrder(displayTickers.map((t) => t.symbol));
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", sym); } catch { /* some browsers require a payload */ }
+  };
+  const reshuffleTo = (sym) => {
+    const drag = dragSymRef.current;
+    if (!canReorder || !drag || sym === drag) return;
+    setLiveOrder((prev) => {
+      const cur = prev || displayTickers.map((t) => t.symbol);
+      const from = cur.indexOf(drag);
+      const to = cur.indexOf(sym);
+      if (from < 0 || to < 0 || from === to) return cur;
+      const next = cur.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, drag);
+      return next;
+    });
+  };
+  const commitReorder = () => {
+    if (canReorder && liveOrder && dragSymRef.current) {
+      const shown = new Set(liveOrder);
+      setWatchlist((prev) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const idxBySym = new Map(list.map((w, i) => [w.symbol, i]));
+        const newSeq = liveOrder.filter((s) => idxBySym.has(s)); // shown symbols, new order
+        const slots = []; // watchlist positions currently occupied by shown symbols
+        list.forEach((w, i) => { if (shown.has(w.symbol)) slots.push(i); });
+        if (slots.length !== newSeq.length) return list; // guard: only permute like-for-like
+        const next = list.slice();
+        slots.forEach((slot, k) => { next[slot] = list[idxBySym.get(newSeq[k])]; });
+        return next;
+      });
+    }
+    dragSymRef.current = null;
+    setDragSym(null);
+    setLiveOrder(null);
+  };
 
   if (status === "idle")
     return (
@@ -2052,8 +2110,19 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <div style={{ padding: "12px 12px 12px" }}>
             {displayTickers.length ? (
             <div className="grid g-pulse">
-            {displayTickers.map((t) => (
-              <div className="card tk" key={t.symbol} style={t._stale ? { opacity: 0.5 } : undefined}>
+            {shownTickers.map((t) => (
+              <div
+                className={`card tk${canReorder ? " tk-drag" : ""}${dragSym === t.symbol ? " tk-dragging" : ""}`}
+                key={t.symbol}
+                style={t._stale ? { opacity: 0.5 } : undefined}
+                draggable={canReorder || undefined}
+                title={canReorder ? "Drag to reorder" : undefined}
+                onDragStart={canReorder ? onCardDragStart(t.symbol) : undefined}
+                onDragEnter={canReorder ? () => reshuffleTo(t.symbol) : undefined}
+                onDragOver={canReorder ? (e) => { if (dragSymRef.current) e.preventDefault(); } : undefined}
+                onDrop={canReorder ? (e) => { e.preventDefault(); commitReorder(); } : undefined}
+                onDragEnd={canReorder ? commitReorder : undefined}
+              >
                 <div className="tk-glow" style={{ background: `linear-gradient(90deg,transparent,${chgColor(t.changePct)},transparent)`, opacity: 0.55 }} />
                 <div className="tk-top">
                   <span className="tk-sym">{t.symbol}</span>
@@ -6480,7 +6549,7 @@ export default function Overwatch() {
   const renderTab = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
