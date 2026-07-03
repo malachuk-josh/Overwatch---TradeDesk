@@ -5696,12 +5696,12 @@ const StrategyLabTab = ({ notify = null }) => {
     }
   };
 
-  // --- live signal monitor + forward journal ---
+  // --- live signal monitor ---
   // Params re-poll after a short debounce (so typing doesn't spam the API), then every 60s while
-  // the tab is open. Signals are detected server-side on completed bars and journaled to Redis.
+  // the tab is open. Signals are detected server-side on completed bars (still journaled to Redis
+  // by the endpoint; the UI just surfaces the latest bar's live read).
   const [live, setLive] = useState({ status: "idle", data: null, error: null });
   const [pollSeq, setPollSeq] = useState(0);
-  const [confirmClear, setConfirmClear] = useState(false);
   const toastRef = useRef(null);
   const liveParamStr = JSON.stringify(buildParams());
   const [liveKey, setLiveKey] = useState(liveParamStr);
@@ -5734,35 +5734,16 @@ const StrategyLabTab = ({ notify = null }) => {
     return () => { alive = false; clearInterval(iv); };
   }, [liveKey, pollSeq, notify]);
 
-  const clearJournal = async () => {
-    if (!confirmClear) {
-      setConfirmClear(true);
-      setTimeout(() => setConfirmClear(false), 4000);
-      return;
-    }
-    setConfirmClear(false);
-    try {
-      await callDesk("algolive", "", { action: "clear", params: buildParams() });
-      setPollSeq((n) => n + 1);
-    } catch { /* next poll re-syncs the journal either way */ }
-  };
-
   const s = bt.data?.stats, m = bt.data?.meta;
 
-  // Live-signal + forward-journal derived state. Hoisted out of the render so the live-signal readout
-  // can live inside the Strategy inputs card while the Forward journal stays its own card below.
+  // Live-signal derived state. Hoisted out of the render so the live-signal readout can live inside
+  // the Strategy inputs card.
   const st = live.data?.state;
-  const journal = live.data?.journal;
   const OS = numOr(p.rsiOS, ALGO_DEFAULTS.rsiOS), OB = numOr(p.rsiOB, ALGO_DEFAULTS.rsiOB);
   const vMin = numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vMax = numOr(p.vixMax, ALGO_DEFAULTS.vixMax);
   const sH = numOr(p.startHour, ALGO_DEFAULTS.startHour), eH = numOr(p.endHour, ALGO_DEFAULTS.endHour);
   const outside = st && st.lowerKC != null && (st.price < st.lowerKC || st.price > st.upperKC);
   const rsiHit = st && st.rsi != null && (st.rsi < OS || st.rsi > OB);
-  const rows = journal ? [...journal].sort((a, b) => b.signalTs - a.signalTs) : [];
-  const closed = rows.filter((e) => e.pnlPct != null);
-  const openN = rows.filter((e) => e.status === "open").length;
-  const hits = closed.filter((e) => e.status === "target").length;
-  const cum = closed.reduce((sum, e) => sum + e.pnlPct, 0);
   const check = (state, label, reading) => (
     <div className="algo-check" key={label}>
       <span className={`algo-check-dot ${state}`} />
@@ -5907,60 +5888,6 @@ const StrategyLabTab = ({ notify = null }) => {
           )}
         </Card>
       </div>
-
-      <Card
-        icon={NotebookPen}
-        title="Forward journal"
-        sub="Every signal the desk saw live, resolved with the backtester's fill model"
-        tools={rows.length > 0 ? (
-          <button className={`btn btn-sm ${confirmClear ? "btn-danger" : "btn-ghost"}`} title="Wipe the forward-test journal" onClick={clearJournal}>
-            {confirmClear ? "Really clear?" : <><Trash2 size={12} /> Clear</>}
-          </button>
-        ) : null}
-      >
-        {journal === null && live.data && (
-          <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-            Journal persistence needs the Upstash Redis env vars (<span className="mono">KV_REST_API_URL</span> / <span className="mono">KV_REST_API_TOKEN</span>) —
-            the same store the archive uses. Signals will still show live in the inputs card, they just won't be recorded.
-          </div>
-        )}
-        {journal !== null && rows.length === 0 && (
-          <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-            Nothing journaled yet. When the monitor catches a setup on a completed bar it's logged here with its bracket, then marked
-            target / stop / flat as later bars resolve it — a live forward test of the strategy.
-          </div>
-        )}
-        {rows.length > 0 && (
-          <>
-            <div className="algo-journal">
-              {rows.map((e) => (
-                <div className="algo-jrow" key={e.id}>
-                  <span className={`algo-side ${e.side}`}>{e.side.toUpperCase()}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: "var(--text)" }}>{e.symbol} · {e.interval} · {algoTime(e.signalTs)}</div>
-                    <div className="algo-jmeta">
-                      {e.fillPx == null && e.status === "open" && `signal ${fmtNum(e.signalPx, 2)} · awaiting fill`}
-                      {e.fillPx == null && e.status === "void" && `signal ${fmtNum(e.signalPx, 2)} · fill unavailable`}
-                      {e.fillPx != null && e.status === "open" && `fill ${fmtNum(e.fillPx, 2)} · SL ${fmtNum(e.sl, 2)} · TP ${fmtNum(e.tp, 2)}`}
-                      {e.fillPx != null && e.status !== "open" && `fill ${fmtNum(e.fillPx, 2)} → ${fmtNum(e.exitPx, 2)} · ${algoTime(e.exitTs)}`}
-                    </div>
-                  </div>
-                  <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-                    {e.pnlPct != null && <b className="mono" style={{ fontSize: 11.5, color: chgColor(e.pnlPct) }}>{fmtSigned(e.pnlPct, 2, "%")}</b>}
-                    <span className={`algo-jstatus ${e.status}`}>{e.status.toUpperCase()}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 15, marginTop: 11, fontSize: 11.5, color: C.muted, flexWrap: "wrap" }}>
-              <span>Open <b style={{ color: "var(--text)" }}>{openN}</b></span>
-              <span>Closed <b style={{ color: "var(--text)" }}>{closed.length}</b></span>
-              <span>Hit rate <b style={{ color: "var(--text)" }}>{closed.length ? `${fmtNum((hits / closed.length) * 100, 0)}%` : "—"}</b></span>
-              <span>Cumulative <b className="mono" style={{ color: chgColor(cum) }}>{fmtSigned(cum, 2, "%")}</b></span>
-            </div>
-          </>
-        )}
-      </Card>
 
       {bt.data && bt.data.trades.length > 0 && (
         <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · oldest first`}>
