@@ -1253,7 +1253,7 @@ const MiniStrip = ({ candles, live = false }) => {
         const tone = Math.abs(c.c - c.o) < span * 0.03 ? "flat" : c.c >= c.o ? "bull" : "bear";
         const now = i === candles.length - 1;
         return (
-          <div className={`msk${now ? " now" : ""}${now && live ? " msk-live" : ""}`} key={i}>
+          <div className={`msk${now && live ? " msk-live" : ""}`} key={i}>
             <div className="msk-wick" style={{ top: `${yHi}%`, height: `${Math.max(yLo - yHi, 1)}%` }} />
             <div className={`msk-body ${tone}`} style={{ top: `${bodyTop}%`, height: `${bodyH}%` }} />
           </div>
