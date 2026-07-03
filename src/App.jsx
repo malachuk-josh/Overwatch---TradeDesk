@@ -6019,14 +6019,19 @@ export default function Overwatch() {
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
-  // Theme defaults to dark, except a first-ever mobile visit (no saved preference yet) defaults to
-  // light — better readability outdoors / on the go. Once anyone toggles the theme button, that
-  // explicit choice is saved and always wins here, on any device, from then on.
+  // Theme defaults to dark, except a first-ever visit on a touch device — phone OR tablet/iPad (no
+  // saved preference yet) — defaults to light for better readability outdoors / on the go. Touch is
+  // detected by maxTouchPoints / pointer:coarse so it catches iPads at any orientation (they can be
+  // 768–1366px wide), with a width fallback for small screens. Once anyone toggles the theme button,
+  // that explicit choice is saved and always wins here, on any device, from then on.
   const [lightMode, setLightMode] = useState(() => {
     try {
       const saved = localStorage.getItem("overwatch:light");
       if (saved !== null) return saved === "1";
-      return typeof window !== "undefined" && window.innerWidth <= 760;
+      if (typeof window === "undefined") return false;
+      const touch = (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0)
+        || (typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches);
+      return touch || window.innerWidth <= 1024;
     } catch { return false; }
   });
   const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine !== false));
