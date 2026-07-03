@@ -2347,7 +2347,9 @@ const callAnthropic = async (prompt) => {
     body: JSON.stringify({
       // Haiku keeps the per-thesis API call fast and cheap; ANTHROPIC_MODEL still overrides.
       model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5",
-      max_tokens: 1600,
+      // The thesis JSON must never be cut off mid-output — a truncated response fails to parse
+      // and silently drops the desk to the template fallback (no jackRead, no AI voice).
+      max_tokens: 3000,
       messages: [{ role: "user", content: prompt }],
     }),
     signal: AbortSignal.timeout(25000),
@@ -2650,6 +2652,7 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
     summary: `The ${timingRead.staleCashRisk ? "futures-adjusted" : "index"} tape is averaging ${round(tape)}% while the headline balance scores ${Math.round(newsScore)}. ${points?.internals?.trendDetail?.read || `The live trend read is ${points?.internals?.trend || "range"}.`} ${pillarRead} ${stanceSummary} That combination produces a ${bias} call with ${conviction}/10 conviction for ${focus.symbol}${notes ? ", with the desk note treated as a secondary constraint" : ""}.`,
     pillarRead,
     stanceRead: stanceSummary,
+    jackRead: `My read: the tape is ${bias === "neutral" ? "not paying either side yet" : `leaning ${bias}`} and I'd put ${conviction}/10 behind it — ${conviction >= 7 ? "when it lines up like this, you press it" : conviction >= 5 ? "enough to trade it, not enough to press it" : "small size until the tape proves it"}. ${trendState === "range" ? "This is range tape, so the action level makes the call, not me." : `The ${trendState} stays my friend until ${pivot ? round(pivot, 0) : "the pivot"} gives way.`} If it breaks against me I flip — I don't marry the call.`,
     pairRead: secondary
       ? `Relative-value angle: with a ${bias} read on ${focus.symbol}, favour ${bias === "bearish" ? `short ${focus.symbol} / long ${secondary}` : `long ${focus.symbol} / short ${secondary}`} while ${focus.symbol} holds its action level. Watch for the two re-converging — that unwinds the spread.`
       : "",
