@@ -5606,6 +5606,17 @@ const StrategyLabTab = ({ notify = null }) => {
     }
   };
 
+  // Auto-run the backtest once when the lab opens, using the saved (or default) settings, so results
+  // are already populated before the user touches "Run backtest". Runs per mount (i.e. each time the
+  // tab is opened), guarded so it fires only once.
+  const didAutoRun = useRef(false);
+  useEffect(() => {
+    if (didAutoRun.current) return;
+    didAutoRun.current = true;
+    runNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // --- live signal monitor ---
   // Params re-poll after a short debounce (so typing doesn't spam the API), then every 60s while
   // the tab is open. Signals are detected server-side on completed bars (still journaled to Redis
