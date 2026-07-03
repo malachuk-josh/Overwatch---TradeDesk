@@ -2591,7 +2591,7 @@ const THESIS_INSTRUMENTS = {
 
 const getThesisInstrument = (instrument = "SPX") => THESIS_INSTRUMENTS[instrument] || THESIS_INSTRUMENTS.SPX;
 
-const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX", focusLevels = null, secondary = "" }) => {
+const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto", risk = "balanced", notes = "", instrument = "SPX", focusLevels = null, secondary = "", personaName = "" }) => {
   const focus = getThesisInstrument(instrument);
   const tickers = market?.tickers || [];
   const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"].map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct).filter(Number.isFinite);
@@ -2675,7 +2675,9 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
     summary: `The ${timingRead.staleCashRisk ? "futures-adjusted" : "index"} tape is averaging ${round(tape)}% while the headline balance scores ${Math.round(newsScore)}. ${points?.internals?.trendDetail?.read || `The live trend read is ${points?.internals?.trend || "range"}.`} ${pillarRead} ${stanceSummary} That combination produces a ${bias} call with ${conviction}/10 conviction for ${focus.symbol}${notes ? ", with the desk note treated as a secondary constraint" : ""}.`,
     pillarRead,
     stanceRead: stanceSummary,
-    jackRead: `My read: the tape is ${bias === "neutral" ? "not paying either side yet" : `leaning ${bias}`} and I'd put ${conviction}/10 behind it — ${conviction >= 7 ? "when it lines up like this, you press it" : conviction >= 5 ? "enough to trade it, not enough to press it" : "small size until the tape proves it"}. ${trendState === "range" ? "This is range tape, so the action level makes the call, not me." : `The ${trendState} stays my friend until ${pivot ? round(pivot, 0) : "the pivot"} gives way.`} If it breaks against me I flip — I don't marry the call.`,
+    // Persona-neutral fallback read (used only when the AI synthesis is unavailable): describe the
+    // conviction and the level that governs the call without leaning on any one persona's idioms.
+    deskRead: `${personaName ? `${personaName}'s read: ` : ""}The tape is ${bias === "neutral" ? "not paying either side yet" : `leaning ${bias}`}, and the weighted read supports ${conviction}/10 conviction — ${conviction >= 7 ? "aligned enough to lean on" : conviction >= 5 ? "tradable, but not a press" : "size stays light until it proves out"}. ${trendState === "range" ? "This is range tape, so the action level does the deciding." : `The ${trendState} holds until ${pivot ? round(pivot, 0) : "the pivot"} gives way — that level is the whole call.`}`,
     pairRead: secondary
       ? `Relative-value angle: with a ${bias} read on ${focus.symbol}, favour ${bias === "bearish" ? `short ${focus.symbol} / long ${secondary}` : `long ${focus.symbol} / short ${secondary}`} while ${focus.symbol} holds its action level. Watch for the two re-converging — that unwinds the spread.`
       : "",
@@ -2915,6 +2917,8 @@ export default async function handler(req, res) {
           ...data,
           pillarRead: data.pillarRead || fallback.pillarRead,
           stanceRead: data.stanceRead || fallback.stanceRead,
+          // Accept the model's deskRead (new key) or a legacy jackRead; backfill from the template.
+          deskRead: data.deskRead || data.jackRead || fallback.deskRead,
           pillarWeights: data.pillarWeights || fallback.pillarWeights,
           pillarScores: data.pillarScores || fallback.pillarScores,
           weightedPillars: data.weightedPillars || fallback.weightedPillars,
