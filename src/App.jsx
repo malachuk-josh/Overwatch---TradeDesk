@@ -3954,6 +3954,87 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
   );
 };
 
+// Collapsed-by-default summary of the primary options scenario, for the Synthesis page itself —
+// full editing (spot/IV/rate/div overrides, IV solver, secondary leg) still lives in the Options
+// Calc sub-tab; this just surfaces the current strike/type/theo/greeks and the feed toggle inline.
+const CompactOptionsCard = ({ deskTools, setDeskTools, live, feedOn = false, symbol = null, thesis = null }) => {
+  const [open, setOpen] = usePersistentState("overwatch:sec:optioncard", false);
+  const { env, options: opt } = deskTools;
+  const { S, sigma, r, q, days, T } = resolveEnv(env, live);
+  const K = numOr(opt.strike, roundStrike(S));
+  const bs = blackScholes({ S, K, T, r, q, sigma, type: opt.type });
+  const valid = S > 0 && K > 0 && T > 0 && sigma > 0;
+  const setEnv = (k, v) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: v } }));
+  const setOpt = (k, v) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: v } }));
+
+  const thesisForSymbol = thesis && thesis._instrument === symbol ? thesis : null;
+  const thesisTarget = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.upside) : null;
+  const thesisInvalidation = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.downside) : null;
+  const matchThesis = (type, level) => { setOpt("type", type); setOpt("strike", String(roundStrike(level))); setOpt("feed", true); };
+
+  const summary = valid
+    ? `${opt.type.toUpperCase()} ${fmtNum(K, 0)} · theo ${fmtNum(bs.price, 2)} (Δ ${fmtNum(bs.delta, 2)})${opt.feed ? " · feeding thesis" : ""}`
+    : "Sync the desk for a live spot to price a scenario";
+
+  return (
+    <Card icon={Calculator} title="Options scenario" sub={summary} collapsible open={open} onToggle={() => setOpen((o) => !o)}>
+      {open && (
+        <>
+          <div className="seg" style={{ marginBottom: 12 }}>
+            {["call", "put"].map((ty) => (
+              <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
+            ))}
+          </div>
+          {(thesisTarget || thesisInvalidation) && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              {thesisTarget && (
+                <button className="btn btn-sm" title="Price a call at the thesis's own upside target" onClick={() => matchThesis("call", thesisTarget)}>
+                  Target {fmtNum(thesisTarget, 0)}
+                </button>
+              )}
+              {thesisInvalidation && (
+                <button className="btn btn-sm" title="Price a put at the thesis's own invalidation level" onClick={() => matchThesis("put", thesisInvalidation)}>
+                  Invalidation {fmtNum(thesisInvalidation, 0)}
+                </button>
+              )}
+            </div>
+          )}
+          <div className="grid g-2" style={{ gap: 10 }}>
+            <NumField label="Strike" value={opt.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(v) => setOpt("strike", v)} />
+            <NumField label="Days" hint="to expiry" value={env.days} placeholder="30" onChange={(v) => setEnv("days", v)} />
+          </div>
+          {valid ? (
+            <div className="grid g-3" style={{ gap: 8, marginTop: 12 }}>
+              <ToolStat k="Theo" v={fmtNum(bs.price, 2)} color={C.brass} sub={`${fmtUsd(bs.price * 100, 0)}/ct`} />
+              <ToolStat k="Delta" v={fmtNum(bs.delta, 3)} />
+              <ToolStat k="Theta" v={fmtNum(bs.theta, 2)} color={C.bear} />
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
+              Sync the Market Pulse for a live spot, or open Options Calc for full control (IV solver, secondary leg).
+            </div>
+          )}
+          <div className="lab-field" style={{ display: "flex", alignItems: "center", gap: 11, marginTop: 12 }}>
+            <button
+              onClick={() => setOpt("feed", !opt.feed)}
+              style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: opt.feed ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+              title="Include this options scenario when feeding the thesis"
+            >
+              <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+            </button>
+            <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
+              <b style={{ color: "var(--text)" }}>Add this scenario to the thesis</b>
+              {opt.feed && !feedOn && (
+                <span style={{ color: C.brass }}> Turn on “Send desk tools to the thesis” to apply it.</span>
+              )}
+            </span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+};
+
 /* ================================================================
    TAB — THESIS LAB
    ================================================================ */
@@ -4134,6 +4215,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             )}
           </div>
         </Card>
+        <CompactOptionsCard deskTools={deskTools} setDeskTools={setDeskTools} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} thesis={t} />
         <Card icon={Crosshair} title="Desk stance">
           <span className="lab-label">Desk lead — whose psychology and strategy write the call</span>
           <div className="persona-seg">
