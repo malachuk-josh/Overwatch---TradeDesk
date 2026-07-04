@@ -878,19 +878,6 @@ input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radiu
 .seg button.on{background:var(--brass-dim);color:var(--brass)}
 .seg button.on.sg-bull{background:var(--bull-dim);color:var(--bull)}
 .seg button.on.sg-bear{background:var(--bear-dim);color:var(--bear)}
-/* Desk-lead persona picker — a 3-across grid instead of .seg's single row so a longer roster of
-   personas (Grandpa George, Robo Eddie...) wraps into clean rows instead of squeezing one-line. */
-.persona-seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line2);border-radius:8px;overflow:hidden;background:var(--panel2)}
-.persona-seg button{
-  padding:8px 5px;border:none;background:none;color:var(--muted);font-weight:600;font-size:11.5px;
-  cursor:pointer;font-family:'Inter',sans-serif;transition:all .13s;
-  border-right:1px solid var(--line);border-bottom:1px solid var(--line);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.persona-seg button:nth-child(3n){border-right:none}
-.persona-seg button:nth-last-child(-n+3){border-bottom:none}
-.persona-seg button:hover{color:var(--text)}
-.persona-seg button.on{background:var(--brass-dim);color:var(--brass)}
 .lab-field{margin-top:16px}
 .lab-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:7px;display:block}
 textarea.bd-ta{
