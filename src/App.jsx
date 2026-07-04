@@ -4239,37 +4239,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                   {t.timingNote || `${t.timestamp || t._generatedAt} · Quote snapshot ${t._quoteAsOf || "timestamp unavailable"}`}
                 </div>
               )}
-              {(t.stanceRead || t.pillarRead || (t.weightedPillars || []).length > 0) && (
-                <div className="th-scorecard">
-                  {t.stanceRead && (
-                    <div className="th-scorecard-row">
-                      <b>Desk stance</b>
-                      <span>{t.stanceRead}</span>
-                    </div>
-                  )}
-                  {t.pillarRead && (
-                    <div className="th-scorecard-row">
-                      <b>Pillar model</b>
-                      <span>{t.pillarRead}</span>
-                    </div>
-                  )}
-                  {(t.weightedPillars || []).length > 0 && (
-                    <div className="pillar-strip">
-                      {(t.weightedPillars || []).map((pillar) => {
-                        const tip = pillar.key === "positioning"
-                          ? `Why ${fmtSigned(pillar.score, 0)}? Positioning posture is ${points?.positioning?.posture || "—"} (flow score ${points?.positioning?.score ?? "—"}), derived from ETF risk flows, credit-vs-duration spread, and the Fear & Greed components (put/call, junk-bond demand, safe-haven demand).`
-                          : `${pillar.label}: raw pillar score ${fmtSigned(pillar.score, 0)}, weighted at ${pillar.weight}% → ${fmtSigned(pillar.contribution, 1)} impact on the base score.`;
-                        return (
-                          <div className="pillar-chip" key={pillar.key || pillar.label} title={tip}>
-                            <b>{pillar.label || pillar.key}</b>
-                            <span>Score {fmtSigned(pillar.score, 0)} · Weight {pillar.weight}% · Impact {fmtSigned(pillar.contribution, 1)}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
               {(t._deskStructures || []).length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div className="lab-label" style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 7 }}>
@@ -4394,19 +4363,6 @@ const buildThesisPrintHTML = (t) => {
     ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${t._personaName || "Jack"}'s read:</b> ${t.deskRead || t.jackRead}</div>` : ""}
 
     ${(t._deskStructures || []).length ? `<div class="callout"><b>Structures fed into this call:</b> ${t._deskStructures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
-
-    ${t.stanceRead || t.pillarRead ? `
-    <h2>Desk stance</h2>
-    <table><tbody>
-      ${t.stanceRead ? `<tr><td class="lbl">Desk stance</td><td>${t.stanceRead}</td></tr>` : ""}
-      ${t.pillarRead ? `<tr><td class="lbl">Pillar model</td><td>${t.pillarRead}</td></tr>` : ""}
-    </tbody></table>` : ""}
-
-    ${(t.weightedPillars || []).length ? `
-    <h2>Pillar breakdown</h2>
-    <table><thead><tr><th>Pillar</th><th>Score</th><th>Weight</th><th>Impact</th></tr></thead><tbody>
-      ${(t.weightedPillars || []).map((p) => `<tr><td>${p.label || p.key}</td><td>${p.score >= 0 ? "+" : ""}${p.score}</td><td>${p.weight}%</td><td>${p.contribution >= 0 ? "+" : ""}${p.contribution?.toFixed(1)}</td></tr>`).join("")}
-    </tbody></table>` : ""}
 
     ${(t.drivers || []).length ? `<div class="callout"><b>Key drivers:</b> ${t.drivers.join(" · ")}</div>` : ""}
 
