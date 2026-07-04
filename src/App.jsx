@@ -5108,6 +5108,40 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
   const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
   const [fsSymbol, setFsSymbol] = useState(null);
 
+  // Mobile-only: size the chart frame to fill exactly the space between itself and the floating
+  // bottom nav (measured live, not guessed via a fixed calc()), so the interval toggles + chart +
+  // symbol strip all fit above the nav with no vertical swipe needed. The page can still scroll to
+  // reveal the footer disclaimer below the nav — that's fine, only the interactive chart shouldn't
+  // require it.
+  const mobileFrameWrapRef = useRef(null);
+  const mobileStripRef = useRef(null);
+  const [mobileFrameH, setMobileFrameH] = useState(420);
+  useEffect(() => {
+    if (!isMobileView) return;
+    const recalc = () => {
+      const frameEl = mobileFrameWrapRef.current;
+      const stripEl = mobileStripRef.current;
+      if (!frameEl) return;
+      const navEl = document.querySelector(".bd-bottom-nav");
+      const navRect = navEl?.getBoundingClientRect();
+      // Hidden/absent nav (display:none) reports an all-zero rect — fall back to a sane clearance.
+      const navTop = navRect && navRect.height > 0 ? navRect.top : window.innerHeight - 100;
+      const frameTop = frameEl.getBoundingClientRect().top;
+      const stripH = stripEl?.getBoundingClientRect().height || 0;
+      const available = navTop - frameTop - stripH - 20;
+      setMobileFrameH(Math.max(280, Math.round(available)));
+    };
+    recalc();
+    const id = requestAnimationFrame(recalc); // strip/nav may not have painted yet on first pass
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+    };
+  }, [isMobileView, interval, activeSymbol]);
+
   useEffect(() => {
     try { localStorage.setItem("overwatch:charts", JSON.stringify(selected)); } catch {}
   }, [selected]);
@@ -5183,13 +5217,13 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
                 ))}
               </div>
             </div>
-            <div key={`${activeSymbol}-${interval}`} className="mobile-chart-frame" style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
+            <div key={`${activeSymbol}-${interval}`} ref={mobileFrameWrapRef} style={{ height: mobileFrameH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
               <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
               <button className="chart-expand-btn" onClick={() => setFsSymbol(activeSymbol)} title="Fullscreen">
                 <Maximize2 size={14} />
               </button>
             </div>
-            <div className="chart-symbol-strip">
+            <div className="chart-symbol-strip" ref={mobileStripRef}>
               {CHART_PRESETS.map((p) => (
                 <button
                   key={p.symbol}
