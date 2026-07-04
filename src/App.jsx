@@ -3960,7 +3960,10 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
 
 const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, notify }) => {
   const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
-  const t = viewing || thesis.data;
+  // Nothing generated this session and nothing explicitly recalled — default to the most recent
+  // archived thesis (newest-first) rather than an empty prompt, same unwrap as the Library's row click.
+  const latestArchived = history.length ? (history[0]._type === "newsletter" ? (history[0]._thesis || history[0]) : history[0]) : null;
+  const t = viewing || thesis.data || latestArchived;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   // Up/down nav across the saved thesis archive (newest first), mirroring the newsletter reader.
   // Index 0 is the live latest — stepping onto it drops back to the live card (setViewing(null)).
