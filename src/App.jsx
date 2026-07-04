@@ -5881,6 +5881,46 @@ const StrategyLabTab = ({ notify = null }) => {
           sub="VIX Range Intraday Reversal Momentum Scalper — Keltner-band fade with RSI confirmation"
           tools={dirty ? <button className="btn btn-ghost btn-sm" title="Reset every input to the strategy's defaults" onClick={() => setSaved(ALGO_DEFAULTS)}><RotateCcw size={12} /> Reset</button> : null}
         >
+          {/* Live signal monitor — kept at the top of the card so the current read is the first thing
+              you see; the same parameters below drive both this readout and the backtest. */}
+          <div style={{ marginBottom: 16, borderBottom: "1px solid var(--line)", paddingBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 11 }}>
+              <Zap size={14} style={{ color: C.brass, flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text)" }}>Live signal</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>Evaluates completed {p.interval} bars · auto-refreshes every 60s</div>
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", flexShrink: 0 }} title="Re-check the latest bar now" onClick={() => setPollSeq((n) => n + 1)}>
+                <RefreshCw size={12} className={live.status === "idle" || (live.status !== "error" && !live.data) ? "spin" : undefined} /> Refresh
+              </button>
+            </div>
+            {!st && live.status !== "error" && <LoadingBlock lines={3} msg="Reading the latest bars…" />}
+            {live.status === "error" && !st && <ErrBlock msg={live.error} onRetry={() => setPollSeq((n) => n + 1)} />}
+            {st && (
+              <>
+                <div className="algo-hero" style={st.signal ? { borderColor: st.signal === "long" ? "rgba(34,197,94,.45)" : "rgba(239,68,68,.45)" } : undefined}>
+                  <span className="algo-hero-badge" style={{ color: st.signal === "long" ? C.bull : st.signal === "short" ? C.bear : "var(--muted)" }}>
+                    {st.signal === "long" ? "LONG SETUP" : st.signal === "short" ? "SHORT SETUP" : "NO SETUP"}
+                  </span>
+                  <span className="algo-jmeta">
+                    {st.signal
+                      ? `stop ${fmtNum(st.sl, 2)} · target ${fmtNum(st.tp, 2)} · ${algoTime(st.barTs)} bar`
+                      : `last completed bar ${algoTime(st.barTs)} ET · close ${fmtNum(st.price, 2)}`}
+                  </span>
+                </div>
+                <div>
+                  {check(outside ? "pass" : "wait", "Keltner band", st.lowerKC == null ? "warming up" : `close ${fmtNum(st.price, 2)} · bands ${fmtNum(st.lowerKC, 2)} – ${fmtNum(st.upperKC, 2)}`)}
+                  {check(rsiHit ? "pass" : "wait", "RSI-14", st.rsi == null ? "warming up" : `${fmtNum(st.rsi, 1)} · needs <${OS} long or >${OB} short`)}
+                  {check(st.vixOK ? "pass" : "fail", "VIX regime", st.vix == null ? "unavailable" : `${fmtNum(st.vix, 2)} · gate ${vMin} – ${vMax}`)}
+                  {check(st.inWindow ? "pass" : "fail", "Session window", `bar ${st.etHour}:${String(st.etMinute).padStart(2, "0")} ET · trades ${sH}:00 → ${eH}:00`)}
+                </div>
+                <div style={{ marginTop: 11, fontSize: 11.5, color: "var(--faint)", lineHeight: 1.5 }}>
+                  Signals fire on bar close, never mid-bar. Detection runs while the desk is open — signals that print while it's closed
+                  aren't journaled.
+                </div>
+              </>
+            )}
+          </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
             <label className="lab-field" style={{ marginTop: 0 }}>
               <span className="lab-label">Symbol</span>
@@ -5930,46 +5970,6 @@ const StrategyLabTab = ({ notify = null }) => {
             {bt.status === "loading" ? <><RefreshCw size={14} className="spin" /> Replaying bars…</> : <><PlayCircle size={14} /> Run backtest</>}
           </button>
 
-          {/* Live signal monitor — consolidated into the inputs card so the same parameters drive both
-              the backtest and the live readout without a separate panel. */}
-          <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 11 }}>
-              <Zap size={14} style={{ color: C.brass, flexShrink: 0 }} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 12, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text)" }}>Live signal</div>
-                <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>Evaluates completed {p.interval} bars · auto-refreshes every 60s</div>
-              </div>
-              <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", flexShrink: 0 }} title="Re-check the latest bar now" onClick={() => setPollSeq((n) => n + 1)}>
-                <RefreshCw size={12} className={live.status === "idle" || (live.status !== "error" && !live.data) ? "spin" : undefined} /> Refresh
-              </button>
-            </div>
-            {!st && live.status !== "error" && <LoadingBlock lines={3} msg="Reading the latest bars…" />}
-            {live.status === "error" && !st && <ErrBlock msg={live.error} onRetry={() => setPollSeq((n) => n + 1)} />}
-            {st && (
-              <>
-                <div className="algo-hero" style={st.signal ? { borderColor: st.signal === "long" ? "rgba(34,197,94,.45)" : "rgba(239,68,68,.45)" } : undefined}>
-                  <span className="algo-hero-badge" style={{ color: st.signal === "long" ? C.bull : st.signal === "short" ? C.bear : "var(--muted)" }}>
-                    {st.signal === "long" ? "LONG SETUP" : st.signal === "short" ? "SHORT SETUP" : "NO SETUP"}
-                  </span>
-                  <span className="algo-jmeta">
-                    {st.signal
-                      ? `stop ${fmtNum(st.sl, 2)} · target ${fmtNum(st.tp, 2)} · ${algoTime(st.barTs)} bar`
-                      : `last completed bar ${algoTime(st.barTs)} ET · close ${fmtNum(st.price, 2)}`}
-                  </span>
-                </div>
-                <div>
-                  {check(outside ? "pass" : "wait", "Keltner band", st.lowerKC == null ? "warming up" : `close ${fmtNum(st.price, 2)} · bands ${fmtNum(st.lowerKC, 2)} – ${fmtNum(st.upperKC, 2)}`)}
-                  {check(rsiHit ? "pass" : "wait", "RSI-14", st.rsi == null ? "warming up" : `${fmtNum(st.rsi, 1)} · needs <${OS} long or >${OB} short`)}
-                  {check(st.vixOK ? "pass" : "fail", "VIX regime", st.vix == null ? "unavailable" : `${fmtNum(st.vix, 2)} · gate ${vMin} – ${vMax}`)}
-                  {check(st.inWindow ? "pass" : "fail", "Session window", `bar ${st.etHour}:${String(st.etMinute).padStart(2, "0")} ET · trades ${sH}:00 → ${eH}:00`)}
-                </div>
-                <div style={{ marginTop: 11, fontSize: 11.5, color: "var(--faint)", lineHeight: 1.5 }}>
-                  Signals fire on bar close, never mid-bar. Detection runs while the desk is open — signals that print while it's closed
-                  aren't journaled.
-                </div>
-              </>
-            )}
-          </div>
         </Card>
 
         <Card
