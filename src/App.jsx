@@ -3448,8 +3448,19 @@ const resolveEnv = (env, live) => ({
   T: numOr(env.days, 30) / 365,
 });
 
+// Does a strike sit on top of a thesis's own upside/downside level (within half a strike step)?
+// Used to tell the AI (and the user) when the fed options scenario isn't an arbitrary strike pick,
+// but is deliberately scoped to the thesis's own target or invalidation.
+const alignedLevelTag = (K, thesisLevels) => {
+  if (!(K > 0) || !thesisLevels) return null;
+  const step = K >= 2000 ? 25 : K >= 1000 ? 10 : K >= 100 ? 5 : 1;
+  if (thesisLevels.up > 0 && Math.abs(K - thesisLevels.up) <= step / 2) return "target";
+  if (thesisLevels.down > 0 && Math.abs(K - thesisLevels.down) <= step / 2) return "invalidation";
+  return null;
+};
+
 // Builds a compact human-readable summary of the enabled desk tools for the AI synthesis.
-const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
+const buildDeskToolsContext = ({ deskTools, market, points, instrument, thesisLevels = null }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
   const lines = [];
@@ -3461,8 +3472,10 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
     if (deskTools.options.feed) {
       const oStrike = numOr(deskTools.options.strike, roundStrike(S));
       const obs = blackScholes({ S, K: oStrike, T, r, q, sigma, type: deskTools.options.type });
+      const tag = alignedLevelTag(oStrike, thesisLevels);
       lines.push(
-        `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt).`
+        `Options scenario: ${deskTools.options.type.toUpperCase()} ${fmtNum(oStrike, 0)} theo ${fmtNum(obs.price, 2)} (Δ ${fmtNum(obs.delta, 2)}, Γ ${fmtNum(obs.gamma, 4)}, Θ ${fmtNum(obs.theta, 2)}/day, vega ${fmtNum(obs.vega, 2)}/pt)`
+        + (tag ? ` — strike is deliberately set at the desk's own ${tag} level, not an arbitrary pick.` : ".")
       );
     }
   }
@@ -3471,12 +3484,16 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
 };
 
 // Short chip labels for the structures fed into a thesis — rendered back in the output as confirmation.
-const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
+const deskStructureLabels = ({ deskTools, market, points, instrument, thesisLevels = null }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, days } = resolveEnv(deskTools.env, live);
   const out = [];
   const o = deskTools.options;
-  if (S > 0 && o.feed) out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
+  if (S > 0 && o.feed) {
+    const K = numOr(o.strike, roundStrike(S));
+    const tag = alignedLevelTag(K, thesisLevels);
+    out.push(`Options: ${o.type} ${fmtNum(K, 0)} · ${days}d${tag ? ` (${tag})` : ""}`);
+  }
   return out;
 };
 
@@ -3736,8 +3753,14 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true, symbol = null, onPickTicker = null, pickExclude = null }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true, symbol = null, onPickTicker = null, pickExclude = null, thesis = null }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
+  // Match-thesis affordance: only offered when the thesis on screen was generated for this same
+  // instrument, so "Target" / "Invalidation" pulls the desk's own levels rather than a stale read.
+  const thesisForSymbol = thesis && thesis._instrument === symbol ? thesis : null;
+  const thesisTarget = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.upside) : null;
+  const thesisInvalidation = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.downside) : null;
+  const matchThesis = (type, level) => { setOpt("type", type); setOpt("strike", String(roundStrike(level))); setOpt("feed", true); };
   // Have any calculator inputs been changed from their defaults? Drives the Reset control.
   const DEF = DEFAULT_DESK_TOOLS;
   const inputsDirty =
@@ -3773,6 +3796,23 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
             <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
           ))}
         </div>
+        {(thesisTarget || thesisInvalidation) && (
+          <div className="lab-field" style={{ marginBottom: 14 }}>
+            <span className="lab-label">Match thesis</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {thesisTarget && (
+                <button className="btn btn-sm" title="Price a call at the thesis's own upside target" onClick={() => matchThesis("call", thesisTarget)}>
+                  Target {fmtNum(thesisTarget, 0)}
+                </button>
+              )}
+              {thesisInvalidation && (
+                <button className="btn btn-sm" title="Price a put at the thesis's own invalidation level" onClick={() => matchThesis("put", thesisInvalidation)}>
+                  Invalidation {fmtNum(thesisInvalidation, 0)}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="grid g-3" style={{ gap: 10 }}>
           <NumField label="Spot" value={env.spot} placeholder={fmtNum(live.spot ?? 0, 2)} onChange={(v) => setEnv("spot", v)} />
           <NumField label="Strike" value={opt.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(v) => setOpt("strike", v)} />
@@ -3964,11 +4004,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         {toolView === "options" && (
           hasSecondary ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} />
+              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} thesis={t} />
               <OptionsCalculator env={deskTools.env2} setEnv={setEnv2} opt={deskTools.options2} setOpt={setOpt2} onReset={resetOptionsCalc2} live={live2} heading={`Secondary · ${live2.cfg?.label || secondary}`} showFeed={false} symbol={secondary} onPickTicker={setSecondary} pickExclude={instrument} />
             </div>
           ) : (
-            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} onPickTicker={setInstrument} />
+            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} onPickTicker={setInstrument} thesis={t} />
           )
         )}
       </div>
@@ -6028,8 +6068,15 @@ export default function Overwatch() {
           levels: secLevels || points.data?.[secCfg.pointsKey] || null,
         };
       }
+      // If the currently-displayed thesis is for this same instrument, its own target/invalidation
+      // levels let the fed options scenario be flagged as deliberately scoped to the desk's read,
+      // rather than an arbitrary strike — carries through to both the AI prompt and the chip label.
+      const priorThesis = thesis.data && thesis.data._instrument === instrument ? thesis.data : null;
+      const priorThesisLevels = priorThesis
+        ? { up: parseFirstPrice(priorThesis.levels?.upside), down: parseFirstPrice(priorThesis.levels?.downside) }
+        : null;
       const deskContext = deskTools.feedToThesis
-        ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument })
+        ? buildDeskToolsContext({ deskTools, market: market.data, points: points.data, instrument, thesisLevels: priorThesisLevels })
         : null;
       // Jack's prior calls: recent Jacks Journal entries (cloud newsletter metadata) give the head
       // trader continuity — he references what the desk already published. Fail-soft: no journal,
@@ -6070,7 +6117,7 @@ export default function Overwatch() {
         _persona: persona,
         _personaName: (PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).name,
         _deskStructures: deskContext
-          ? deskStructureLabels({ deskTools, market: market.data, points: points.data, instrument })
+          ? deskStructureLabels({ deskTools, market: market.data, points: points.data, instrument, thesisLevels: priorThesisLevels })
           : null,
         _tradeStructures: deskContext
           ? buildTradeStructures({
