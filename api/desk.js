@@ -877,6 +877,8 @@ const FINNHUB_RT_SYMBOLS = new Set([
   // AI-infra basket — US-listed equities + ADRs, all covered by Finnhub's free /quote. (SPCX is
   // omitted deliberately: it's an uncertain symbol, so it falls back to the Yahoo/delayed path.)
   "AVGO", "AMD", "MRVL", "MU", "ASML", "TSM", "ALAB", "CRWV", "VRT", "GEV",
+  // Healthcare-infra basket — all US-listed equities, covered by Finnhub's free /quote.
+  "UNH", "HCA", "UHS", "MCK", "CAH", "DGX", "TMO", "MDT", "SYK", "ISRG", "WELL", "VTR", "VEEV", "DOCS", "TEM",
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 

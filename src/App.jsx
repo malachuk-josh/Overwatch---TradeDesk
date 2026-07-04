@@ -116,6 +116,23 @@ const DEFAULT_WATCHLIST = [
   { symbol: "VRT", name: "Vertiv Holdings", off: true, cat: "AI Infra" },
   { symbol: "GEV", name: "GE Vernova", off: true, cat: "AI Infra" },
   { symbol: "SPCX", name: "SPCX", off: true, cat: "AI Infra" },
+  // Healthcare infrastructure basket — hospitals, distributors, diagnostics, devices, health REITs
+  // and health-tech. Live-quoted, shipped hidden by default under the "Healthcare Infra" subcategory.
+  { symbol: "UNH", name: "UnitedHealth Group", off: true, cat: "Healthcare Infra" },
+  { symbol: "HCA", name: "HCA Healthcare", off: true, cat: "Healthcare Infra" },
+  { symbol: "UHS", name: "Universal Health Services", off: true, cat: "Healthcare Infra" },
+  { symbol: "MCK", name: "McKesson", off: true, cat: "Healthcare Infra" },
+  { symbol: "CAH", name: "Cardinal Health", off: true, cat: "Healthcare Infra" },
+  { symbol: "DGX", name: "Quest Diagnostics", off: true, cat: "Healthcare Infra" },
+  { symbol: "TMO", name: "Thermo Fisher Scientific", off: true, cat: "Healthcare Infra" },
+  { symbol: "MDT", name: "Medtronic", off: true, cat: "Healthcare Infra" },
+  { symbol: "SYK", name: "Stryker", off: true, cat: "Healthcare Infra" },
+  { symbol: "ISRG", name: "Intuitive Surgical", off: true, cat: "Healthcare Infra" },
+  { symbol: "WELL", name: "Welltower", off: true, cat: "Healthcare Infra" },
+  { symbol: "VTR", name: "Ventas", off: true, cat: "Healthcare Infra" },
+  { symbol: "VEEV", name: "Veeva Systems", off: true, cat: "Healthcare Infra" },
+  { symbol: "DOCS", name: "Doximity", off: true, cat: "Healthcare Infra" },
+  { symbol: "TEM", name: "Tempus AI", off: true, cat: "Healthcare Infra" },
   // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
   // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
   { symbol: "XLK", name: "Technology Sector SPDR", off: true },
@@ -130,7 +147,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 60;
+const WATCHLIST_CAP = 80;
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
