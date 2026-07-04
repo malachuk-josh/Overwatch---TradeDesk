@@ -5183,7 +5183,7 @@ const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
                 ))}
               </div>
             </div>
-            <div key={`${activeSymbol}-${interval}`} style={{ height: 420, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
+            <div key={`${activeSymbol}-${interval}`} className="mobile-chart-frame" style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
               <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
               <button className="chart-expand-btn" onClick={() => setFsSymbol(activeSymbol)} title="Fullscreen">
                 <Maximize2 size={14} />
