@@ -501,6 +501,67 @@ const buildTimingSnapshot = ({ market, news, points } = {}) => {
   };
 };
 
+// How many calendar landmines are on the tape right now (0-45) — mirrors the fallback thesis
+// engine's event-risk penalty (api/desk.js) so the client can preview it without a round trip.
+const calendarRiskScore = (points = {}) => {
+  const groups = points?.calendarGroups || {};
+  const events = [...(groups.today || []), ...(groups.tomorrow || []), ...(groups.upcoming || [])];
+  const high = events.filter((event) => event.importance === "high").length;
+  const fomc = events.some(isFomcEvent) ? 1 : 0;
+  return clamp(high * 5 + fomc * 14, 0, 45);
+};
+
+const positioningFactorScore = (points = {}) => {
+  const pos = points?.positioning;
+  if (pos && typeof pos === "object" && Number.isFinite(Number(pos.score))) {
+    // Soft deadzone over the "mixed" band so positioning only carries weight when genuinely decisive.
+    const r = Number(pos.score);
+    const eff = Math.sign(r) * Math.max(0, Math.abs(r) - 0.5);
+    return Math.round(clamp(eff * 18, -100, 100));
+  }
+  if (pos?.posture === "risk-on") return 35;
+  if (pos?.posture === "defensive") return -35;
+  return 0;
+};
+
+// Live, unweighted pillar scores (-100..100) computed straight from synced market/news/points data.
+// Mirrors the fallback thesis engine's factor math (api/desk.js `makeThesis`) so the Pillar weights
+// card can preview what each pillar currently reads, independent of the weight sliders themselves.
+const computePillarFactorScores = ({ market, news, points } = {}) => {
+  const tickers = market?.tickers || [];
+  const indexChanges = ["SPX", "DJI", "ES", "NQ", "YM", "NDX"]
+    .map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct)
+    .filter(Number.isFinite);
+  const cashTape = avgChange(tickers, ["SPX", "NDX", "DJI"]);
+  const futuresTape = avgChange(tickers, ["ES", "NQ", "YM"]);
+  const staleCashRisk = marketSession().label !== "MARKET OPEN";
+  const tape = staleCashRisk && Number.isFinite(futuresTape)
+    ? (futuresTape * 0.7) + ((Number.isFinite(cashTape) ? cashTape : futuresTape) * 0.3)
+    : indexChanges.length
+      ? indexChanges.reduce((sum, v) => sum + v, 0) / indexChanges.length
+      : 0;
+  const headlines = news?.headlines || [];
+  const newsScore = Number.isFinite(Number(news?.sentimentScore))
+    ? Number(news.sentimentScore)
+    : headlines.length
+      ? (headlines.filter((h) => h.sentiment === "bullish").length - headlines.filter((h) => h.sentiment === "bearish").length) / headlines.length * 100
+      : 0;
+  const trendScore = Number.isFinite(Number(points?.internals?.trendDetail?.score))
+    ? Number(points.internals.trendDetail.score)
+    : points?.internals?.trend === "uptrend" ? 55 : points?.internals?.trend === "downtrend" ? -55 : 0;
+  const breadthScore = Number.isFinite(Number(points?.internals?.breadthDetail?.score)) ? Number(points.internals.breadthDetail.score) : 0;
+  const vixScore = (points?.vix?.spot || 20) > 28 ? -65 : (points?.vix?.spot || 20) < 16 ? 35 : -10;
+  const volScore = Number.isFinite(Number(points?.internals?.volDetail?.score)) ? -Number(points.internals.volDetail.score) : vixScore;
+  const eventPenalty = calendarRiskScore(points);
+  return {
+    technicals: Math.round(clamp(tape * 34 + trendScore * 0.58 + breadthScore * 0.5, -100, 100)),
+    macro: Math.round(clamp(newsScore * 0.8 - eventPenalty * 0.35, -100, 100)),
+    sentiment: Math.round(clamp(newsScore * 0.55 + tape * 16 + breadthScore * 0.22, -100, 100)),
+    positioning: positioningFactorScore(points),
+    eventRisk: Math.round(clamp(volScore - eventPenalty, -100, 100)),
+  };
+};
+
 const nyIsoDate = (offsetDays = 0) => {
   const date = new Date(Date.now() + offsetDays * 86400000);
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -1560,8 +1621,11 @@ const SentimentDonut = ({ headlines }) => {
 // Interactive pillar-weight radar. When onChange(newWeights) is supplied, the vertices become drag
 // handles — dragging a point sets that pillar's weight and the rest rebalance equally. Each gesture
 // redistributes from a snapshot taken at drag-start, so the move is stable and fully reversible.
-const FactorRadarChart = ({ weights, onChange }) => {
-  const data = FACTORS.map((f) => ({ key: f.key, k: f.label.split(" ")[0], v: Number(weights[f.key]) || 0 }));
+const FactorRadarChart = ({ weights, onChange, scores = null }) => {
+  const data = FACTORS.map((f) => ({
+    key: f.key, k: f.label.split(" ")[0], v: Number(weights[f.key]) || 0,
+    score: scores && Number.isFinite(Number(scores[f.key])) ? Number(scores[f.key]) : null,
+  }));
   const n = data.length;
   // Zoom the radial scale to the current weights (rounded up to a clean bound, with headroom) so a
   // balanced ~20% spread fills most of the chart instead of hugging the center, while still letting a
@@ -1638,7 +1702,13 @@ const FactorRadarChart = ({ weights, onChange }) => {
           return (
             <g key={d.key}>
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
-              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fill="#94A3B8" fontSize="10.5" fontFamily="JetBrains Mono, monospace">{d.k}</text>
+              <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace">
+                {d.score != null && <title>{`Current ${d.k} read: ${d.score > 0 ? "+" : ""}${d.score} (unweighted, -100 to 100) — the weight below is how much it counts toward the call`}</title>}
+                <tspan fill="#94A3B8">{d.k}</tspan>
+                {d.score != null && (
+                  <tspan fill={d.score > 3 ? C.bull : d.score < -3 ? C.bear : C.brass} fontWeight="700"> {d.score > 0 ? "+" : ""}{d.score}</tspan>
+                )}
+              </text>
               <text x={lx} y={ly + 8} textAnchor="middle" dominantBaseline="middle" fill="#3B82F6" fontSize="10.5" fontWeight="700" fontFamily="JetBrains Mono, monospace">{fmtPct(d.v)}%</text>
             </g>
           );
@@ -3888,7 +3958,8 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, points, onGoLibrary, notify }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, notify }) => {
+  const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
   const t = viewing || thesis.data;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
   // Up/down nav across the saved thesis archive (newest first), mirroring the newsletter reader.
@@ -4035,7 +4106,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           sub={`Drag the points — fixed 100-point budget, raising one pillar pulls equally from the rest (max ${MAX_PILLAR}% each)`}
           tools={<button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>}
         >
-          <FactorRadarChart weights={weights} onChange={setWeights} />
+          <FactorRadarChart weights={weights} onChange={setWeights} scores={pillarScores} />
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
             <span className="lab-label" style={{ margin: 0 }}>Allocated</span>
             <span className="mono" style={{ fontSize: 12, color: weightSum === WEIGHT_TOTAL ? C.brass : C.bear }}>{weightSum} / {WEIGHT_TOTAL}</span>
@@ -6228,7 +6299,7 @@ export default function Overwatch() {
             history={thesisHistory} viewing={viewing} setViewing={setViewing}
             onDeleteHist={deleteArchiveEntry} anyData={anyData}
             deskTools={deskTools} setDeskTools={setDeskTools}
-            market={market.data} points={points.data}
+            market={market.data} news={news.data} points={points.data}
             onGoLibrary={() => nav("archives")}
             notify={notify}
           />
