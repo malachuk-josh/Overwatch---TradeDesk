@@ -1314,7 +1314,7 @@ const MiniStrip = ({ candles, live = false }) => {
         const now = i === candles.length - 1;
         return (
           <div className={`msk${now && live ? " msk-live" : ""}`} key={i}>
-            <div className="msk-wick" style={{ top: `${yHi}%`, height: `${Math.max(yLo - yHi, 1)}%` }} />
+            <div className={`msk-wick ${tone}`} style={{ top: `${yHi}%`, height: `${Math.max(yLo - yHi, 1)}%` }} />
             <div className={`msk-body ${tone}`} style={{ top: `${bodyTop}%`, height: `${bodyH}%` }} />
           </div>
         );
