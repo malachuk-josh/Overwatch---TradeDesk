@@ -4752,76 +4752,6 @@ const OUTCOME_META = {
   miss: { label: "MISS", color: "#EF4444" },
   flat: { label: "FLAT", color: "#94A3B8" },
 };
-const ThesisScoreboard = ({ history }) => {
-  const graded = history.filter((e) => (!e._type || e._type === "thesis") && e._outcome);
-  const trades = history.filter((e) => e._trade && Number.isFinite(e._trade.pnl));
-  if (!graded.length && !trades.length) return null;
-  const hitRate = (list) => {
-    const h = list.filter((e) => e._outcome.result === "hit").length;
-    const m = list.filter((e) => e._outcome.result === "miss").length;
-    return h + m ? Math.round((h / (h + m)) * 100) : null;
-  };
-  const overall = hitRate(graded);
-  const byBias = ["bullish", "bearish", "neutral"]
-    .map((b) => ({ key: b, list: graded.filter((e) => e.bias === b) }))
-    .filter((g) => g.list.length);
-  const convBand = (c) => (c >= 8 ? "8–10" : c >= 5 ? "5–7" : "1–4");
-  const byConv = ["8–10", "5–7", "1–4"]
-    .map((band) => ({ key: `conviction ${band}`, list: graded.filter((e) => Number.isFinite(Number(e.conviction)) && convBand(Number(e.conviction)) === band) }))
-    .filter((g) => g.list.length);
-  const byInst = Object.values(graded.reduce((acc, e) => {
-    const sym = e._instrument || e.instrument || "—";
-    (acc[sym] ||= { key: sym, list: [] }).list.push(e);
-    return acc;
-  }, {})).sort((a, b) => b.list.length - a.list.length).slice(0, 4);
-  const totalPnl = trades.reduce((s, e) => s + e._trade.pnl, 0);
-  const wins = trades.filter((e) => e._trade.pnl > 0).length;
-  const rateColor = (r) => (r == null ? C.muted : r >= 55 ? C.bull : r <= 45 ? C.bear : C.brass);
-  const Row = ({ group }) => {
-    const r = hitRate(group.list);
-    return (
-      <div className="sb-row">
-        <span className="sb-row-k">{group.key}</span>
-        <span className="sb-row-n">{group.list.length} call{group.list.length === 1 ? "" : "s"}</span>
-        <span className="sb-row-v" style={{ color: rateColor(r) }}>{r == null ? "all flat" : `${r}%`}</span>
-      </div>
-    );
-  };
-  return (
-    <Card icon={Crosshair} title="Desk scoreboard" sub="Graded calls and logged trades — the feedback loop">
-      <div className="sb-tiles">
-        <div className="sb-tile">
-          <span>Calls graded</span>
-          <b>{graded.length}</b>
-        </div>
-        <div className="sb-tile">
-          <span>Hit rate</span>
-          <b style={{ color: rateColor(overall) }}>{overall == null ? "—" : `${overall}%`}</b>
-          <small>flat pushes excluded</small>
-        </div>
-        <div className="sb-tile">
-          <span>Trades logged</span>
-          <b>{trades.length}</b>
-          {trades.length > 0 && <small>{wins} win{wins === 1 ? "" : "s"}</small>}
-        </div>
-        <div className="sb-tile">
-          <span>Trade P/L</span>
-          <b style={{ color: trades.length ? (totalPnl >= 0 ? C.bull : C.bear) : C.muted }}>
-            {trades.length ? `${totalPnl >= 0 ? "+" : "−"}${fmtUsd(Math.abs(totalPnl), 0)}` : "—"}
-          </b>
-        </div>
-      </div>
-      {(byBias.length > 0 || byConv.length > 0 || byInst.length > 0) && (
-        <div className="sb-breakdown">
-          {byBias.length > 0 && <div className="sb-col"><div className="sb-col-h">By bias</div>{byBias.map((g) => <Row group={g} key={g.key} />)}</div>}
-          {byConv.length > 0 && <div className="sb-col"><div className="sb-col-h">By conviction</div>{byConv.map((g) => <Row group={g} key={g.key} />)}</div>}
-          {byInst.length > 0 && <div className="sb-col"><div className="sb-col-h">By instrument</div>{byInst.map((g) => <Row group={g} key={g.key} />)}</div>}
-        </div>
-      )}
-    </Card>
-  );
-};
-
 const ArchiveTab = ({
   archiveHistory,
   viewing,
@@ -4853,7 +4783,6 @@ const ArchiveTab = ({
       >
         {journalOpen && <CloudNewsletterList inSplit={inSplit} auth={auth} />}
       </Card>
-      <ThesisScoreboard history={archiveHistory} />
       <Card
         icon={History}
         title="Thesis Library"
