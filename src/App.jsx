@@ -5546,16 +5546,16 @@ const StrategyLabTab = ({ notify = null }) => {
       </div>
 
       {bt.data && bt.data.trades.length > 0 && (
-        <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · oldest first`}>
+        <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · newest first`}>
           <div className="algo-table-wrap">
             <table className="algo-table">
               <thead>
                 <tr><th>#</th><th>Side</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P/L</th><th>P/L %</th><th>Exit via</th></tr>
               </thead>
               <tbody>
-                {bt.data.trades.map((t, i) => (
+                {[...bt.data.trades].reverse().map((t, i) => (
                   <tr key={`${t.entryT}-${i}`}>
-                    <td>{i + 1}</td>
+                    <td>{bt.data.trades.length - i}</td>
                     <td><span className={`algo-side ${t.side}`}>{t.side.toUpperCase()}</span></td>
                     <td>{algoTime(t.entryT)} · <b>{fmtNum(t.entryPx, 2)}</b></td>
                     <td>{algoTime(t.exitT)} · <b>{fmtNum(t.exitPx, 2)}</b></td>
