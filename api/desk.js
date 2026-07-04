@@ -2491,7 +2491,7 @@ Discipline:
 - Actively seek disconfirming evidence — hunt the bear case, don't just confirm a prior.
 - If the web doesn't support a claim, say the evidence is thin rather than inventing it.
 
-You have web_search and web_fetch. A few well-aimed queries beat many vague ones; fetch the actual page when a snippet isn't enough (filings, transcripts, IR). When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
+Hard budget: this runs inside a 60-second window. You get AT MOST 3 web searches and 1 page fetch, total, for the whole task — spend them well. Default to search results alone; only fetch a page if a snippet genuinely can't answer the question. Do not chain extra searches to "double check" — form the brief from what you already have as soon as it's enough to answer the question. When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
 
 const RESEARCH_SCHEMA = `Respond with ONLY a raw JSON object — no markdown, no commentary before or after. Exact schema:
 {"headline":"<punchy 6-12 word takeaway>","verdict":"bullish|bearish|neutral|mixed","summary":"<3-4 sentence synthesis of what you found and what it means for the instrument>","keyFindings":[{"point":"<a specific, sourced finding>","source":"<publisher name or URL you got it from>"}],"catalysts":[{"when":"<date or timeframe>","event":"<upcoming event>","impact":"<why it matters for price>"}],"risks":["<bear-case / downside bullet>"],"positioning":"<one line on flow, sentiment, short interest or analyst positioning if found, else empty string>","confidence":"high|medium|low — <one clause on why, e.g. thin/conflicting sources>","asOf":"<the recency window your sources actually cover, e.g. 'as of Jul 4 2026, sources from the past 2 weeks'>"}
@@ -2514,14 +2514,16 @@ const callResearch = async ({ prompt, timeoutMs }) => {
     body: JSON.stringify({
       // Sonnet is the fast-but-capable tier the desk wants for a web-fanning tool. Overridable.
       model: process.env.ANTHROPIC_RESEARCH_MODEL || "claude-sonnet-5",
-      max_tokens: 4500,
+      max_tokens: 3500,
       system: RESEARCH_SYSTEM(dateLine()),
       // web_search_20260209 / web_fetch_20260209 carry dynamic filtering: Claude filters results
       // with code before they reach context, for better signal + token efficiency. max_uses bounds
-      // the agentic loop so the whole run fits the serverless budget.
+      // the agentic loop so the whole run reliably fits the serverless budget — each fetch round-trip
+      // can run 10-20s+, so the previous 5 search / 3 fetch ceiling routinely blew past the 55s
+      // internal timeout, burning the tool spend without ever returning a brief.
       tools: [
-        { type: "web_search_20260209", name: "web_search", max_uses: 5 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 },
+        { type: "web_search_20260209", name: "web_search", max_uses: 3 },
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 1 },
       ],
       messages: [{ role: "user", content: prompt }],
     }),
