@@ -1172,6 +1172,42 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .bd-root.light .skel{background:var(--panel3)}
 .bd-root.light .skel::after{background:linear-gradient(90deg,transparent,rgba(180,140,60,.1),transparent)}
 
+/* ---------- research library (deep research harness) ---------- */
+.rl-root{display:flex;flex-direction:column;gap:14px}
+.rl-intro{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border:1px solid var(--line2);border-radius:10px;
+  background:radial-gradient(120% 130% at 0% 0%,rgba(59,130,246,.10),transparent 55%),var(--panel2);
+  font-size:12.5px;line-height:1.55;color:var(--muted)}
+.rl-presets{display:flex;flex-wrap:wrap;gap:7px}
+.rl-preset{padding:6px 11px;border-radius:20px;border:1px solid var(--line2);background:var(--panel2);
+  color:var(--muted);font-size:11.5px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:all .13s;white-space:nowrap}
+.rl-preset:hover{color:var(--brass);border-color:rgba(59,130,246,.4);background:var(--brass-dim)}
+.rl-brief{display:flex;flex-direction:column;gap:14px}
+.rl-brief-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rl-headline{font-family:'Space Grotesk',sans-serif;font-size:17px;line-height:1.25;margin:0;text-wrap:balance}
+.rl-summary{font-size:13px;line-height:1.62;color:var(--text);margin:0}
+.rl-meta{display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--muted);line-height:1.5}
+.rl-meta b{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-right:5px}
+.rl-section{display:flex;flex-direction:column;gap:8px}
+.rl-section-h{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--brass)}
+.rl-src-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--faint)}
+.rl-findings,.rl-catalysts,.rl-risks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rl-findings li{position:relative;padding-left:14px;font-size:12.5px;line-height:1.55;color:var(--text)}
+.rl-findings li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:var(--brass)}
+.rl-findings .rl-src{display:block;margin-top:3px;font-style:normal;font-size:10.5px;color:var(--faint);font-family:'JetBrains Mono',monospace}
+.rl-catalysts li{font-size:12.5px;line-height:1.55;color:var(--muted);padding-left:14px;position:relative}
+.rl-catalysts li::before{content:"›";position:absolute;left:2px;top:0;color:var(--brass)}
+.rl-catalysts li b{color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px}
+.rl-catalysts li em{font-style:normal;color:var(--faint)}
+.rl-risks li{position:relative;padding-left:14px;font-size:12.5px;line-height:1.55;color:var(--text)}
+.rl-risks li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:var(--bear)}
+.rl-positioning{font-size:12.5px;line-height:1.55;color:var(--muted);margin:0}
+.rl-sources{display:flex;flex-wrap:wrap;gap:6px}
+.rl-source{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:5px 9px;border-radius:7px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:11px;text-decoration:none;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:all .13s}
+.rl-source:hover{color:var(--brass);border-color:rgba(59,130,246,.4)}
+.rl-source svg{flex:none}
+
 /* ---------- strategy lab ---------- */
 .algo-table-wrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:9px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}
 .algo-table{width:100%;border-collapse:collapse}
