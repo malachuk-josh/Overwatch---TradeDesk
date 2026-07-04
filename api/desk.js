@@ -1056,13 +1056,18 @@ const primeBoardHistory = async (symbols) => {
 
 // Last 7 daily OHLC candles for one symbol (includes today's partial candle during the session).
 // Pull ~15 calendar days so weekends/holidays still leave 7 completed trading sessions.
-const fetchHistory = async (symbol) => {
+const fetchHistory = async (symbol, period = "d") => {
   if (!symbol || typeof symbol !== "string") return null;
+  const weekly = period === "w";
   try {
     const sym = symbol.toUpperCase();
     const ysym = YAHOO_SYMBOLS[sym] || sym;
     const scale = YAHOO_SCALE[sym] || 1;
-    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=15d&interval=1d`);
+    // Weekly candles use Yahoo's own 1wk interval (7 bars needs ~2 months of range to be safe
+    // across holidays/short weeks) rather than resampling daily bars client-side.
+    const range = weekly ? "3mo" : "15d";
+    const interval = weekly ? "1wk" : "1d";
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=${interval}`);
     const result = payload?.chart?.result?.[0];
     const ts = result?.timestamp || [];
     const bars = result?.indicators?.quote?.[0] || {};
@@ -1071,7 +1076,7 @@ const fetchHistory = async (symbol) => {
       .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
       .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
       .slice(-7);
-    return candles.length ? { symbol: sym, candles } : null;
+    return candles.length ? { symbol: sym, period, candles } : null;
   } catch {
     return null;
   }
@@ -2972,7 +2977,7 @@ export default async function handler(req, res) {
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") data = await fetchStockLevels(payload.symbol, payload.period);
-    else if (operation === "history") data = await fetchHistory(payload.symbol);
+    else if (operation === "history") data = await fetchHistory(payload.symbol, payload.period);
     else if (operation === "rotation") data = await fetchSectorRotation();
     else if (operation === "backtest") data = await runBacktest(payload.params);
     else if (operation === "algolive") data = await runAlgoLive(payload.params, payload.action);
