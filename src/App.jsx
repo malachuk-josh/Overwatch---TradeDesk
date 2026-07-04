@@ -1767,11 +1767,12 @@ const fetchLevelsCached = async (symbol, period = "d") => {
   return data;
 };
 const _lmHistCache = new Map();
-const fetchHistoryCached = async (symbol) => {
-  const hit = _lmHistCache.get(symbol);
+const fetchHistoryCached = async (symbol, period = "d") => {
+  const key = `${symbol}:${period}`;
+  const hit = _lmHistCache.get(key);
   if (hit && Date.now() - hit.ts < 10 * 60 * 1000) return hit.data;
-  const data = await callDesk("history", "", { symbol }).catch(() => null);
-  _lmHistCache.set(symbol, { ts: Date.now(), data });
+  const data = await callDesk("history", "", { symbol, period }).catch(() => null);
+  _lmHistCache.set(key, { ts: Date.now(), data });
   return data;
 };
 
@@ -1790,17 +1791,18 @@ const lmDecimals = (symbol, tickers) => {
   return ETF_INSTRUMENTS.has(symbol) || (Number.isFinite(px) && Math.abs(px) < 1000) ? 2 : 0;
 };
 
-// Seven daily candlesticks for the level-map header (today's partial candle is the last one). Rendered
+// Seven daily (or weekly, when the level map is toggled to the weekly timeframe) candlesticks for
+// the level-map header (the most recent session/week is the last, still-forming candle). Rendered
 // in HTML with the exact same wick/body classes as the Market Pulse ticker-card candle, so the
 // gradient bodies, inset borders, glow and bull/bear/flat tones match one-for-one.
-const CandleStrip = ({ candles, decimals = 2, live = false }) => {
+const CandleStrip = ({ candles, decimals = 2, live = false, period = "d" }) => {
   if (!candles?.length) return null;
   const H = 72, n = candles.length, pad = 5;
   const min = Math.min(...candles.map((c) => c.l));
   const max = Math.max(...candles.map((c) => c.h));
   const yFor = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
   return (
-    <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} daily candles`}>
+    <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} ${period === "w" ? "weekly" : "daily"} candles`}>
       {candles.map((c, i) => {
         const isLast = i === n - 1;
         const up = c.c >= c.o;
@@ -1828,18 +1830,19 @@ const CandleStrip = ({ candles, decimals = 2, live = false }) => {
   );
 };
 
-// Header candles for the active instrument: 5-day history strip, falling back to the single-session
-// MiniCandle while history loads (or if the history fetch fails).
-const LevelMapCandles = ({ symbol, tickers }) => {
+// Header candles for the active instrument: 7-bar history strip (daily or weekly, matching the
+// card's level timeframe toggle), falling back to the single-session MiniCandle while history
+// loads (or if the history fetch fails).
+const LevelMapCandles = ({ symbol, tickers, period = "d" }) => {
   const [hist, setHist] = useState(null);
   useEffect(() => {
     let dead = false;
     setHist(null);
-    fetchHistoryCached(symbol).then((h) => { if (!dead) setHist(h); });
+    fetchHistoryCached(symbol, period).then((h) => { if (!dead) setHist(h); });
     return () => { dead = true; };
-  }, [symbol]);
+  }, [symbol, period]);
   const dec = lmDecimals(symbol, tickers);
-  if (hist?.candles?.length) return <CandleStrip candles={hist.candles} decimals={dec} live={symbolMarketOpen(symbol)} />;
+  if (hist?.candles?.length) return <CandleStrip candles={hist.candles} decimals={dec} live={symbolMarketOpen(symbol)} period={period} />;
   const t = (tickers || []).find((x) => x.symbol === symbol);
   if (!t) return null;
   return (
@@ -1882,7 +1885,7 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
       sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
       tools={
         <span className="lm-tools">
-          <LevelMapCandles symbol={active} tickers={tickers} />
+          <LevelMapCandles symbol={active} tickers={tickers} period={period} />
           {liveT && !liveT._stale && Number.isFinite(Number(liveT.changePct)) && (
             <span className="lm-chg" title={`${active} today: ${fmtSigned(liveT.changePct, 2, "%")} · ${fmtSigned(liveT.change, lmDecimals(active, tickers))} pts`}>
               <b style={{ color: chgColor(liveT.changePct) }}>{fmtSigned(liveT.changePct, 2, "%")}</b>
