@@ -1028,9 +1028,6 @@ select.bd-in option{background:var(--panel);color:var(--text)}
   .bd-root *,.bd-root *::before,.bd-root *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
 }
 
-/* Mobile single-chart frame — was a fixed 420px, leaving a large dead gap above the bottom nav on
-   most phones. Scales with the viewport instead so the chart fills the space actually available. */
-.mobile-chart-frame{height:calc(100dvh - 300px);min-height:380px;max-height:640px}
 /* ========== CHARTS MOBILE SYMBOL STRIP ========== */
 .chart-symbol-strip{
   display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;
