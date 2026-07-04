@@ -977,10 +977,15 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .wl-vis{display:inline-flex;align-items:center;gap:5px;flex:none;padding:5px 11px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:11px;letter-spacing:.03em;cursor:pointer;transition:.12s}
 .wl-vis:hover{border-color:var(--muted);color:var(--text)}
 .wl-vis.on{color:var(--bull);border-color:rgba(34,197,94,.45);background:var(--bull-dim)}
-/* Toggle subcategory (e.g. AI Infra): a labeled group of hidden-by-default names with a show/hide-all. */
-.wl-group{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line2)}
-.wl-group-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+/* Collapsible toggle subcategory (e.g. AI Infra): a labeled, expandable group of hidden-by-default
+   names with a show/hide-all — collapsed by default so they don't bury the main reorderable list. */
+.wl-group{margin-top:8px}
+.wl-group-head{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--panel2);cursor:pointer;transition:border-color .12s,background .12s;font-family:inherit;text-align:left}
+.wl-group-head:hover{border-color:var(--line);background:var(--panel3)}
+.wl-group.open .wl-group-head{border-color:rgba(59,130,246,.35);background:var(--brass-dim)}
+.wl-group-chev{display:grid;place-items:center;color:var(--muted);flex:none}
 .wl-group-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}
+.wl-group-count{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--faint)}
 .wl-group-toggle{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:7px;border:1px solid var(--line2);background:var(--panel);color:var(--muted);font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10.5px;cursor:pointer;transition:.12s}
 .wl-group-toggle:hover{color:var(--text);border-color:var(--muted)}
 .wl-row-sub{margin-left:10px}

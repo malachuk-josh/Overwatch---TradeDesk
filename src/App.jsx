@@ -5139,6 +5139,10 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
   const [confirmReset, setConfirmReset] = useState(false);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
+  // Which watchlist subcategories are expanded. Default collapsed — these supplemental baskets
+  // (AI Infra, Healthcare Infra) otherwise bury the reorderable main list under 30+ rows.
+  const [expandedCats, setExpandedCats] = usePersistentState("overwatch:settings:wlcats", {});
+  const toggleCat = (cat) => setExpandedCats((prev) => ({ ...prev, [cat]: !prev[cat] }));
   if (!open) return null;
 
   // Flip a symbol's visibility on the Pulse grid without dropping it from the board.
@@ -5222,23 +5226,40 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
               </div>
               {[...groups.entries()].map(([cat, items]) => {
                 const allShown = items.every(({ w }) => !w.off);
+                const shownCount = items.filter(({ w }) => !w.off).length;
+                const expanded = !!expandedCats[cat];
                 return (
-                  <div key={cat} className="wl-group">
-                    <div className="wl-group-head">
-                      <span className="wl-group-label">{cat} · {items.length}</span>
-                      <button className="wl-group-toggle" onClick={() => setCategoryHidden(cat, allShown)}>
+                  <div key={cat} className={`wl-group${expanded ? " open" : ""}`}>
+                    <button
+                      className="wl-group-head"
+                      onClick={() => toggleCat(cat)}
+                      aria-expanded={expanded}
+                      title={expanded ? "Collapse" : "Expand"}
+                    >
+                      <span className="wl-group-chev">{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
+                      <span className="wl-group-label">{cat}</span>
+                      <span className="wl-group-count">{shownCount ? `${shownCount}/${items.length} shown` : `${items.length}`}</span>
+                      <span
+                        className="wl-group-toggle"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); setCategoryHidden(cat, allShown); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setCategoryHidden(cat, allShown); } }}
+                      >
                         {allShown ? <><EyeOff size={12} /> Hide all</> : <><Eye size={12} /> Show all</>}
-                      </button>
-                    </div>
-                    <div className="wl-list">
-                      {items.map(({ w }) => (
-                        <div key={w.symbol} className={`wl-row wl-row-sub${w.off ? " off" : ""}`}>
-                          <span className="wl-sym mono">{w.symbol}</span>
-                          <span className="wl-name">{w.name}</span>
-                          {visRow(w)}
-                        </div>
-                      ))}
-                    </div>
+                      </span>
+                    </button>
+                    {expanded && (
+                      <div className="wl-list" style={{ marginTop: 8 }}>
+                        {items.map(({ w }) => (
+                          <div key={w.symbol} className={`wl-row wl-row-sub${w.off ? " off" : ""}`}>
+                            <span className="wl-sym mono">{w.symbol}</span>
+                            <span className="wl-name">{w.name}</span>
+                            {visRow(w)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
