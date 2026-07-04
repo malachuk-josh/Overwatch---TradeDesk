@@ -937,14 +937,6 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 .th-jackread b{color:#D4A048}
 .timing-note{border:1px solid rgba(59,130,246,.28);background:rgba(59,130,246,.07);border-radius:8px;padding:10px 12px;margin-top:13px;font-size:12px;line-height:1.55;color:#F0D5A0}
 .timing-note b{display:block;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass);margin-bottom:4px}
-.th-scorecard{border:1px solid var(--line);border-radius:10px;background:var(--panel2);padding:12px 13px;margin-top:13px;display:flex;flex-direction:column;gap:10px}
-.th-scorecard-row{display:grid;grid-template-columns:115px 1fr;gap:10px;align-items:start}
-.th-scorecard-row b{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--brass)}
-.th-scorecard-row span{font-size:12px;line-height:1.55;color:var(--muted)}
-.pillar-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px}
-.pillar-chip{border:1px solid var(--line);border-radius:8px;background:var(--panel3);padding:8px 9px}
-.pillar-chip b{display:block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--text);margin-bottom:4px}
-.pillar-chip span{font-size:11px;color:var(--muted);line-height:1.45}
 .spectrum{position:relative;height:30px;margin-top:20px}
 .spectrum-track{
   position:absolute;top:12px;left:0;right:0;height:6px;border-radius:3px;
@@ -1060,11 +1052,6 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .toast.t-err{border-color:rgba(239,68,68,.45)}
 
 .bd-foot{padding:15px 22px 22px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);letter-spacing:.06em;line-height:1.8}
-
-@media (max-width: 760px){
-  .th-scorecard-row{grid-template-columns:1fr}
-  .pillar-strip{grid-template-columns:1fr}
-}
 
 @media (prefers-reduced-motion: reduce){
   .bd-root *,.bd-root *::before,.bd-root *::after{animation-duration:.01ms !important;transition-duration:.01ms !important}
