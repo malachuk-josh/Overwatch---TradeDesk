@@ -133,6 +133,8 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 .bd-in:focus-visible,.bd-ta:focus-visible,.mono-in:focus-visible{outline:2px solid #3B82F6;outline-offset:1px}
 .btn-brass{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
 .btn-brass:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
+.btn-sync-icon{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8;padding:7px 9px;line-height:0}
+.btn-sync-icon:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
 .btn-ghost{background:transparent;border-color:transparent;color:var(--muted);padding:7px 10px}
 .btn-ghost:hover{color:var(--text);background:var(--panel3);border-color:transparent;transform:none}
 .btn-sm{padding:6px 11px;font-size:12px;border-radius:7px}
@@ -1198,6 +1200,8 @@ select.bd-in option{background:var(--panel);color:var(--text)}
    the generic .bd-root.light .btn rule above out-specifies plain .btn-brass and would grey them out. */
 .bd-root.light .btn-brass{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
 .bd-root.light .btn-brass:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
+.bd-root.light .btn-sync-icon{background:linear-gradient(135deg,#3B82F6,#2563EB);color:#fff;border-color:#1D4ED8}
+.bd-root.light .btn-sync-icon:hover{background:linear-gradient(135deg,#4B8FF7,#2F6BE0);border-color:#2563EB}
 /* Preserve the amber "inputs changed" state (Generate thesis) in light mode too */
 .bd-root.light .btn-dirty{background:linear-gradient(135deg,#D4A048,#B8842F);color:#fff;border-color:#9A6E26}
 .bd-root.light .btn-dirty:hover{background:linear-gradient(135deg,#E0AE56,#C28F36);border-color:#B8842F}

@@ -6261,8 +6261,8 @@ export default function Overwatch() {
             <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
             {session.label}
           </span>
-          <button className="btn btn-brass" onClick={syncAll} disabled={anyLoading}>
-            {anyLoading ? <><RefreshCw size={14} className="spin" /> <span className="sync-label">Syncing…</span></> : <><Zap size={14} /> <span className="sync-label">Sync</span></>}
+          <button className="btn btn-sync-icon" onClick={syncAll} disabled={anyLoading} title={anyLoading ? "Syncing…" : "Sync live data"} aria-label={anyLoading ? "Syncing…" : "Sync live data"}>
+            {anyLoading ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
           </button>
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
