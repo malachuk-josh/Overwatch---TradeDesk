@@ -4136,11 +4136,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         </Card>
         <Card icon={Crosshair} title="Desk stance">
           <span className="lab-label">Desk lead — whose psychology and strategy write the call</span>
-          <div className="persona-seg">
+          <select className="bd-in" value={persona} onChange={(e) => setPersona(e.target.value)}>
             {Object.entries(PERSONAS).map(([id, p]) => (
-              <button key={id} className={persona === id ? "on" : ""} onClick={() => setPersona(id)} title={p.style}>{p.name}</button>
+              <option key={id} value={id}>{p.name}</option>
             ))}
-          </div>
+          </select>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 7, marginBottom: 14, lineHeight: 1.5 }}>
             {(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).style}
           </div>
