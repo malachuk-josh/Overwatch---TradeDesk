@@ -405,7 +405,7 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 .tk-glow{position:absolute;top:0;left:0;right:0;height:2px}
 /* 7-session history strip, top-center of the card. Same candle colour language as the day candle;
    all seven share one price scale so the strip reads as the recent path. */
-.tk-strip{display:flex;justify-content:center;align-items:flex-end;gap:5px;height:46px;margin-top:10px}
+.tk-strip{display:flex;justify-content:center;align-items:flex-end;gap:2px;height:46px;margin-top:10px}
 .msk{position:relative;width:12px;height:100%}
 /* Wick and body reuse the level maps' exact .candle-wick/.candle-body classes (same neutral wick,
    same solid glowing body, same light-mode overrides) so the two candle strips read identically. */
