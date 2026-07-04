@@ -48,7 +48,6 @@ import Sigma from "lucide-react/dist/esm/icons/sigma.mjs";
 import Gauge from "lucide-react/dist/esm/icons/gauge.mjs";
 import Orbit from "lucide-react/dist/esm/icons/orbit.mjs";
 import Scale from "lucide-react/dist/esm/icons/scale.mjs";
-import Layers from "lucide-react/dist/esm/icons/layers.mjs";
 import Columns2 from "lucide-react/dist/esm/icons/columns-2.mjs";
 import Bot from "lucide-react/dist/esm/icons/bot.mjs";
 import UserRound from "lucide-react/dist/esm/icons/user-round.mjs";
@@ -3385,60 +3384,6 @@ const impliedVol = ({ S, K, T, r = 0, q = 0, type = "call", marketPrice }) => {
 
 const FUTURES_MULT = { ES: 50, NQ: 20, YM: 5, RTY: 50 };
 
-// Generic two-leg vertical spread (same type, long one strike, short another).
-// Handles debit/credit and bull/bear from the strike ordering; values in $ (×100×contracts).
-const evalVertical = ({ type, kLong, kShort, premLong, premShort, contracts = 1 }) => {
-  const pay = (K, S) => (type === "put" ? Math.max(K - S, 0) : Math.max(S - K, 0));
-  const net = premLong - premShort; // >0 = net debit paid
-  const lo = Math.min(kLong, kShort), hi = Math.max(kLong, kShort);
-  const plAt = (S) => pay(kLong, S) - pay(kShort, S) - net;
-  const pls = [0, lo, hi, hi * 2 + 1000].map(plAt);
-  const maxP = Math.max(...pls), maxL = Math.min(...pls);
-  let be = null, prev = plAt(lo);
-  const steps = 2000;
-  for (let i = 1; i <= steps; i++) {
-    const S = lo + ((hi - lo) * i) / steps;
-    const cur = plAt(S);
-    if ((prev <= 0 && cur >= 0) || (prev >= 0 && cur <= 0)) { be = S; break; }
-    prev = cur;
-  }
-  return {
-    net,
-    isDebit: net > 0,
-    width: hi - lo,
-    maxProfit: maxP * 100 * contracts,
-    maxLoss: maxL * 100 * contracts,
-    breakeven: be,
-    rr: maxL !== 0 ? maxP / Math.abs(maxL) : null,
-  };
-};
-
-// Calendar / diagonal: long far-dated, short near-dated. Value estimated at the near expiry
-// assuming spot is unchanged, using the far leg's remaining time value.
-const evalCalendar = ({ type, kNear, kFar, premNear, premFar, contracts = 1, S, sigma, r, q, nearDays, farDays }) => {
-  const net = premFar - premNear; // net debit paid
-  const remT = Math.max(farDays - nearDays, 0) / 365;
-  const farRemain = blackScholes({ S, K: kFar, T: remT, r, q, sigma, type }).price;
-  const nearIntrinsic = type === "put" ? Math.max(kNear - S, 0) : Math.max(S - kNear, 0);
-  const valAtNear = farRemain - nearIntrinsic;
-  return {
-    net,
-    debit: net * 100 * contracts,
-    valueAtNearExpiry: valAtNear * 100 * contracts,
-    estPnl: (valAtNear - net) * 100 * contracts,
-  };
-};
-
-// Pairs / ratio hedge between two correlated instruments.
-const evalPairs = ({ priceLong, priceShort, betaLong, betaShort, notional }) => {
-  if (!(priceLong > 0) || !(priceShort > 0) || !(betaShort > 0)) return null;
-  const ratio = (priceLong * betaLong) / (priceShort * betaShort); // short units per 1 long unit
-  const unitsLong = notional / priceLong;
-  const shortNotional = notional * (betaLong / betaShort); // beta-neutral
-  const unitsShort = shortNotional / priceShort;
-  return { ratio, unitsLong, unitsShort, longNotional: notional, shortNotional };
-};
-
 // Reads spot / vol / rate from the live feed for auto-fill (every field stays editable).
 const deskLiveContext = (market, points, instrument) => {
   const cfg = thesisInstrumentConfig(instrument);
@@ -3476,38 +3421,20 @@ const DEFAULT_DESK_TOOLS = {
   // pricing environment + option fields so both legs can be priced side by side.
   env2: { spot: "", sigmaPct: "", ratePct: "", divPct: "1.3", days: "30" },
   options2: { strike: "", type: "call", marketPrice: "", feed: false },
-  hedge: {
-    beta: { on: true, portfolioValue: "100000", beta: "1.00", mode: "futures", putOtmPct: "5" },
-    vertical: { on: false, type: "call", longStrike: "", shortStrike: "", contracts: "1" },
-    calendar: { on: false, type: "call", strike: "", farStrike: "", nearDays: "7", farDays: "37", contracts: "1" },
-    pairs: { on: false, longSym: "QQQ", shortSym: "SPY", betaLong: "1.20", betaShort: "1.00", notional: "100000" },
-  },
 };
 
 // Deep-merge a saved deskTools blob (from local storage or the cloud) onto the defaults, keeping
-// only known sub-objects and validating the pairs symbols against the current instrument table.
+// only known sub-objects. A retired `hedge` key from an older save is dropped on the floor.
 const mergeSavedDeskTools = (base, saved) => {
   if (!saved || typeof saved !== "object") return base;
-  const savedPairs = saved.hedge?.pairs || {};
-  const validSym = (sym, fallback) => THESIS_INSTRUMENTS.some((it) => it.symbol === sym) ? sym : fallback;
+  const { hedge: _retiredHedge, ...rest } = saved;
   return {
     ...base,
-    ...saved,
-    env: { ...base.env, ...(saved.env || {}) },
-    options: { ...base.options, ...(saved.options || {}) },
-    env2: { ...base.env2, ...(saved.env2 || {}) },
-    options2: { ...base.options2, ...(saved.options2 || {}) },
-    hedge: {
-      beta: { ...base.hedge.beta, ...(saved.hedge?.beta || {}) },
-      vertical: { ...base.hedge.vertical, ...(saved.hedge?.vertical || {}) },
-      calendar: { ...base.hedge.calendar, ...(saved.hedge?.calendar || {}) },
-      pairs: {
-        ...base.hedge.pairs,
-        ...savedPairs,
-        longSym: validSym(savedPairs.longSym, base.hedge.pairs.longSym),
-        shortSym: validSym(savedPairs.shortSym, base.hedge.pairs.shortSym),
-      },
-    },
+    ...rest,
+    env: { ...base.env, ...(rest.env || {}) },
+    options: { ...base.options, ...(rest.options || {}) },
+    env2: { ...base.env2, ...(rest.env2 || {}) },
+    options2: { ...base.options2, ...(rest.options2 || {}) },
   };
 };
 
@@ -3526,7 +3453,7 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
   const live = deskLiveContext(market, points, instrument);
   const { S, sigma, r, q, days, T } = resolveEnv(deskTools.env, live);
   const lines = [];
-  // Spot-dependent context (options scenario + option/futures hedges) only when a focus spot is available.
+  // Spot-dependent context (the options scenario) only when a focus spot is available.
   if (S > 0) {
     lines.push(
       `Pricing environment: ${live.cfg.symbol} spot ${fmtNum(S, 2)}, IV ${fmtNum(sigma * 100, 1)}%, ${days}d to expiry, rate ${fmtNum(r * 100, 2)}%, dividend ${fmtNum(q * 100, 2)}%.`
@@ -3540,58 +3467,6 @@ const buildDeskToolsContext = ({ deskTools, market, points, instrument }) => {
     }
   }
 
-  const h = deskTools.hedge;
-  if (h.beta.on && S > 0) {
-    const pv = numOr(h.beta.portfolioValue, 0);
-    const beta = numOr(h.beta.beta, 1);
-    const notional = pv * beta;
-    if (h.beta.mode === "puts") {
-      const k = roundStrike(S * (1 - numOr(h.beta.putOtmPct, 5) / 100));
-      const pb = blackScholes({ S, K: k, T, r, q, sigma, type: "put" });
-      const contracts = pb.delta !== 0 ? notional / (S * 100 * Math.abs(pb.delta)) : 0;
-      lines.push(
-        `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → buy ~${fmtNum(contracts, 1)} ${live.cfg.symbol} ${fmtNum(k, 0)} puts (cost ≈ ${fmtUsd(pb.price * 100 * contracts)}) to neutralize ${fmtUsd(notional)} of delta.`
-      );
-    } else {
-      const futPrice = live.priceOf(live.futSym) ?? live.spot;
-      const contracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
-      lines.push(
-        `Beta-weighted hedge: ${fmtUsd(pv)} book at beta ${fmtNum(beta, 2)} → short ~${fmtNum(contracts, 2)} ${live.futSym} futures (×${live.futMult}) to offset ${fmtUsd(notional)} of exposure.`
-      );
-    }
-  }
-  if (h.vertical.on && S > 0) {
-    const kL = numOr(h.vertical.longStrike, roundStrike(S));
-    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
-    const premL = blackScholes({ S, K: kL, T, r, q, sigma, type: h.vertical.type }).price;
-    const premS = blackScholes({ S, K: kS, T, r, q, sigma, type: h.vertical.type }).price;
-    const v = evalVertical({ type: h.vertical.type, kLong: kL, kShort: kS, premLong: premL, premShort: premS, contracts: numOr(h.vertical.contracts, 1) });
-    lines.push(
-      `Vertical spread: ${h.vertical.type} ${fmtNum(kL, 0)}/${fmtNum(kS, 0)} (${v.isDebit ? "debit" : "credit"}) — max profit ${fmtUsd(v.maxProfit)}, max loss ${fmtUsd(v.maxLoss)}, BE ${fmtNum(v.breakeven, 0)}, R/R ${fmtNum(v.rr, 2)}.`
-    );
-  }
-  if (h.calendar.on && S > 0) {
-    const kNear = numOr(h.calendar.strike, roundStrike(S));
-    const kFar = numOr(h.calendar.farStrike, kNear);
-    const nearDays = numOr(h.calendar.nearDays, 7);
-    const farDays = numOr(h.calendar.farDays, 37);
-    const premNear = blackScholes({ S, K: kNear, T: nearDays / 365, r, q, sigma, type: h.calendar.type }).price;
-    const premFar = blackScholes({ S, K: kFar, T: farDays / 365, r, q, sigma, type: h.calendar.type }).price;
-    const c = evalCalendar({ type: h.calendar.type, kNear, kFar, premNear, premFar, contracts: numOr(h.calendar.contracts, 1), S, sigma, r, q, nearDays, farDays });
-    lines.push(
-      `${kNear === kFar ? "Calendar" : "Diagonal"} spread: ${h.calendar.type} ${fmtNum(kNear, 0)}${kNear === kFar ? "" : "/" + fmtNum(kFar, 0)} ${nearDays}d vs ${farDays}d — net debit ${fmtUsd(c.debit)}, est P/L at near expiry (spot flat) ${fmtUsd(c.estPnl)}.`
-    );
-  }
-  if (h.pairs.on) {
-    const priceLong = live.priceOf(h.pairs.longSym);
-    const priceShort = live.priceOf(h.pairs.shortSym);
-    const p = evalPairs({ priceLong, priceShort, betaLong: numOr(h.pairs.betaLong, 1), betaShort: numOr(h.pairs.betaShort, 1), notional: numOr(h.pairs.notional, 0) });
-    if (p) {
-      lines.push(
-        `Pairs/ratio: long ${h.pairs.longSym} vs short ${h.pairs.shortSym} — hedge ratio ${fmtNum(p.ratio, 3)} (short units per long), beta-neutral short notional ${fmtUsd(p.shortNotional)}.`
-      );
-    }
-  }
   return lines.join("\n");
 };
 
@@ -3601,22 +3476,7 @@ const deskStructureLabels = ({ deskTools, market, points, instrument }) => {
   const { S, days } = resolveEnv(deskTools.env, live);
   const out = [];
   const o = deskTools.options;
-  const h = deskTools.hedge;
-  if (S > 0) {
-    if (o.feed) out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
-    if (h.beta.on) out.push(`Beta hedge · ${h.beta.mode === "puts" ? `${live.cfg.symbol} puts` : `${live.futSym} futures`}`);
-    if (h.vertical.on) {
-      const kL = numOr(h.vertical.longStrike, roundStrike(S));
-      const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
-      out.push(`${h.vertical.type} vertical ${fmtNum(kL, 0)}/${fmtNum(kS, 0)}`);
-    }
-    if (h.calendar.on) {
-      const kN = numOr(h.calendar.strike, roundStrike(S));
-      const kF = numOr(h.calendar.farStrike, kN);
-      out.push(`${h.calendar.type} ${kN === kF ? "calendar" : "diagonal"} ${fmtNum(kN, 0)} · ${numOr(h.calendar.nearDays, 7)}d/${numOr(h.calendar.farDays, 37)}d`);
-    }
-  }
-  if (h.pairs.on) out.push(`Pairs ${h.pairs.longSym}/${h.pairs.shortSym}`);
+  if (S > 0 && o.feed) out.push(`Options: ${o.type} ${fmtNum(numOr(o.strike, roundStrike(S)), 0)} · ${days}d`);
   return out;
 };
 
@@ -3649,44 +3509,6 @@ const buildTradeStructures = ({ deskTools, market, points, instrument, thesisLev
       entry, cost: entry * 100, breakeven, maxRisk: entry * 100,
       delta: bs.delta, theta: bs.theta, vega: bs.vega, ladder,
     });
-  }
-  const h = deskTools.hedge;
-  if (h.vertical.on && S > 0) {
-    const kL = numOr(h.vertical.longStrike, roundStrike(S));
-    const kS = numOr(h.vertical.shortStrike, roundStrike(S * (h.vertical.type === "call" ? 1.02 : 0.98)));
-    const premL = blackScholes({ S, K: kL, T, r, q, sigma, type: h.vertical.type }).price;
-    const premS = blackScholes({ S, K: kS, T, r, q, sigma, type: h.vertical.type }).price;
-    const v = evalVertical({ type: h.vertical.type, kLong: kL, kShort: kS, premLong: premL, premShort: premS, contracts: numOr(h.vertical.contracts, 1) });
-    out.push({ kind: "vertical", type: h.vertical.type, kLong: kL, kShort: kS, isDebit: v.isDebit, maxProfit: v.maxProfit, maxLoss: v.maxLoss, breakeven: v.breakeven, rr: v.rr });
-  }
-  if (h.calendar.on && S > 0) {
-    const kNear = numOr(h.calendar.strike, roundStrike(S));
-    const kFar = numOr(h.calendar.farStrike, kNear);
-    const nearDays = numOr(h.calendar.nearDays, 7);
-    const farDays = numOr(h.calendar.farDays, 37);
-    const premNear = blackScholes({ S, K: kNear, T: nearDays / 365, r, q, sigma, type: h.calendar.type }).price;
-    const premFar = blackScholes({ S, K: kFar, T: farDays / 365, r, q, sigma, type: h.calendar.type }).price;
-    const c = evalCalendar({ type: h.calendar.type, kNear, kFar, premNear, premFar, contracts: numOr(h.calendar.contracts, 1), S, sigma, r, q, nearDays, farDays });
-    out.push({ kind: "calendar", diagonal: kNear !== kFar, type: h.calendar.type, kNear, kFar, nearDays, farDays, debit: c.debit, estPnl: c.estPnl });
-  }
-  if (h.beta.on && S > 0) {
-    const pv = numOr(h.beta.portfolioValue, 0);
-    const beta = numOr(h.beta.beta, 1);
-    const notional = pv * beta;
-    if (h.beta.mode === "puts") {
-      const k = roundStrike(S * (1 - numOr(h.beta.putOtmPct, 5) / 100));
-      const pb = blackScholes({ S, K: k, T, r, q, sigma, type: "put" });
-      const contracts = pb.delta !== 0 ? notional / (S * 100 * Math.abs(pb.delta)) : 0;
-      out.push({ kind: "beta", mode: "puts", symbol: live.cfg.symbol, strike: k, contracts, cost: pb.price * 100 * contracts, notional });
-    } else {
-      const futPrice = live.priceOf(live.futSym) ?? live.spot;
-      const contracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
-      out.push({ kind: "beta", mode: "futures", futSym: live.futSym, futMult: live.futMult, contracts, notional });
-    }
-  }
-  if (h.pairs.on) {
-    const p = evalPairs({ priceLong: live.priceOf(h.pairs.longSym), priceShort: live.priceOf(h.pairs.shortSym), betaLong: numOr(h.pairs.betaLong, 1), betaShort: numOr(h.pairs.betaShort, 1), notional: numOr(h.pairs.notional, 0) });
-    if (p) out.push({ kind: "pairs", longSym: h.pairs.longSym, shortSym: h.pairs.shortSym, ratio: p.ratio, shortNotional: p.shortNotional });
   }
   return out;
 };
@@ -3738,62 +3560,6 @@ const TradeStructureCard = ({ structures, bias }) => {
                   ))}
                 </div>
                 <div className="tstruct-note">Manage against the ladder: scale out toward the upside rows as the thesis target fills; full premium ({fmtUsd(s.maxRisk, 0)}) is the hard cap if it expires worthless. Theta bleeds ~${fmtNum(Math.abs(s.theta), 2)}/day while you wait.</div>
-              </div>
-            );
-          }
-          if (s.kind === "vertical") {
-            return (
-              <div className="tstruct" key={i}>
-                <div className="tstruct-head"><span className="tstruct-title">{s.type.toUpperCase()} vertical {fmtNum(s.kLong, 0)}/{fmtNum(s.kShort, 0)} · {s.isDebit ? "debit" : "credit"}</span></div>
-                <div className="tstruct-stats">
-                  <div className="tstruct-stat"><span>Max profit</span><b style={{ color: C.bull }}>{fmtUsd(s.maxProfit, 0)}</b></div>
-                  <div className="tstruct-stat"><span>Max loss</span><b style={{ color: C.bear }}>{fmtUsd(s.maxLoss, 0)}</b></div>
-                  <div className="tstruct-stat"><span>Breakeven</span><b>{s.breakeven != null ? fmtNum(s.breakeven, 0) : "—"}</b></div>
-                  <div className="tstruct-stat"><span>Risk / reward</span><b>{s.rr != null ? fmtNum(s.rr, 2) : "—"}</b></div>
-                </div>
-              </div>
-            );
-          }
-          if (s.kind === "calendar") {
-            return (
-              <div className="tstruct" key={i}>
-                <div className="tstruct-head"><span className="tstruct-title">{s.type.toUpperCase()} {s.diagonal ? "diagonal" : "calendar"} {fmtNum(s.kNear, 0)}{s.diagonal ? `/${fmtNum(s.kFar, 0)}` : ""} · {s.nearDays}d/{s.farDays}d</span></div>
-                <div className="tstruct-stats">
-                  <div className="tstruct-stat"><span>Net debit</span><b>{fmtUsd(s.debit, 0)}</b></div>
-                  <div className="tstruct-stat"><span>Est. P/L</span><b style={{ color: s.estPnl >= 0 ? C.bull : C.bear }}>{fmtUsd(s.estPnl, 0)}</b><small>near expiry, spot flat</small></div>
-                </div>
-              </div>
-            );
-          }
-          if (s.kind === "beta") {
-            return (
-              <div className="tstruct" key={i}>
-                <div className="tstruct-head"><span className="tstruct-title">Beta hedge · {s.mode === "puts" ? `${s.symbol} puts` : `${s.futSym} futures`}</span></div>
-                <div className="tstruct-stats">
-                  {s.mode === "puts" ? (
-                    <>
-                      <div className="tstruct-stat"><span>Buy</span><b>~{fmtNum(s.contracts, 1)}</b><small>{fmtNum(s.strike, 0)} puts</small></div>
-                      <div className="tstruct-stat"><span>Cost</span><b>{fmtUsd(s.cost, 0)}</b></div>
-                      <div className="tstruct-stat"><span>Covers</span><b>{fmtUsd(s.notional, 0)}</b><small>of delta</small></div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="tstruct-stat"><span>Short</span><b>~{fmtNum(s.contracts, 2)}</b><small>{s.futSym} (×{s.futMult})</small></div>
-                      <div className="tstruct-stat"><span>Offsets</span><b>{fmtUsd(s.notional, 0)}</b><small>exposure</small></div>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          }
-          if (s.kind === "pairs") {
-            return (
-              <div className="tstruct" key={i}>
-                <div className="tstruct-head"><span className="tstruct-title">Pairs · long {s.longSym} / short {s.shortSym}</span></div>
-                <div className="tstruct-stats">
-                  <div className="tstruct-stat"><span>Hedge ratio</span><b>{fmtNum(s.ratio, 3)}</b><small>short per long</small></div>
-                  <div className="tstruct-stat"><span>Short notional</span><b>{fmtUsd(s.shortNotional, 0)}</b></div>
-                </div>
               </div>
             );
           }
@@ -3948,23 +3714,6 @@ const PayoffChart = ({ payoff, lo, hi, spot, markers = [], title }) => {
   );
 };
 
-const StructToggle = ({ on, onToggle, icon: Ic, label, sub }) => (
-  <button
-    onClick={() => onToggle(!on)}
-    className="card"
-    style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", cursor: "pointer", textAlign: "left", borderColor: on ? "var(--brass)" : undefined, width: "100%", background: "var(--panel2)" }}
-  >
-    <span style={{ width: 36, height: 21, borderRadius: 21, background: on ? C.brass : "var(--line2)", position: "relative", flex: "none", transition: ".2s" }}>
-      <span style={{ position: "absolute", top: 2.5, left: on ? 17 : 2.5, width: 16, height: 16, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
-    </span>
-    {Ic && <Ic size={15} color={on ? C.brass : C.muted} style={{ flex: "none" }} />}
-    <span style={{ minWidth: 0 }}>
-      <b style={{ fontSize: 13 }}>{label}</b>
-      <div style={{ fontSize: 11.5, color: C.muted }}>{sub}</div>
-    </span>
-  </button>
-);
-
 const FeedToggle = ({ on, onToggle, summary }) => (
   <div className="card" style={{ display: "flex", alignItems: "center", gap: 13, padding: "12px 16px" }}>
     <button
@@ -3979,7 +3728,7 @@ const FeedToggle = ({ on, onToggle, summary }) => (
       <div>
         {on
           ? <>Master switch is on — the next thesis run will reference: <span style={{ color: C.brass }}>{summary}</span>.</>
-          : "Master switch — when on, the next thesis run factors in the hedge structures and options scenario you've enabled below."}
+          : "Master switch — when on, the next thesis run factors in the options scenario you've enabled below."}
       </div>
     </div>
   </div>
@@ -4095,221 +3844,6 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
   );
 };
 
-/* ---------- Hedge & spread builder ---------- */
-
-const HedgeBuilder = ({ env, setEnv, hedge, setHedge, live }) => {
-  const { S, sigma, r, q, days, T } = resolveEnv(env, live);
-  const b = hedge.beta, v = hedge.vertical, cal = hedge.calendar, pr = hedge.pairs;
-
-  // Beta-weighted hedge
-  const pv = numOr(b.portfolioValue, 0);
-  const beta = numOr(b.beta, 1);
-  const notional = pv * beta;
-  // A futures contract is priced at the index level (e.g. ES ≈ 10× SPY), so size off the
-  // futures' own price — not the focus instrument's spot. Falls back to spot if unavailable.
-  const futPrice = live.priceOf(live.futSym) ?? live.spot;
-  const futContracts = futPrice > 0 ? notional / (futPrice * live.futMult) : 0;
-  // Micro contracts are 1/10 the notional of the full-size future (e.g. MES ×5 vs ES ×50),
-  // so a book too small for a whole ES contract can still hedge cleanly with micros.
-  const microMult = live.futMult / 10;
-  const microSym = `M${live.futSym}`;
-  const microContracts = futPrice > 0 ? notional / (futPrice * microMult) : 0;
-  const fullContractNotional = futPrice * live.futMult;
-  const putStrike = roundStrike(S * (1 - numOr(b.putOtmPct, 5) / 100));
-  const putBs = blackScholes({ S, K: putStrike, T, r, q, sigma, type: "put" });
-  const putContracts = S > 0 && putBs.delta !== 0 ? notional / (S * 100 * Math.abs(putBs.delta)) : 0;
-  const putCost = putBs.price * 100 * putContracts;
-  const spyPrice = live.priceOf("SPY");
-  const spyShares = spyPrice > 0 ? notional / spyPrice : 0;
-
-  // Vertical
-  const vL = numOr(v.longStrike, roundStrike(S));
-  const vShort = numOr(v.shortStrike, roundStrike(S * (v.type === "call" ? 1.02 : 0.98)));
-  const vPremL = blackScholes({ S, K: vL, T, r, q, sigma, type: v.type }).price;
-  const vPremS = blackScholes({ S, K: vShort, T, r, q, sigma, type: v.type }).price;
-  const vres = evalVertical({ type: v.type, kLong: vL, kShort: vShort, premLong: vPremL, premShort: vPremS, contracts: numOr(v.contracts, 1) });
-
-  // Calendar / diagonal
-  const cNear = numOr(cal.strike, roundStrike(S));
-  const cFar = numOr(cal.farStrike, cNear);
-  const cNearDays = numOr(cal.nearDays, 7);
-  const cFarDays = numOr(cal.farDays, 37);
-  const cPremNear = blackScholes({ S, K: cNear, T: cNearDays / 365, r, q, sigma, type: cal.type }).price;
-  const cPremFar = blackScholes({ S, K: cFar, T: cFarDays / 365, r, q, sigma, type: cal.type }).price;
-  const cres = evalCalendar({ type: cal.type, kNear: cNear, kFar: cFar, premNear: cPremNear, premFar: cPremFar, contracts: numOr(cal.contracts, 1), S, sigma, r, q, nearDays: cNearDays, farDays: cFarDays });
-
-  // Pairs
-  const prLongP = live.priceOf(pr.longSym);
-  const prShortP = live.priceOf(pr.shortSym);
-  const pres = evalPairs({ priceLong: prLongP, priceShort: prShortP, betaLong: numOr(pr.betaLong, 1), betaShort: numOr(pr.betaShort, 1), notional: numOr(pr.notional, 0) });
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div className="card" style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px" }}>
-        <Crosshair size={13} color={C.brass} />
-        <span style={{ fontSize: 12, color: C.muted }}>
-          Structures priced against <b style={{ color: "var(--text)" }}>{live.cfg?.label}</b> @ {fmtNum(live.spot ?? 0, 2)} · {live.futSym} futures proxy
-        </span>
-      </div>
-      {/* Beta-weighted hedge */}
-      <StructToggle on={b.on} onToggle={(on) => setHedge("beta", "on", on)} icon={Shield} label="Beta-weighted portfolio hedge" sub="Neutralize directional exposure with futures or protective puts" />
-      {b.on && (
-        <Card>
-          <div className="grid g-3" style={{ gap: 10 }}>
-            <NumField label="Book value" suffix="$" value={b.portfolioValue} onChange={(val) => setHedge("beta", "portfolioValue", val)} />
-            <NumField label="Portfolio beta" value={b.beta} placeholder="1.00" onChange={(val) => setHedge("beta", "beta", val)} />
-            <div className="lab-field" style={{ marginTop: 0 }}>
-              <span className="lab-label">Hedge vehicle</span>
-              <div className="seg">
-                {[["futures", `${live.futSym} fut`], ["puts", `${live.cfg.symbol} puts`]].map(([m, lbl]) => (
-                  <button key={m} className={b.mode === m ? "on" : ""} onClick={() => setHedge("beta", "mode", m)}>{lbl}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>Exposure to neutralize: <b style={{ color: "var(--text)" }}>{fmtUsd(notional)}</b> (book × beta).</div>
-          {b.mode === "futures" ? (
-            <>
-              <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-                <ToolStat k={`Short ${live.futSym}`} v={fmtNum(futContracts, 2)} color={C.brass} sub={futPrice > 0 ? `×${live.futMult} @ ${fmtNum(futPrice, 2)}` : `contracts (×${live.futMult})`} />
-                <ToolStat k="Rounded" v={fmtNum(Math.round(futContracts), 0)} sub="whole contracts" />
-                <ToolStat k="SPY-share equiv" v={fmtNum(spyShares, 0)} sub={spyPrice > 0 ? `shares @ ${fmtNum(spyPrice, 2)}` : "SPY not synced"} />
-              </div>
-              <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>Shorting {live.futSym} neutralizes directional delta both ways — it caps downside but also gives up the upside on the hedged exposure. No premium outlay, but margin and roll risk apply.</div>
-              {Math.round(futContracts) === 0 && notional > 0 && futPrice > 0 && (
-                <div className="hedge-warn">
-                  <b>Book too small for one full {live.futSym} contract</b> (≈{fmtUsd(fullContractNotional, 0)} notional each), so a whole-size futures hedge rounds to 0 and leaves you effectively unhedged. Use micro futures instead — <b style={{ color: "var(--text)" }}>~{fmtNum(microContracts, 1)} {microSym}</b> (×{microMult}), round to {fmtNum(Math.round(microContracts), 0)} — or hedge with {live.cfg.symbol} puts or the {fmtNum(spyShares, 0)}-share SPY equivalent above.
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{ marginTop: 12, maxWidth: 200 }}>
-                <NumField label="Put OTM %" hint={`strike ≈ ${fmtNum(putStrike, 0)}`} suffix="%" value={b.putOtmPct} placeholder="5" onChange={(val) => setHedge("beta", "putOtmPct", val)} />
-              </div>
-              <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-                <ToolStat k="Buy puts" v={fmtNum(putContracts, 1)} color={C.brass} sub={`${live.cfg.symbol} ${fmtNum(putStrike, 0)}P`} />
-                <ToolStat k="Put delta" v={fmtNum(putBs.delta, 3)} sub={`@ ${fmtNum(putBs.price, 2)}`} />
-                <ToolStat k="Hedge cost" v={fmtUsd(putCost)} color={C.bear} sub={notional > 0 ? `${fmtNum((putCost / notional) * 100, 2)}% of book` : "—"} />
-              </div>
-              <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>Protective puts cap downside below {fmtNum(putStrike, 0)} while keeping full upside — the cost is the {fmtUsd(putCost, 0)} premium drag if the hedge expires worthless.</div>
-            </>
-          )}
-        </Card>
-      )}
-
-      {/* Vertical spread */}
-      <StructToggle on={v.on} onToggle={(on) => setHedge("vertical", "on", on)} icon={Layers} label="Vertical spread" sub="Debit or credit call/put spread — risk, reward & breakeven" />
-      {v.on && (
-        <Card>
-          <div className="seg" style={{ marginBottom: 12, maxWidth: 220 }}>
-            {["call", "put"].map((ty) => (
-              <button key={ty} className={v.type === ty ? "on" : ""} onClick={() => setHedge("vertical", "type", ty)}>{ty.toUpperCase()}</button>
-            ))}
-          </div>
-          <div className="grid g-3" style={{ gap: 10 }}>
-            <NumField label="Long strike" hint={`prem $${fmtNum(vPremL, 2)}`} value={v.longStrike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(val) => setHedge("vertical", "longStrike", val)} />
-            <NumField label="Short strike" hint={`prem $${fmtNum(vPremS, 2)}`} value={v.shortStrike} placeholder={fmtNum(roundStrike(S * (v.type === "call" ? 1.02 : 0.98)), 0)} onChange={(val) => setHedge("vertical", "shortStrike", val)} />
-            <NumField label="Contracts" value={v.contracts} placeholder="1" onChange={(val) => setHedge("vertical", "contracts", val)} />
-          </div>
-          <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-            <ToolStat k={vres.isDebit ? "Net debit" : "Net credit"} v={fmtUsd(Math.abs(vres.net) * 100 * numOr(v.contracts, 1), 0)} color={C.brass} sub={`${fmtNum(Math.abs(vres.net), 2)} / spread · ${fmtNum(vres.width, 0)} wide`} />
-            <ToolStat k="Breakeven" v={fmtNum(vres.breakeven, 2)} sub="at expiry" />
-            <ToolStat k="Max profit" v={fmtUsd(vres.maxProfit, 0)} color={C.bull} sub="at expiry" />
-            <ToolStat k="Max loss" v={fmtUsd(vres.maxLoss, 0)} color={C.bear} sub={vres.rr != null ? `R/R ${fmtNum(vres.rr, 2)}` : ""} />
-          </div>
-          <PayoffChart
-            title="Profit / loss at expiry"
-            payoff={(price) => (
-              (v.type === "put" ? Math.max(vL - price, 0) : Math.max(price - vL, 0))
-              - (v.type === "put" ? Math.max(vShort - price, 0) : Math.max(price - vShort, 0))
-              - vres.net
-            ) * 100 * numOr(v.contracts, 1)}
-            lo={Math.min(vL, vShort) - (vres.width || S * 0.04) * 0.9}
-            hi={Math.max(vL, vShort) + (vres.width || S * 0.04) * 0.9}
-            spot={S}
-            markers={[{ x: vres.breakeven, label: "BE", color: C.brass }]}
-          />
-          <div style={{ marginTop: 8, fontSize: 11.5, color: C.muted }}>
-            Legs auto-priced from the shared environment (IV {fmtNum(sigma * 100, 1)}%, {days}d). A {v.type} {vres.isDebit ? "debit" : "credit"} spread risks {fmtUsd(Math.abs(vres.maxLoss), 0)} to make {fmtUsd(Math.abs(vres.maxProfit), 0)} — adjust strikes to reshape the curve.
-          </div>
-        </Card>
-      )}
-
-      {/* Calendar / diagonal */}
-      <StructToggle on={cal.on} onToggle={(on) => setHedge("calendar", "on", on)} icon={CalendarDays} label="Calendar / diagonal spread" sub="Sell near-dated, buy far-dated — same or different strike" />
-      {cal.on && (
-        <Card>
-          <div className="seg" style={{ marginBottom: 12, maxWidth: 220 }}>
-            {["call", "put"].map((ty) => (
-              <button key={ty} className={cal.type === ty ? "on" : ""} onClick={() => setHedge("calendar", "type", ty)}>{ty.toUpperCase()}</button>
-            ))}
-          </div>
-          <div className="grid g-3" style={{ gap: 10 }}>
-            <NumField label="Near strike (short)" hint={`prem $${fmtNum(cPremNear, 2)}`} value={cal.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(val) => setHedge("calendar", "strike", val)} />
-            <NumField label="Far strike (long)" hint={`prem $${fmtNum(cPremFar, 2)} · = near for calendar`} value={cal.farStrike} placeholder={fmtNum(cNear, 0)} onChange={(val) => setHedge("calendar", "farStrike", val)} />
-            <NumField label="Contracts" value={cal.contracts} placeholder="1" onChange={(val) => setHedge("calendar", "contracts", val)} />
-            <NumField label="Near days" value={cal.nearDays} placeholder="7" onChange={(val) => setHedge("calendar", "nearDays", val)} />
-            <NumField label="Far days" value={cal.farDays} placeholder="37" onChange={(val) => setHedge("calendar", "farDays", val)} />
-          </div>
-          <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-            <ToolStat k="Net debit" v={fmtUsd(cres.debit, 0)} color={C.brass} sub={`${cNear === cFar ? "calendar" : "diagonal"} · ${cNearDays}d vs ${cFarDays}d`} />
-            <ToolStat k="Value @ near exp" v={fmtUsd(cres.valueAtNearExpiry, 0)} sub="if spot unchanged" />
-            <ToolStat k="Est. P/L" v={fmtUsd(cres.estPnl, 0)} color={cres.estPnl >= 0 ? C.bull : C.bear} sub="spot flat at near exp" />
-          </div>
-          <PayoffChart
-            title={`P/L at near expiry (${cNearDays}d) across spot`}
-            payoff={(price) => {
-              const farVal = blackScholes({ S: price, K: cFar, T: Math.max(cFarDays - cNearDays, 0) / 365, r, q, sigma, type: cal.type }).price;
-              const nearIntrinsic = cal.type === "put" ? Math.max(cNear - price, 0) : Math.max(price - cNear, 0);
-              return (farVal - nearIntrinsic - cres.net) * 100 * numOr(cal.contracts, 1);
-            }}
-            lo={cNear * 0.9}
-            hi={cNear * 1.1}
-            spot={S}
-            markers={[{ x: cNear, label: "K", color: C.brass }]}
-          />
-          <div style={{ marginTop: 8, fontSize: 11.5, color: C.muted }}>Calendars profit most when spot finishes near the strike at the near expiry with the far leg holding time value. The curve assumes IV holds at {fmtNum(sigma * 100, 1)}%.</div>
-        </Card>
-      )}
-
-      {/* Pairs / ratio */}
-      <StructToggle on={pr.on} onToggle={(on) => setHedge("pairs", "on", on)} icon={Scale} label="Pairs / ratio hedge" sub="Long one instrument vs short a correlated one at a beta-neutral ratio" />
-      {pr.on && (
-        <Card>
-          <div className="grid g-2" style={{ gap: 10 }}>
-            <div className="lab-field" style={{ marginTop: 0 }}>
-              <span className="lab-label">Long {prLongP ? `· ${fmtNum(prLongP, 2)}` : ""}</span>
-              <InstrumentSelect value={pr.longSym} onChange={(val) => setHedge("pairs", "longSym", val)} />
-            </div>
-            <div className="lab-field" style={{ marginTop: 0 }}>
-              <span className="lab-label">Short {prShortP ? `· ${fmtNum(prShortP, 2)}` : ""}</span>
-              <InstrumentSelect value={pr.shortSym} onChange={(val) => setHedge("pairs", "shortSym", val)} />
-            </div>
-          </div>
-          <div className="grid g-3" style={{ gap: 10, marginTop: 10 }}>
-            <NumField label="Long beta" value={pr.betaLong} placeholder="1.20" onChange={(val) => setHedge("pairs", "betaLong", val)} />
-            <NumField label="Short beta" value={pr.betaShort} placeholder="1.00" onChange={(val) => setHedge("pairs", "betaShort", val)} />
-            <NumField label="Long notional" suffix="$" value={pr.notional} onChange={(val) => setHedge("pairs", "notional", val)} />
-          </div>
-          {pres ? (
-            <>
-              <div className="grid g-3" style={{ gap: 10, marginTop: 12 }}>
-                <ToolStat k="Hedge ratio" v={fmtNum(pres.ratio, 3)} color={C.brass} sub={`short ${pr.shortSym} per long ${pr.longSym}`} />
-                <ToolStat k={`Long ${pr.longSym}`} v={fmtNum(pres.unitsLong, 1)} sub={`units · ${fmtUsd(pres.longNotional, 0)}`} />
-                <ToolStat k={`Short ${pr.shortSym}`} v={fmtNum(pres.unitsShort, 1)} sub={`units · ${fmtUsd(pres.shortNotional, 0)} (β-neutral)`} />
-              </div>
-              <div style={{ marginTop: 10, fontSize: 11.5, color: C.muted }}>A beta-neutral pair isolates relative performance — you profit if {pr.longSym} outperforms {pr.shortSym}, regardless of which way the broad market moves.</div>
-            </>
-          ) : (
-            <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>Sync the Market Pulse so both legs have a live price, or pick instruments that are loaded.</div>
-          )}
-        </Card>
-      )}
-    </div>
-  );
-};
-
 /* ================================================================
    TAB — THESIS LAB
    ================================================================ */
@@ -4345,7 +3879,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const TOOL_TABS = [
     { id: "synthesis", label: "Synthesis", Icon: Sparkles },
     { id: "options", label: "Options Calc", Icon: Calculator },
-    { id: "hedge", label: "Hedge & Spreads", Icon: Shield },
     { id: "algo", label: "Algo Lab", Icon: Bot },
   ];
   const toolSeg = (
@@ -4405,14 +3938,8 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // which also restores the auto-fill-from-live-feed behavior for spot/IV/rate.
   const resetOptionsCalc = () => setDeskTools((d) => ({ ...d, env: { ...DEFAULT_DESK_TOOLS.env }, options: { ...DEFAULT_DESK_TOOLS.options } }));
   const resetOptionsCalc2 = () => setDeskTools((d) => ({ ...d, env2: { ...DEFAULT_DESK_TOOLS.env2 }, options2: { ...DEFAULT_DESK_TOOLS.options2 } }));
-  const setHedge = (s, k, val) => setDeskTools((d) => ({ ...d, hedge: { ...d.hedge, [s]: { ...d.hedge[s], [k]: val } } }));
   const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
-  const activeHedges = Object.values(deskTools.hedge).filter((x) => x.on).length;
-  const feedParts = [
-    deskTools.options.feed ? "options scenario" : null,
-    activeHedges ? `${activeHedges} hedge structure${activeHedges === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
-  const feedSummary = feedParts.length ? feedParts.join(" + ") : "nothing yet — toggle a hedge or the options scenario";
+  const feedSummary = deskTools.options.feed ? "options scenario" : "nothing yet — toggle the options scenario";
   const weightSum = Math.round(FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0));
   // Once a thesis is on the tape (or one is loading / errored), split into controls-left + output-right.
   // Before that, the controls ride consolidated across the top instead of leaving a big empty pane.
@@ -4422,7 +3949,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {toolSeg}
-        {(toolView === "options" || toolView === "hedge") && <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />}
+        {toolView === "options" && <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />}
         {toolView === "algo" && (
           <>
             <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
@@ -4444,7 +3971,6 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} onPickTicker={setInstrument} />
           )
         )}
-        {toolView === "hedge" && <HedgeBuilder env={deskTools.env} setEnv={setEnv} hedge={deskTools.hedge} setHedge={setHedge} live={live} />}
       </div>
     );
   }
