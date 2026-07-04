@@ -117,22 +117,22 @@ const DEFAULT_WATCHLIST = [
   { symbol: "GEV", name: "GE Vernova", off: true, cat: "AI Infra" },
   { symbol: "SPCX", name: "SPCX", off: true, cat: "AI Infra" },
   // Healthcare infrastructure basket — hospitals, distributors, diagnostics, devices, health REITs
-  // and health-tech. Live-quoted, shipped hidden by default under the "Healthcare Infra" subcategory.
-  { symbol: "UNH", name: "UnitedHealth Group", off: true, cat: "Healthcare Infra" },
-  { symbol: "HCA", name: "HCA Healthcare", off: true, cat: "Healthcare Infra" },
-  { symbol: "UHS", name: "Universal Health Services", off: true, cat: "Healthcare Infra" },
-  { symbol: "MCK", name: "McKesson", off: true, cat: "Healthcare Infra" },
-  { symbol: "CAH", name: "Cardinal Health", off: true, cat: "Healthcare Infra" },
-  { symbol: "DGX", name: "Quest Diagnostics", off: true, cat: "Healthcare Infra" },
-  { symbol: "TMO", name: "Thermo Fisher Scientific", off: true, cat: "Healthcare Infra" },
-  { symbol: "MDT", name: "Medtronic", off: true, cat: "Healthcare Infra" },
-  { symbol: "SYK", name: "Stryker", off: true, cat: "Healthcare Infra" },
-  { symbol: "ISRG", name: "Intuitive Surgical", off: true, cat: "Healthcare Infra" },
-  { symbol: "WELL", name: "Welltower", off: true, cat: "Healthcare Infra" },
-  { symbol: "VTR", name: "Ventas", off: true, cat: "Healthcare Infra" },
-  { symbol: "VEEV", name: "Veeva Systems", off: true, cat: "Healthcare Infra" },
-  { symbol: "DOCS", name: "Doximity", off: true, cat: "Healthcare Infra" },
-  { symbol: "TEM", name: "Tempus AI", off: true, cat: "Healthcare Infra" },
+  // and health-tech. Live-quoted, shipped hidden by default under the "Healthcare" subcategory.
+  { symbol: "UNH", name: "UnitedHealth Group", off: true, cat: "Healthcare" },
+  { symbol: "HCA", name: "HCA Healthcare", off: true, cat: "Healthcare" },
+  { symbol: "UHS", name: "Universal Health Services", off: true, cat: "Healthcare" },
+  { symbol: "MCK", name: "McKesson", off: true, cat: "Healthcare" },
+  { symbol: "CAH", name: "Cardinal Health", off: true, cat: "Healthcare" },
+  { symbol: "DGX", name: "Quest Diagnostics", off: true, cat: "Healthcare" },
+  { symbol: "TMO", name: "Thermo Fisher Scientific", off: true, cat: "Healthcare" },
+  { symbol: "MDT", name: "Medtronic", off: true, cat: "Healthcare" },
+  { symbol: "SYK", name: "Stryker", off: true, cat: "Healthcare" },
+  { symbol: "ISRG", name: "Intuitive Surgical", off: true, cat: "Healthcare" },
+  { symbol: "WELL", name: "Welltower", off: true, cat: "Healthcare" },
+  { symbol: "VTR", name: "Ventas", off: true, cat: "Healthcare" },
+  { symbol: "VEEV", name: "Veeva Systems", off: true, cat: "Healthcare" },
+  { symbol: "DOCS", name: "Doximity", off: true, cat: "Healthcare" },
+  { symbol: "TEM", name: "Tempus AI", off: true, cat: "Healthcare" },
   // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
   // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
   { symbol: "XLK", name: "Technology Sector SPDR", off: true },
@@ -1989,7 +1989,7 @@ const SNAP_SECTOR_SET = new Set(SECTOR_ETFS.map((s) => s.symbol));
 // field so the snapshot filter stays in lockstep with the Settings baskets.
 const watchlistCatSet = (cat) => new Set(DEFAULT_WATCHLIST.filter((w) => w.cat === cat).map((w) => w.symbol));
 const SNAP_AI_SET = watchlistCatSet("AI Infra");
-const SNAP_HEALTH_SET = watchlistCatSet("Healthcare Infra");
+const SNAP_HEALTH_SET = watchlistCatSet("Healthcare");
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
@@ -1999,7 +1999,7 @@ const SNAP_FILTER_OPTIONS = [
   { key: "sectors", label: "Sectors", short: "Sectors" },
   { key: "mag7", label: "Mag 7", short: "Mag 7" },
   { key: "ai", label: "AI Infra", short: "AI Infra" },
-  { key: "healthcare", label: "Healthcare Infra", short: "Health" },
+  { key: "healthcare", label: "Healthcare", short: "Health" },
 ];
 const SNAP_FILTER_TEST = {
   live: (t) => symbolMarketOpen(t.symbol),
@@ -5149,7 +5149,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
   // Which watchlist subcategories are expanded. Default collapsed — these supplemental baskets
-  // (AI Infra, Healthcare Infra) otherwise bury the reorderable main list under 30+ rows.
+  // (AI Infra, Healthcare) otherwise bury the reorderable main list under 30+ rows.
   const [expandedCats, setExpandedCats] = usePersistentState("overwatch:settings:wlcats", {});
   const toggleCat = (cat) => setExpandedCats((prev) => ({ ...prev, [cat]: !prev[cat] }));
   if (!open) return null;
