@@ -5733,7 +5733,7 @@ const ALGO_DEFAULTS = {
   symbol: "SPY", interval: "1h",
   emaLen: 21, atrMult: 2.5, rsiOS: 30, rsiOB: 70,
   rr: 3, stopAtr: 1, startHour: 11, endHour: 16,
-  vixMin: 10, vixMax: 40, qtyPct: 10, vixMode: "sameday",
+  vixMin: 10, vixMax: 40, qtyPct: 100, vixMode: "sameday",
 };
 const ALGO_SYMBOL_GROUPS = [
   ["Index ETFs", ["SPY", "QQQ", "DIA", "IWM", "SMH"]],
@@ -5784,6 +5784,20 @@ const StrategyLabTab = ({ notify = null }) => {
   const set = (k, v) => setSaved((prev) => ({ ...ALGO_DEFAULTS, ...prev, [k]: v }));
   const [bt, setBt] = useState({ status: "idle", data: null, error: null });
   const dirty = Object.keys(ALGO_DEFAULTS).some((k) => String(p[k]) !== String(ALGO_DEFAULTS[k]));
+  // One-time migration: the position default changed 10% -> 100%. usePersistentState wrote the old
+  // default through on first mount, so existing devices carry qtyPct:10; lift it to the new default
+  // once. Flag-guarded so a later deliberate 10% is never re-clobbered.
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("overwatch:algo:qtypct100") === "1") return;
+      localStorage.setItem("overwatch:algo:qtypct100", "1");
+      setSaved((prev) => {
+        const cur = { ...ALGO_DEFAULTS, ...prev };
+        return Number(cur.qtyPct) === 10 ? { ...cur, qtyPct: 100 } : prev;
+      });
+    } catch { /* storage unavailable — new default applies anyway */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const buildParams = () => ({
     symbol: p.symbol, interval: p.interval, vixMode: p.vixMode,
@@ -5957,7 +5971,7 @@ const StrategyLabTab = ({ notify = null }) => {
             <NumField label="Reward : risk" value={p.rr} placeholder="3" onChange={(v) => set("rr", v)} />
             <NumField label="First entry" hint="ET hour" value={p.startHour} placeholder="11" onChange={(v) => set("startHour", v)} />
             <NumField label="Last entry" hint="ET hour" value={p.endHour} placeholder="16" onChange={(v) => set("endHour", v)} />
-            <NumField label="Position" suffix="%" hint="of equity" value={p.qtyPct} placeholder="10" onChange={(v) => set("qtyPct", v)} />
+            <NumField label="Position" suffix="%" hint="of equity" value={p.qtyPct} placeholder="100" onChange={(v) => set("qtyPct", v)} />
             <NumField label="VIX min" value={p.vixMin} placeholder="15" onChange={(v) => set("vixMin", v)} />
             <NumField label="VIX max" value={p.vixMax} placeholder="40" onChange={(v) => set("vixMax", v)} />
           </div>

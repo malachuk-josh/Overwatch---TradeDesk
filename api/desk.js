@@ -1321,7 +1321,7 @@ const algoParams = (raw = {}) => {
       endHour: Math.round(btNum(raw.endHour, 16, 1, 24)),
       vixMin: btNum(raw.vixMin, 15, 0, 200),
       vixMax: btNum(raw.vixMax, 40, 0, 200),
-      qtyPct: btNum(raw.qtyPct, 10, 1, 100),
+      qtyPct: btNum(raw.qtyPct, 100, 1, 100),
       vixMode: raw.vixMode === "prior" ? "prior" : "sameday",
     },
   };
