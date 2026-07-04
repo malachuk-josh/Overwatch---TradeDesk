@@ -1985,6 +1985,11 @@ const SNAP_FUTURES_SET = new Set(["ES", "NQ", "YM", "RTY"]);
 const SNAP_ETF_SET = new Set(["SPY", "QQQ", "DIA", "IWM", "SMH", "HYG", "TLT", "USO", ...SECTOR_ETFS.map((s) => s.symbol)]);
 const SNAP_INDEX_SET = new Set(["SPX", "NDX", "DJI", "RUT"]);
 const SNAP_SECTOR_SET = new Set(SECTOR_ETFS.map((s) => s.symbol));
+// Symbol sets for the watchlist toggle subcategories, derived straight from DEFAULT_WATCHLIST's `cat`
+// field so the snapshot filter stays in lockstep with the Settings baskets.
+const watchlistCatSet = (cat) => new Set(DEFAULT_WATCHLIST.filter((w) => w.cat === cat).map((w) => w.symbol));
+const SNAP_AI_SET = watchlistCatSet("AI Infra");
+const SNAP_HEALTH_SET = watchlistCatSet("Healthcare Infra");
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
@@ -1993,6 +1998,8 @@ const SNAP_FILTER_OPTIONS = [
   { key: "etfs", label: "ETFs", short: "ETFs" },
   { key: "sectors", label: "Sectors", short: "Sectors" },
   { key: "mag7", label: "Mag 7", short: "Mag 7" },
+  { key: "ai", label: "AI Infra", short: "AI Infra" },
+  { key: "healthcare", label: "Healthcare Infra", short: "Health" },
 ];
 const SNAP_FILTER_TEST = {
   live: (t) => symbolMarketOpen(t.symbol),
@@ -2001,13 +2008,15 @@ const SNAP_FILTER_TEST = {
   etfs: (t) => SNAP_ETF_SET.has(t.symbol),
   sectors: (t) => SNAP_SECTOR_SET.has(t.symbol),
   mag7: (t) => THESIS_STOCK_SET.has(t.symbol),
+  ai: (t) => SNAP_AI_SET.has(t.symbol),
+  healthcare: (t) => SNAP_HEALTH_SET.has(t.symbol),
 };
 // Groups whose members are hidden from the default board (off:true), so focusing them pulls from the
 // full fetched universe rather than the visible board.
-const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7"]);
+const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7", "ai", "healthcare"]);
 // Instrument-type groups the user can hide from the "All markets" view (the dynamic "live" filter and
 // "all" itself aren't hideable).
-const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7"];
+const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7", "ai", "healthcare"];
 
 // "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header. Each row can
 // be tapped to focus that group, or (for instrument-type groups) toggled with the eye button to hide
