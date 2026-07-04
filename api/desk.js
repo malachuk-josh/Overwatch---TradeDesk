@@ -2463,6 +2463,112 @@ const callAnthropic = async (prompt) => {
   }
 };
 
+// ---- Deep Research harness --------------------------------------------------------------------
+// A grounded, bounded, agentic web-research pass on a single instrument. Unlike the thesis call
+// (which reasons over data we already hand it), this one turns on Claude's server-side web_search
+// + web_fetch tools so the model actively searches the live web, reads primary sources, and
+// synthesises a decision-ready brief. The desk's own live tape for the instrument is passed in as
+// grounding context so the research anchors to the real price/levels, not generic web noise.
+//
+// Bounded by design: max_uses caps the agentic loop so a run fits inside the 60s serverless budget
+// (true multi-minute deep research would need an async job + polling, a natural v2). Sonnet is the
+// default here — it's the capable-but-fast tier the desk wants for a tool that fans out to the web.
+// Human date line in ET for grounding the research prompt's recency instructions.
+const dateLine = () => new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+const RESEARCH_SYSTEM = (dateLine) => `You are the senior research analyst on the Overwatch trading desk. You produce tight, decision-ready research briefs on ONE instrument by searching the live web. Today is ${dateLine}.
+
+Discipline:
+- Recency first: financial facts go stale fast. Strongly prefer sources from the last days/weeks and flag anything older or undated.
+- Primary sources over aggregators: company filings / investor-relations pages, earnings call transcripts, the exchange, the regulator, and the primary reporting outlet beat SEO blogspam and content farms.
+- Cite every non-obvious claim with the source it came from. NEVER state a price, figure, date or quote you did not actually find in a source.
+- Separate fact from inference. When something is your own read rather than a sourced fact, say so.
+- Actively seek disconfirming evidence — hunt the bear case, don't just confirm a prior.
+- If the web doesn't support a claim, say the evidence is thin rather than inventing it.
+
+You have web_search and web_fetch. A few well-aimed queries beat many vague ones; fetch the actual page when a snippet isn't enough (filings, transcripts, IR). When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
+
+const RESEARCH_SCHEMA = `Respond with ONLY a raw JSON object — no markdown, no commentary before or after. Exact schema:
+{"headline":"<punchy 6-12 word takeaway>","verdict":"bullish|bearish|neutral|mixed","summary":"<3-4 sentence synthesis of what you found and what it means for the instrument>","keyFindings":[{"point":"<a specific, sourced finding>","source":"<publisher name or URL you got it from>"}],"catalysts":[{"when":"<date or timeframe>","event":"<upcoming event>","impact":"<why it matters for price>"}],"risks":["<bear-case / downside bullet>"],"positioning":"<one line on flow, sentiment, short interest or analyst positioning if found, else empty string>","confidence":"high|medium|low — <one clause on why, e.g. thin/conflicting sources>","asOf":"<the recency window your sources actually cover, e.g. 'as of Jul 4 2026, sources from the past 2 weeks'>"}
+Rules: keyFindings 3-7 items, risks 2-4 items, catalysts 0-4 items. Keep every string tight. Do not fabricate — omit a field's content rather than guess.`;
+
+const buildResearchPrompt = ({ instrument, name, context, question }) => {
+  const focus = `${instrument}${name ? ` (${name})` : ""}`;
+  const grounding = context ? `\n\n=== DESK'S LIVE TAPE FOR ${instrument} (grounding — verify/extend against the web, don't just repeat it) ===\n${context}` : "";
+  return `Research target: ${focus}.${grounding}\n\n=== RESEARCH QUESTION ===\n${question}\n\nWork the live web to answer it for ${focus}, then write the brief.\n\n${RESEARCH_SCHEMA}`;
+};
+
+const callResearch = async ({ prompt, timeoutMs }) => {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      // Sonnet is the fast-but-capable tier the desk wants for a web-fanning tool. Overridable.
+      model: process.env.ANTHROPIC_RESEARCH_MODEL || "claude-sonnet-5",
+      max_tokens: 4500,
+      system: RESEARCH_SYSTEM(dateLine()),
+      // web_search_20260209 / web_fetch_20260209 carry dynamic filtering: Claude filters results
+      // with code before they reach context, for better signal + token efficiency. max_uses bounds
+      // the agentic loop so the whole run fits the serverless budget.
+      tools: [
+        { type: "web_search_20260209", name: "web_search", max_uses: 5 },
+        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 },
+      ],
+      messages: [{ role: "user", content: prompt }],
+    }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) throw new Error(`Anthropic research returned ${response.status}`);
+  const payload = await response.json();
+  const blocks = payload.content || [];
+  // The brief is the model's final text block (it narrates between searches in earlier text blocks).
+  const textBlocks = blocks.filter((b) => b.type === "text" && b.text);
+  const finalText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
+  const brief = cleanModelJson(finalText);
+  // Ground-truth source list: every unique URL that actually came back from a search/fetch tool
+  // result — the verifiable trail, independent of what the model chose to list in keyFindings.
+  const sources = [];
+  const seen = new Set();
+  for (const b of blocks) {
+    const results = (b.type === "web_search_tool_result" || b.type === "web_fetch_tool_result") ? b.content : null;
+    const items = Array.isArray(results) ? results : results ? [results] : [];
+    for (const it of items) {
+      const url = it?.url || it?.content?.url;
+      const title = it?.title || it?.content?.title || url;
+      if (url && !seen.has(url)) { seen.add(url); sources.push({ title, url }); }
+    }
+  }
+  return { ...brief, _sources: sources.slice(0, 24) };
+};
+
+const runResearch = async (payload = {}) => {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error("Deep research needs ANTHROPIC_API_KEY configured on the desk.");
+  const instrument = String(payload.instrument || "").toUpperCase().slice(0, 12);
+  const question = String(payload.question || "").trim().slice(0, 2000);
+  if (!instrument) throw new Error("Pick an instrument to research.");
+  if (!question) throw new Error("Enter a research question.");
+  const prompt = buildResearchPrompt({
+    instrument,
+    name: String(payload.name || "").slice(0, 80),
+    context: String(payload.context || "").slice(0, 1200),
+    question,
+  });
+  // Single pass, wide window — web search + fetch rounds can run long, and a retry would blow the
+  // 60s budget. Leave ~5s headroom under maxDuration so the runtime never kills it mid-stream.
+  const brief = await callResearch({ prompt, timeoutMs: 55000 });
+  return {
+    instrument,
+    name: payload.name || "",
+    question,
+    ...brief,
+    generatedAt: dateLine(),
+  };
+};
+
 const avgChangeForSymbols = (tickers, symbols) => {
   const values = symbols
     .map((symbol) => tickers.find((item) => item.symbol === symbol)?.changePct)
@@ -2981,6 +3087,7 @@ export default async function handler(req, res) {
     else if (operation === "rotation") data = await fetchSectorRotation();
     else if (operation === "backtest") data = await runBacktest(payload.params);
     else if (operation === "algolive") data = await runAlgoLive(payload.params, payload.action);
+    else if (operation === "research") data = await runResearch(payload);
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {

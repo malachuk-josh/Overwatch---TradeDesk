@@ -53,6 +53,9 @@ import Bot from "lucide-react/dist/esm/icons/bot.mjs";
 import UserRound from "lucide-react/dist/esm/icons/user-round.mjs";
 import SlidersHorizontal from "lucide-react/dist/esm/icons/sliders-horizontal.mjs";
 import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
+import Globe from "lucide-react/dist/esm/icons/globe.mjs";
+import BookMarked from "lucide-react/dist/esm/icons/book-marked.mjs";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
 import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive } from "./auth.jsx";
 import "./styles.css";
 
@@ -4758,18 +4761,248 @@ const OUTCOME_META = {
   miss: { label: "MISS", color: "#EF4444" },
   flat: { label: "FLAT", color: "#94A3B8" },
 };
+/* ---------- Research Library — grounded deep-research harness (Sonnet + web search) ---------- */
+
+// Preloaded research angles. Each builds the actual question from the selected instrument's symbol,
+// so a click drops a real, editable prompt into the box rather than a vague template.
+const RESEARCH_PRESETS = [
+  { label: "What's moving it", q: (s) => `What is moving ${s} right now? Identify the specific news, catalysts or flows driving its price action over the last few sessions.` },
+  { label: "Latest earnings", q: (s) => `Summarize ${s}'s most recent earnings: the headline beats/misses, forward guidance, and how the stock reacted. What changed in the story?` },
+  { label: "Analyst sentiment", q: (s) => `Recent sell-side analyst sentiment on ${s}: upgrades, downgrades and price-target changes in the last few weeks, and the reasoning behind them.` },
+  { label: "Catalyst calendar", q: (s) => `Upcoming catalysts and scheduled events for ${s} over the next 2-4 weeks — earnings, product, regulatory, and the macro prints it's most sensitive to.` },
+  { label: "Bear case", q: (s) => `Build the bear case for ${s} right now. The biggest risks, red flags and downside scenarios the market may be underpricing.` },
+  { label: "Positioning & flow", q: (s) => `Positioning on ${s}: short interest, unusual options activity, institutional flows and overall sentiment. Is the trade crowded?` },
+  { label: "Macro drivers", q: (s) => `What macro drivers most move ${s} (rates, dollar, oil, sector rotation, specific data prints), and what is the current macro setup implying for it?` },
+];
+
+// Compact live-tape grounding string handed to the research prompt so the web work anchors to the
+// desk's real numbers for the instrument rather than starting cold.
+const buildResearchContext = (market, points, instrument) => {
+  const live = deskLiveContext(market, points, instrument);
+  const cfg = live.cfg;
+  const parts = [];
+  if (Number.isFinite(Number(live.spot))) parts.push(`live price ~${fmtNum(live.spot, 2)}`);
+  const t = (market?.tickers || []).find((x) => x.symbol === cfg.symbol);
+  if (t && Number.isFinite(Number(t.changePct))) parts.push(`today ${fmtSigned(t.changePct, 2, "%")}`);
+  const lv = points?.[cfg.pointsKey];
+  if (lv?.pivot) parts.push(`session pivot ${fmtNum(lv.pivot, 2)}`);
+  parts.push(`market session: ${marketSession().label}`);
+  return parts.length ? `${cfg.symbol}: ${parts.join(", ")}.` : "";
+};
+
+const researchVerdictColor = (v) => {
+  const s = String(v || "").toLowerCase();
+  return s.includes("bull") ? C.bull : s.includes("bear") ? C.bear : C.brass;
+};
+
+const ResearchBrief = ({ data }) => {
+  if (!data) return null;
+  const vColor = researchVerdictColor(data.verdict);
+  return (
+    <div className="rl-brief">
+      <div className="rl-brief-head">
+        <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", textTransform: "uppercase" }}>{data.verdict || "read"}</span>
+        <h3 className="rl-headline">{data.headline || `${data.instrument} research`}</h3>
+      </div>
+      {data.summary && <p className="rl-summary">{data.summary}</p>}
+      <div className="rl-meta">
+        {data.confidence && <span><b>Confidence</b> {data.confidence}</span>}
+        {data.asOf && <span><b>As of</b> {data.asOf}</span>}
+      </div>
+
+      {(data.keyFindings || []).length > 0 && (
+        <div className="rl-section">
+          <div className="rl-section-h"><Search size={12} /> Key findings</div>
+          <ul className="rl-findings">
+            {data.keyFindings.map((f, i) => (
+              <li key={i}>
+                <span>{typeof f === "string" ? f : f.point}</span>
+                {f && f.source && <em className="rl-src">{f.source}</em>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(data.catalysts || []).length > 0 && (
+        <div className="rl-section">
+          <div className="rl-section-h"><CalendarDays size={12} /> Catalysts</div>
+          <ul className="rl-catalysts">
+            {data.catalysts.map((c, i) => (
+              <li key={i}>
+                <b>{c.when || "TBD"}</b> — {c.event}{c.impact ? <em> · {c.impact}</em> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(data.risks || []).length > 0 && (
+        <div className="rl-section">
+          <div className="rl-section-h" style={{ color: C.bear }}><AlertTriangle size={12} /> Risks</div>
+          <ul className="rl-risks">
+            {data.risks.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {data.positioning && (
+        <div className="rl-section">
+          <div className="rl-section-h"><Scale size={12} /> Positioning</div>
+          <p className="rl-positioning">{data.positioning}</p>
+        </div>
+      )}
+
+      {(data._sources || []).length > 0 && (
+        <div className="rl-section">
+          <div className="rl-section-h"><Globe size={12} /> Sources consulted <span className="rl-src-count">{data._sources.length}</span></div>
+          <div className="rl-sources">
+            {data._sources.map((s, i) => (
+              <a key={i} className="rl-source" href={s.url} target="_blank" rel="noreferrer noopener" title={s.url}>
+                <ExternalLink size={11} /> {s.title || s.url}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ResearchLab = ({ market, points, notify }) => {
+  const [instrument, setInstrument] = usePersistentState("overwatch:research:instrument", DEFAULT_THESIS_INSTRUMENT);
+  const [question, setQuestion] = useState("");
+  const [run, setRun] = useState({ status: "idle", data: null, error: null });
+  const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
+  const [viewingId, setViewingId] = useState(null);
+  const cfg = thesisInstrumentConfig(instrument);
+
+  const viewed = viewingId ? reports.find((r) => r._id === viewingId) : run.data;
+  const showBrief = run.status === "loading" || run.status === "error" || !!viewed;
+
+  const applyPreset = (p) => { setQuestion(p.q(cfg.symbol)); setViewingId(null); };
+
+  const doResearch = async () => {
+    const q = question.trim();
+    if (!q) { notify?.("Enter a research question first", "err"); return; }
+    setViewingId(null);
+    setRun({ status: "loading", data: null, error: null });
+    try {
+      const context = buildResearchContext(market, points, instrument);
+      const data = await callDesk("research", "", { instrument: cfg.symbol, name: cfg.name, question: q, context });
+      const entry = { ...data, _id: uid(), _ts: Date.now(), _date: dateShort(), _time: stampNow() };
+      setRun({ status: "ready", data: entry, error: null });
+      setReports((prev) => [entry, ...prev].slice(0, 40));
+      notify?.(`Research brief ready for ${cfg.symbol}`, "ok");
+    } catch (e) {
+      setRun({ status: "error", data: null, error: e?.message || "Research failed" });
+      notify?.("Research run failed", "err");
+    }
+  };
+
+  const openReport = (r) => { setViewingId(r._id); setRun((s) => ({ ...s, status: s.data ? s.status : "idle" })); };
+  const deleteReport = (id) => {
+    setReports((prev) => prev.filter((r) => r._id !== id));
+    if (viewingId === id) setViewingId(null);
+  };
+
+  return (
+    <div className="rl-root">
+      <div className="rl-intro">
+        <Bot size={14} color={C.brass} style={{ flex: "none" }} />
+        <span>A grounded deep-research pass: it runs a live web search harness on your selected instrument and hands back a sourced brief. Sonnet + web search — separate from the thesis desk.</span>
+      </div>
+
+      <div className="grid g-2" style={{ alignItems: "start", gap: 14 }}>
+        <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
+          <div className="lab-field" style={{ marginTop: 0 }}>
+            <span className="lab-label">Instrument</span>
+            <InstrumentSelect value={instrument} onChange={(s) => { setInstrument(s); setViewingId(null); }} />
+          </div>
+          <div className="lab-field">
+            <span className="lab-label">Research angles</span>
+            <div className="rl-presets">
+              {RESEARCH_PRESETS.map((p) => (
+                <button key={p.label} className="rl-preset" onClick={() => applyPreset(p)} title={p.q(cfg.symbol)}>{p.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="lab-field">
+            <span className="lab-label">Prompt — edit freely or write your own</span>
+            <textarea
+              className="bd-ta"
+              style={{ minHeight: 96 }}
+              placeholder={`e.g. What's the latest on ${cfg.symbol}'s earnings and how did the Street react?`}
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-brass"
+            style={{ width: "100%", justifyContent: "center", marginTop: 4, padding: "12px" }}
+            onClick={doResearch}
+            disabled={run.status === "loading" || !question.trim()}
+          >
+            {run.status === "loading" ? <><RefreshCw size={15} className="spin" /> Researching {cfg.symbol}…</> : <><Search size={15} /> Run deep research</>}
+          </button>
+          <div style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
+            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Briefs are saved below on this device.
+          </div>
+        </Card>
+
+        <Card
+          icon={Search}
+          title={viewed ? `${viewed.instrument} brief` : "Research brief"}
+          sub={viewed ? `${viewed.question}`.slice(0, 90) : "Your sourced findings land here"}
+          tools={viewed && viewingId ? <button className="btn btn-ghost btn-sm" onClick={() => setViewingId(null)} title="Back to the latest run">Latest</button> : null}
+        >
+          {run.status === "loading" && <LoadingBlock lines={4} msg={`Searching the web for ${cfg.symbol}…`} />}
+          {run.status === "error" && !viewingId && <ErrBlock msg={run.error} onRetry={doResearch} />}
+          {showBrief && viewed && <ResearchBrief data={viewed} />}
+          {!showBrief && (
+            <EmptyState icon={Globe} title="No research yet" body="Pick an instrument and an angle, then run the harness. It searches the live web and returns a sourced brief — verdict, findings, catalysts and risks." />
+          )}
+        </Card>
+      </div>
+
+      {reports.length > 0 && (
+        <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, stored on this device`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {reports.map((r) => {
+              const vColor = researchVerdictColor(r.verdict);
+              return (
+                <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => openReport(r)}>
+                  <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+                  <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+                  <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+                  <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
 const ArchiveTab = ({
   archiveHistory,
   viewing,
   setViewing,
   onDeleteEntry,
   onGoThesis,
+  market,
+  points,
+  notify,
   inSplit = false,
   auth = null,
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [journalOpen, setJournalOpen] = usePersistentState("overwatch:sec:journal", true);
   const [libraryOpen, setLibraryOpen] = usePersistentState("overwatch:sec:library", false); // collapsed by default
+  const [researchOpen, setResearchOpen] = usePersistentState("overwatch:sec:research", false); // collapsed by default
   const isDesktop = useIsDesktop();
   const collapsedCount = isDesktop ? 7 : 3;
   const filteredHistory = archiveHistory;
@@ -4849,6 +5082,16 @@ const ArchiveTab = ({
           </button>
         )}
         </>)}
+      </Card>
+      <Card
+        icon={Globe}
+        title="Research Library"
+        sub="Deep research harness — Sonnet + live web search on a chosen instrument"
+        collapsible
+        open={researchOpen}
+        onToggle={() => setResearchOpen((o) => !o)}
+      >
+        {researchOpen && <ResearchLab market={market} points={points} notify={notify} />}
       </Card>
       <AcademyCard />
     </div>
@@ -6239,6 +6482,9 @@ export default function Overwatch() {
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => nav("thesis")}
+            market={market.data}
+            points={points.data}
+            notify={notify}
             inSplit={splitOn}
             auth={auth}
           />
