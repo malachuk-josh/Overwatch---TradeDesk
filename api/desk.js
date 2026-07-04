@@ -874,6 +874,9 @@ const FINNHUB_RT_SYMBOLS = new Set([
   // Select Sector SPDR ETFs — Finnhub's free /quote covers US-listed ETFs in real time.
   "XLK", "XLF", "XLV", "XLE", "XLY", "XLP", "XLI", "XLB", "XLU", "XLRE", "XLC",
   "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA",
+  // AI-infra basket — US-listed equities + ADRs, all covered by Finnhub's free /quote. (SPCX is
+  // omitted deliberately: it's an uncertain symbol, so it falls back to the Yahoo/delayed path.)
+  "AVGO", "AMD", "MRVL", "MU", "ASML", "TSM", "ALAB", "CRWV", "VRT", "GEV",
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 

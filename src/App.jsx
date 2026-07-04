@@ -95,13 +95,27 @@ const DEFAULT_WATCHLIST = [
   { symbol: "ETH", name: "Ethereum" },
   // Magnificent Seven mega-caps ship on the board but start hidden (off) — flip them on from
   // Settings to render their ticker cards on Market Pulse. Their live prices are fetched either way.
+  // MSFT/NVDA/AMZN/GOOGL double as AI-infra names and are grouped under that toggle subcategory.
   { symbol: "AAPL", name: "Apple", off: true },
-  { symbol: "MSFT", name: "Microsoft", off: true },
-  { symbol: "NVDA", name: "Nvidia", off: true },
-  { symbol: "AMZN", name: "Amazon", off: true },
-  { symbol: "GOOGL", name: "Alphabet", off: true },
+  { symbol: "MSFT", name: "Microsoft", off: true, cat: "AI Infra" },
+  { symbol: "NVDA", name: "Nvidia", off: true, cat: "AI Infra" },
+  { symbol: "AMZN", name: "Amazon", off: true, cat: "AI Infra" },
+  { symbol: "GOOGL", name: "Alphabet", off: true, cat: "AI Infra" },
   { symbol: "META", name: "Meta Platforms", off: true },
   { symbol: "TSLA", name: "Tesla", off: true },
+  // AI infrastructure basket — chips, compute, power and the crossover mega-caps. Live-quoted and
+  // shipped on the board but hidden by default; grouped under the "AI Infra" toggle subcategory.
+  { symbol: "AVGO", name: "Broadcom", off: true, cat: "AI Infra" },
+  { symbol: "AMD", name: "Advanced Micro Devices", off: true, cat: "AI Infra" },
+  { symbol: "MRVL", name: "Marvell Technology", off: true, cat: "AI Infra" },
+  { symbol: "MU", name: "Micron Technology", off: true, cat: "AI Infra" },
+  { symbol: "ASML", name: "ASML Holding", off: true, cat: "AI Infra" },
+  { symbol: "TSM", name: "Taiwan Semiconductor", off: true, cat: "AI Infra" },
+  { symbol: "ALAB", name: "Astera Labs", off: true, cat: "AI Infra" },
+  { symbol: "CRWV", name: "CoreWeave", off: true, cat: "AI Infra" },
+  { symbol: "VRT", name: "Vertiv Holdings", off: true, cat: "AI Infra" },
+  { symbol: "GEV", name: "GE Vernova", off: true, cat: "AI Infra" },
+  { symbol: "SPCX", name: "SPCX", off: true, cat: "AI Infra" },
   // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
   // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
   { symbol: "XLK", name: "Technology Sector SPDR", off: true },
@@ -116,7 +130,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 45;
+const WATCHLIST_CAP = 60;
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
@@ -132,7 +146,8 @@ const reconcileWatchlist = (items) => {
     .map((item) => {
       const symbol = String(item.symbol).toUpperCase();
       const def = DEFAULT_WATCHLIST.find((d) => d.symbol === symbol);
-      return { symbol, name: def?.name || item.name || symbol, ...(item.off ? { off: true } : {}) };
+      const cat = def?.cat || item.cat;
+      return { symbol, name: def?.name || item.name || symbol, ...(item.off ? { off: true } : {}), ...(cat ? { cat } : {}) };
     });
   // Append any default symbols the saved list is missing (e.g. newly-shipped defaults), capped.
   const merged = [...cleaned];
@@ -5116,6 +5131,13 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
     return { ...x, off: true };
   }));
 
+  // Show / hide an entire toggle subcategory (e.g. the AI Infra basket) at once.
+  const setCategoryHidden = (cat, hidden) => setWatchlist(watchlist.map((x) => {
+    if (x.cat !== cat) return x;
+    if (hidden) return { ...x, off: true };
+    const { off, ...rest } = x; return rest;
+  }));
+
   // Drag-to-reorder the watchlist (and therefore the Market Pulse card order).
   const moveRow = (from, to) => {
     if (from == null || to == null || from === to) return;
@@ -5147,30 +5169,65 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
 
         <span className="lab-label">Watchlist · {watchlist.length}</span>
         <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Drag the handle to reorder cards on Market Pulse. Use Show / Hide to control what appears — hidden names still price for the Thesis Lab.</div>
-        <div className="wl-list">
-          {watchlist.map((w, i) => (
-            <div
-              key={w.symbol}
-              className={`wl-row${w.off ? " off" : ""}${dragIndex === i ? " dragging" : ""}${overIndex === i && dragIndex !== null && dragIndex !== i ? " over" : ""}`}
-              draggable
-              onDragStart={(e) => { setDragIndex(i); e.dataTransfer.effectAllowed = "move"; }}
-              onDragOver={(e) => { e.preventDefault(); if (overIndex !== i) setOverIndex(i); }}
-              onDrop={(e) => { e.preventDefault(); moveRow(dragIndex, i); setDragIndex(null); setOverIndex(null); }}
-              onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+        {(() => {
+          const rows = watchlist.map((w, i) => ({ w, i }));
+          const mainRows = rows.filter(({ w }) => !w.cat);
+          const groups = new Map();
+          for (const r of rows) { if (r.w.cat) { if (!groups.has(r.w.cat)) groups.set(r.w.cat, []); groups.get(r.w.cat).push(r); } }
+          const visRow = (w) => (
+            <button
+              className={`wl-vis${w.off ? "" : " on"}`}
+              onClick={() => toggleTicker(w.symbol)}
+              title={w.off ? "Hidden — show this card on Market Pulse" : "Shown — hide this card from Market Pulse"}
             >
-              <span className="wl-grip" title="Drag to reorder"><GripVertical size={15} /></span>
-              <span className="wl-sym mono">{w.symbol}</span>
-              <span className="wl-name">{w.name}</span>
-              <button
-                className={`wl-vis${w.off ? "" : " on"}`}
-                onClick={() => toggleTicker(w.symbol)}
-                title={w.off ? "Hidden — show this card on Market Pulse" : "Shown — hide this card from Market Pulse"}
-              >
-                {w.off ? <><EyeOff size={13} /> Hidden</> : <><Eye size={13} /> Shown</>}
-              </button>
-            </div>
-          ))}
-        </div>
+              {w.off ? <><EyeOff size={13} /> Hidden</> : <><Eye size={13} /> Shown</>}
+            </button>
+          );
+          return (
+            <>
+              <div className="wl-list">
+                {mainRows.map(({ w, i }) => (
+                  <div
+                    key={w.symbol}
+                    className={`wl-row${w.off ? " off" : ""}${dragIndex === i ? " dragging" : ""}${overIndex === i && dragIndex !== null && dragIndex !== i ? " over" : ""}`}
+                    draggable
+                    onDragStart={(e) => { setDragIndex(i); e.dataTransfer.effectAllowed = "move"; }}
+                    onDragOver={(e) => { e.preventDefault(); if (overIndex !== i) setOverIndex(i); }}
+                    onDrop={(e) => { e.preventDefault(); moveRow(dragIndex, i); setDragIndex(null); setOverIndex(null); }}
+                    onDragEnd={() => { setDragIndex(null); setOverIndex(null); }}
+                  >
+                    <span className="wl-grip" title="Drag to reorder"><GripVertical size={15} /></span>
+                    <span className="wl-sym mono">{w.symbol}</span>
+                    <span className="wl-name">{w.name}</span>
+                    {visRow(w)}
+                  </div>
+                ))}
+              </div>
+              {[...groups.entries()].map(([cat, items]) => {
+                const allShown = items.every(({ w }) => !w.off);
+                return (
+                  <div key={cat} className="wl-group">
+                    <div className="wl-group-head">
+                      <span className="wl-group-label">{cat} · {items.length}</span>
+                      <button className="wl-group-toggle" onClick={() => setCategoryHidden(cat, allShown)}>
+                        {allShown ? <><EyeOff size={12} /> Hide all</> : <><Eye size={12} /> Show all</>}
+                      </button>
+                    </div>
+                    <div className="wl-list">
+                      {items.map(({ w }) => (
+                        <div key={w.symbol} className={`wl-row wl-row-sub${w.off ? " off" : ""}`}>
+                          <span className="wl-sym mono">{w.symbol}</span>
+                          <span className="wl-name">{w.name}</span>
+                          {visRow(w)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
         <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={() => { setWatchlist(DEFAULT_WATCHLIST); notify("Watchlist restored to desk defaults", "ok"); }}>
           <RotateCcw size={12} /> Restore default board
         </button>
