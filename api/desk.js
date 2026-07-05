@@ -1015,7 +1015,9 @@ const HIST_CACHE_KEY = "overwatch:hist:v2"; // v2: 7-session bars (v1 held 5, di
 const HIST_LOCK_KEY = "overwatch:hist:lock";
 // Weekly bars barely move intra-week, so a far longer freshness window keeps Yahoo call volume low.
 const HISTW_FRESH_MS = 6 * 60 * 60_000;
-const HISTW_CACHE_KEY = "overwatch:histw:v1";
+// v2: bars are now aggregated from daily ourselves; v1 cached Yahoo's buggy native-1wk bars (whose
+// last candle was a stray daily bar), so bump the key to discard that stale cache on deploy.
+const HISTW_CACHE_KEY = "overwatch:histw:v2";
 const HISTW_LOCK_KEY = "overwatch:histw:lock";
 // Hourly bars turn over every hour; a 15-min window keeps the forming-hour candle reasonably current.
 const HISTH_FRESH_MS = 15 * 60_000;
