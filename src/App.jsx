@@ -1371,7 +1371,7 @@ const ConvictionPips = ({ n, bias }) => {
   );
 };
 
-const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, period = "d" }) => {
+const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
   if (low == null || high == null || price == null || high <= low) return null;
   const open = Number.isFinite(Number(dayOpen))
     ? Number(dayOpen)
@@ -1394,7 +1394,7 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, per
   const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
   const toneClass = flat ? "flat" : bullish ? "bull" : "bear";
   return (
-    <div className="tk-candle" aria-label={`${period === "w" ? "Weekly" : period === "h" ? "Hourly" : "Daily"} candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
+    <div className="tk-candle" aria-label={`Daily candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
       <div className="candle-axis" aria-hidden="true">
         <span className="candle-axis-line candle-axis-hi">
           <span className="candle-axis-tag">H</span>
@@ -2461,25 +2461,10 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                       <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
                     </div>
                   </div>
-                  {!t._stale && (() => {
-                    const dec = t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0;
-                    // Weekly/hourly mode: the card's "day candle" reflects the current forming period
-                    // (from the same series driving the strip above it), not the daily session — so the
-                    // H/L labels agree with the strip right next to them.
-                    const series = stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : null;
-                    const bar = series && series.length ? series[series.length - 1] : null;
-                    // Expand the forming bar to include the live price so the candle always contains the
-                    // current close and never clamps or collapses to a degenerate (high<=low) bar — a
-                    // just-opened hour can post a single tick, which previously made the candle vanish.
-                    if (bar && Number.isFinite(Number(t.price))) {
-                      const hi = Math.max(Number(bar.h), Number(t.price));
-                      const lo = Math.min(Number(bar.l), Number(t.price));
-                      if (hi > lo) return <DayCandle low={lo} high={hi} price={t.price} dayOpen={bar.o} previousClose={null} decimals={dec} period={stripPeriod} />;
-                    }
-                    // Missing or degenerate period bar → fall back to the daily session candle so the
-                    // card's candle never disappears.
-                    return <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} period="d" />;
-                  })()}
+                  {/* The single H/L candle always shows today's daily session — a stable, accurate
+                      reference whose colour tracks the day's move — regardless of the strip's H/D/W
+                      timeframe. Only the mini strip above follows the toggle. */}
+                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0} />}
                 </div>
               </div>
             ))}
