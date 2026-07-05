@@ -56,7 +56,7 @@ import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
 import Globe from "lucide-react/dist/esm/icons/globe.mjs";
 import BookMarked from "lucide-react/dist/esm/icons/book-marked.mjs";
 import Search from "lucide-react/dist/esm/icons/search.mjs";
-import { CLERK_ENABLED, AuthControl, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive } from "./auth.jsx";
+import { CLERK_ENABLED, AuthControl, GatedSignIn, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive, loadUserResearch, saveUserResearch } from "./auth.jsx";
 import "./styles.css";
 
 /* ================================================================
@@ -721,10 +721,10 @@ const usePersistentState = (key, initial) => {
 
 /* ---------------- secure desk API layer ---------------- */
 
-const callDesk = async (operation, prompt, payload = {}) => {
+const callDesk = async (operation, prompt, payload = {}, token = null) => {
   const res = await fetch("/api/desk", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ operation, prompt, payload }),
   });
   const data = await res.json();
@@ -4910,13 +4910,28 @@ const ResearchBrief = ({ data }) => {
   );
 };
 
-const ResearchLab = ({ market, points, notify }) => {
+const ResearchLab = ({ market, points, notify, auth }) => {
   const [instrument, setInstrument] = usePersistentState("overwatch:research:instrument", DEFAULT_THESIS_INSTRUMENT);
   const [question, setQuestion] = useState("");
   const [run, setRun] = useState({ status: "idle", data: null, error: null });
+  // Local cache only — the source of truth for a signed-in account is the server (per-user, synced
+  // across devices). Deep research is metered, so it's account-gated: signed-out visitors see a
+  // sign-in prompt instead of the tool, never a stale local list from a previous session.
   const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
   const [viewingId, setViewingId] = useState(null);
   const cfg = thesisInstrumentConfig(instrument);
+  const signedIn = Boolean(auth?.signedIn);
+  const hydrated = useRef(false);
+
+  useEffect(() => {
+    if (!signedIn) { hydrated.current = false; return; }
+    if (hydrated.current) return;
+    hydrated.current = true;
+    (async () => {
+      const server = await loadUserResearch(auth.getToken);
+      if (Array.isArray(server)) setReports(server);
+    })();
+  }, [signedIn]);
 
   const viewed = viewingId ? reports.find((r) => r._id === viewingId) : run.data;
   const showBrief = run.status === "loading" || run.status === "error" || !!viewed;
@@ -4926,14 +4941,20 @@ const ResearchLab = ({ market, points, notify }) => {
   const doResearch = async () => {
     const q = question.trim();
     if (!q) { notify?.("Enter a research question first", "err"); return; }
+    if (!signedIn) { notify?.("Sign in to run deep research", "err"); return; }
     setViewingId(null);
     setRun({ status: "loading", data: null, error: null });
     try {
+      const token = await auth.getToken();
       const context = buildResearchContext(market, points, instrument);
-      const data = await callDesk("research", "", { instrument: cfg.symbol, name: cfg.name, question: q, context });
+      const data = await callDesk("research", "", { instrument: cfg.symbol, name: cfg.name, question: q, context }, token);
       const entry = { ...data, _id: uid(), _ts: Date.now(), _date: dateShort(), _time: stampNow() };
       setRun({ status: "ready", data: entry, error: null });
-      setReports((prev) => [entry, ...prev].slice(0, 40));
+      setReports((prev) => {
+        const next = [entry, ...prev].slice(0, 40);
+        saveUserResearch(auth.getToken, next).catch(() => {});
+        return next;
+      });
       notify?.(`Research brief ready for ${cfg.symbol}`, "ok");
     } catch (e) {
       setRun({ status: "error", data: null, error: e?.message || "Research failed" });
@@ -4943,9 +4964,30 @@ const ResearchLab = ({ market, points, notify }) => {
 
   const openReport = (r) => { setViewingId(r._id); setRun((s) => ({ ...s, status: s.data ? s.status : "idle" })); };
   const deleteReport = (id) => {
-    setReports((prev) => prev.filter((r) => r._id !== id));
+    setReports((prev) => {
+      const next = prev.filter((r) => r._id !== id);
+      if (signedIn) saveUserResearch(auth.getToken, next).catch(() => {});
+      return next;
+    });
     if (viewingId === id) setViewingId(null);
   };
+
+  if (!signedIn) {
+    return (
+      <div className="rl-root">
+        <div className="rl-intro">
+          <Bot size={14} color={C.brass} style={{ flex: "none" }} />
+          <span>A grounded deep-research pass: it runs a live web search harness on your selected instrument and hands back a sourced brief. Sonnet + web search — separate from the thesis desk.</span>
+        </div>
+        <Card icon={Lock} title="Sign in required" sub="Deep research uses metered API calls, so it's tied to your account">
+          <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginTop: 0 }}>
+            Each run fans out to live web search on your behalf, which costs real money per call. Sign in so usage is tracked per account and your saved briefs sync across devices.
+          </p>
+          <GatedSignIn label="Sign in to run deep research" />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="rl-root">
@@ -5007,7 +5049,7 @@ const ResearchLab = ({ market, points, notify }) => {
       </div>
 
       {reports.length > 0 && (
-        <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, stored on this device`}>
+        <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, synced to your account`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {reports.map((r) => {
               const vColor = researchVerdictColor(r.verdict);
@@ -5132,7 +5174,7 @@ const ArchiveTab = ({
         open={researchOpen}
         onToggle={() => setResearchOpen((o) => !o)}
       >
-        {researchOpen && <ResearchLab market={market} points={points} notify={notify} />}
+        {researchOpen && <ResearchLab market={market} points={points} notify={notify} auth={auth} />}
       </Card>
       <AcademyCard />
     </div>

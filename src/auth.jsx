@@ -78,6 +78,28 @@ export async function saveUserArchive(getToken, archive) {
   return res.ok;
 }
 
+// Per-user deep-research briefs (Phase 4). Deep research is metered (Anthropic + live web search),
+// so it's account-gated end to end: the /api/desk "research" op itself requires this same token.
+export async function loadUserResearch(getToken) {
+  const token = await getToken?.();
+  if (!token) return null;
+  const res = await fetch("/api/user/research", { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const { data } = await res.json();
+  return Array.isArray(data) ? data : null;
+}
+
+export async function saveUserResearch(getToken, briefs) {
+  const token = await getToken?.();
+  if (!token) return false;
+  const res = await fetch("/api/user/research", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ briefs }),
+  });
+  return res.ok;
+}
+
 // Keep Clerk's popovers/modal on-brand with the dark desk (brass-blue accent).
 const clerkAppearance = {
   variables: {
@@ -85,6 +107,19 @@ const clerkAppearance = {
     borderRadius: "10px",
   },
 };
+
+// In-context sign-in CTA for gating a specific feature (vs. the header's compact AuthControl).
+// Only render this when auth.signedIn is false; it's a no-op if Clerk isn't configured at all.
+export function GatedSignIn({ label = "Sign in to continue" }) {
+  if (!CLERK_ENABLED) return null;
+  return (
+    <SignInButton mode="modal" appearance={clerkAppearance}>
+      <button className="btn btn-brass" style={{ width: "100%", justifyContent: "center", gap: 8, padding: "12px" }}>
+        <LogIn size={15} /> {label}
+      </button>
+    </SignInButton>
+  );
+}
 
 // Header control: a "Sign in" button when signed out, the account avatar/menu when signed in.
 export function AuthControl() {
