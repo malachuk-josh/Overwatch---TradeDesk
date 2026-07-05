@@ -1418,21 +1418,25 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
 // boxes. The newest candle carries a "now" marker (and a live pulse when the market's open) to tie
 // it to the live day candle on the right. Same bull/bear/flat colours as the day candle.
 const MiniStrip = ({ candles, live = false }) => {
-  if (!Array.isArray(candles) || candles.length < 2) return null;
-  const lo = Math.min(...candles.map((c) => c.l));
-  const hi = Math.max(...candles.map((c) => c.h));
+  // Drop degenerate zero-range (o=h=l=c) bars: Yahoo's intraday feed appends a flat placeholder for
+  // the current/last period (esp. hourly, and on a closed market), which would otherwise render as a
+  // meaningless blue doji at the end of the strip.
+  const clean = (Array.isArray(candles) ? candles : []).filter((c) => Number(c.h) > Number(c.l));
+  if (clean.length < 2) return null;
+  const lo = Math.min(...clean.map((c) => c.l));
+  const hi = Math.max(...clean.map((c) => c.h));
   const span = (hi - lo) || 1;
   const PAD = 8; // % breathing room top/bottom so extremes don't touch the edges
   const y = (v) => PAD + ((hi - v) / span) * (100 - PAD * 2);
   return (
     <div className="tk-strip" aria-hidden="true">
-      {candles.map((c, i) => {
+      {clean.map((c, i) => {
         const yHi = y(c.h), yLo = y(c.l);
         let bodyTop = Math.min(y(c.o), y(c.c));
         const bodyH = Math.max(Math.abs(y(c.c) - y(c.o)), 10); // floor so a doji stays visible
         bodyTop = clamp(bodyTop, PAD, 100 - PAD - bodyH);
         const tone = Math.abs(c.c - c.o) < span * 0.03 ? "flat" : c.c >= c.o ? "bull" : "bear";
-        const now = i === candles.length - 1;
+        const now = i === clean.length - 1;
         return (
           <div className={`msk${now && live ? " msk-live" : ""}`} key={i}>
             <div className="candle-wick" style={{ top: `${yHi}%`, height: `${Math.max(yLo - yHi, 1)}%` }} />
@@ -1917,14 +1921,17 @@ const lmDecimals = (symbol, tickers) => {
 // in HTML with the exact same wick/body classes as the Market Pulse ticker-card candle, so the
 // gradient bodies, inset borders, glow and bull/bear/flat tones match one-for-one.
 const CandleStrip = ({ candles, decimals = 2, live = false, period = "d" }) => {
-  if (!candles?.length) return null;
-  const H = 72, n = candles.length, pad = 5;
-  const min = Math.min(...candles.map((c) => c.l));
-  const max = Math.max(...candles.map((c) => c.h));
+  // Drop degenerate zero-range (h<=l) bars — Yahoo's intraday feed appends a flat placeholder for the
+  // current/last period (esp. hourly, and on a closed market) that would render as a blank blue doji.
+  const clean = (Array.isArray(candles) ? candles : []).filter((c) => Number(c.h) > Number(c.l));
+  if (!clean.length) return null;
+  const H = 72, n = clean.length, pad = 5;
+  const min = Math.min(...clean.map((c) => c.l));
+  const max = Math.max(...clean.map((c) => c.h));
   const yFor = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
   return (
     <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} ${period === "w" ? "weekly" : period === "h" ? "hourly" : "daily"} candles`}>
-      {candles.map((c, i) => {
+      {clean.map((c, i) => {
         const isLast = i === n - 1;
         const up = c.c >= c.o;
         const flat = Math.abs(c.c - c.o) < Math.max((c.h - c.l) * 0.05, Number.EPSILON);

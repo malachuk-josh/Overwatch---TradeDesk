@@ -1062,7 +1062,9 @@ const _histFetchOne = async (symbol, period = "d") => {
     const ts = result?.timestamp || [];
     const rows = ts
       .map((t, i) => ({ o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
-      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+      // Drop degenerate zero-range placeholders (o=h=l=c) that Yahoo appends for the current/last
+      // hour, so the strip keeps a full 7 real candles instead of ending on a blank doji.
+      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite) && b.h > b.l)
       .map((b) => ({ o: round(b.o * scale, 4), h: round(b.h * scale, 4), l: round(b.l * scale, 4), c: round(b.c * scale, 4) }))
       .slice(-7);
     return rows.length >= 2 ? rows : null;
@@ -1156,7 +1158,8 @@ const fetchHistory = async (symbol, period = "d") => {
       const bars = result?.indicators?.quote?.[0] || {};
       const candles = ts
         .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
-        .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+        // Drop degenerate zero-range placeholders (o=h=l=c) Yahoo appends for the current/last hour.
+        .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite) && b.h > b.l)
         .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
         .slice(-7);
       return candles.length ? { symbol: sym, period, candles } : null;
