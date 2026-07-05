@@ -1236,12 +1236,20 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .rl-risks li{position:relative;padding-left:14px;font-size:12.5px;line-height:1.55;color:var(--text)}
 .rl-risks li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:var(--bear)}
 .rl-positioning{font-size:12.5px;line-height:1.55;color:var(--muted);margin:0}
-.rl-sources{display:flex;flex-wrap:wrap;gap:6px}
-.rl-source{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:5px 9px;border-radius:7px;
-  border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:11px;text-decoration:none;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:all .13s}
+/* Let the two research cards shrink to the viewport on mobile: grid items default to
+   min-width:auto and won't shrink below a long source URL's min-content, which blew the whole
+   grid track (and both cards) past a phone's width. min-width:0 lets the fr track win instead. */
+.rl-root .grid > *{min-width:0}
+.rl-sources{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.rl-source{display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0;padding:5px 9px;border-radius:7px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:11px;text-decoration:none;transition:all .13s}
 .rl-source:hover{color:var(--brass);border-color:rgba(59,130,246,.4)}
 .rl-source svg{flex:none}
+/* Truncate the label (usually a publisher name; a bare URL can be long) so a chip never forces
+   its card wider than the column. */
+.rl-source-txt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Finding-source labels can be raw URLs — let them wrap rather than push the card wide. */
+.rl-findings .rl-src{overflow-wrap:anywhere}
 
 /* ---------- strategy lab ---------- */
 .algo-table-wrap{overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:9px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent}

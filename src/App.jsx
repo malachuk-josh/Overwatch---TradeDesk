@@ -5034,7 +5034,7 @@ const ResearchBrief = ({ data }) => {
           <div className="rl-sources">
             {data._sources.map((s, i) => (
               <a key={i} className="rl-source" href={s.url} target="_blank" rel="noreferrer noopener" title={s.url}>
-                <ExternalLink size={11} /> {s.title || s.url}
+                <ExternalLink size={11} /> <span className="rl-source-txt">{s.title || s.url}</span>
               </a>
             ))}
           </div>
