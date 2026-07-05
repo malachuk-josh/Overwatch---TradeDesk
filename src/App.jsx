@@ -133,6 +133,40 @@ const DEFAULT_WATCHLIST = [
   { symbol: "VEEV", name: "Veeva Systems", off: true, cat: "Healthcare" },
   { symbol: "DOCS", name: "Doximity", off: true, cat: "Healthcare" },
   { symbol: "TEM", name: "Tempus AI", off: true, cat: "Healthcare" },
+  // Fintech / payments basket — card networks, processors, neobanks and consumer lenders.
+  // Live-quoted, shipped hidden by default under the "Fintech Payments" subcategory.
+  { symbol: "ICE", name: "Intercontinental Exchange", off: true, cat: "Fintech Payments" },
+  { symbol: "WU", name: "Western Union", off: true, cat: "Fintech Payments" },
+  { symbol: "SOFI", name: "SoFi Technologies", off: true, cat: "Fintech Payments" },
+  { symbol: "AXP", name: "American Express", off: true, cat: "Fintech Payments" },
+  { symbol: "MA", name: "Mastercard", off: true, cat: "Fintech Payments" },
+  { symbol: "V", name: "Visa", off: true, cat: "Fintech Payments" },
+  { symbol: "COF", name: "Capital One Financial", off: true, cat: "Fintech Payments" },
+  { symbol: "DFS", name: "Discover Financial Services", off: true, cat: "Fintech Payments" },
+  { symbol: "AFRM", name: "Affirm Holdings", off: true, cat: "Fintech Payments" },
+  { symbol: "PYPL", name: "PayPal Holdings", off: true, cat: "Fintech Payments" },
+  { symbol: "PLTU", name: "Direxion Daily PLTR Bull 2X Shares", off: true, cat: "Fintech Payments" },
+  // Semiconductors basket — the broader chip complex beyond the AI-infra crossover names (which
+  // stay under "AI Infra": NVDA, AVGO, AMD, MRVL, MU, TSM). Hidden by default under "Semiconductors".
+  { symbol: "QCOM", name: "Qualcomm", off: true, cat: "Semiconductors" },
+  { symbol: "LRCX", name: "Lam Research", off: true, cat: "Semiconductors" },
+  { symbol: "SMCI", name: "Super Micro Computer", off: true, cat: "Semiconductors" },
+  { symbol: "ON", name: "ON Semiconductor", off: true, cat: "Semiconductors" },
+  { symbol: "TXN", name: "Texas Instruments", off: true, cat: "Semiconductors" },
+  { symbol: "INTC", name: "Intel", off: true, cat: "Semiconductors" },
+  // Robotics / automation / defense-tech basket — ISRG stays under "Healthcare" (surgical robotics
+  // crossover). Live-quoted, hidden by default under "Robotics Automation".
+  { symbol: "ROBT", name: "First Trust Nasdaq AI and Robotics ETF", off: true, cat: "Robotics Automation" },
+  { symbol: "GE", name: "GE Aerospace", off: true, cat: "Robotics Automation" },
+  { symbol: "AXON", name: "Axon Enterprise", off: true, cat: "Robotics Automation" },
+  { symbol: "DRS", name: "Leonardo DRS", off: true, cat: "Robotics Automation" },
+  { symbol: "TDG", name: "TransDigm Group", off: true, cat: "Robotics Automation" },
+  { symbol: "NOC", name: "Northrop Grumman", off: true, cat: "Robotics Automation" },
+  { symbol: "LMT", name: "Lockheed Martin", off: true, cat: "Robotics Automation" },
+  { symbol: "RTX", name: "RTX Corp", off: true, cat: "Robotics Automation" },
+  { symbol: "RCAT", name: "Red Cat Holdings", off: true, cat: "Robotics Automation" },
+  { symbol: "KTOS", name: "Kratos Defense & Security Solutions", off: true, cat: "Robotics Automation" },
+  { symbol: "AVAV", name: "AeroVironment", off: true, cat: "Robotics Automation" },
   // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
   // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
   { symbol: "XLK", name: "Technology Sector SPDR", off: true },
@@ -147,7 +181,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 80;
+const WATCHLIST_CAP = 130; // DEFAULT_WATCHLIST is 97 entries; leaves headroom for custom additions
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
@@ -1990,6 +2024,9 @@ const SNAP_SECTOR_SET = new Set(SECTOR_ETFS.map((s) => s.symbol));
 const watchlistCatSet = (cat) => new Set(DEFAULT_WATCHLIST.filter((w) => w.cat === cat).map((w) => w.symbol));
 const SNAP_AI_SET = watchlistCatSet("AI Infra");
 const SNAP_HEALTH_SET = watchlistCatSet("Healthcare");
+const SNAP_FINTECH_SET = watchlistCatSet("Fintech Payments");
+const SNAP_SEMI_SET = watchlistCatSet("Semiconductors");
+const SNAP_ROBOTICS_SET = watchlistCatSet("Robotics Automation");
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
@@ -2000,6 +2037,9 @@ const SNAP_FILTER_OPTIONS = [
   { key: "mag7", label: "Mag 7", short: "Mag 7" },
   { key: "ai", label: "AI Infra", short: "AI Infra" },
   { key: "healthcare", label: "Healthcare", short: "Health" },
+  { key: "fintech", label: "Fintech Payments", short: "Fintech" },
+  { key: "semis", label: "Semiconductors", short: "Semis" },
+  { key: "robotics", label: "Robotics Automation", short: "Robotics" },
 ];
 const SNAP_FILTER_TEST = {
   live: (t) => symbolMarketOpen(t.symbol),
@@ -2010,13 +2050,16 @@ const SNAP_FILTER_TEST = {
   mag7: (t) => THESIS_STOCK_SET.has(t.symbol),
   ai: (t) => SNAP_AI_SET.has(t.symbol),
   healthcare: (t) => SNAP_HEALTH_SET.has(t.symbol),
+  fintech: (t) => SNAP_FINTECH_SET.has(t.symbol),
+  semis: (t) => SNAP_SEMI_SET.has(t.symbol),
+  robotics: (t) => SNAP_ROBOTICS_SET.has(t.symbol),
 };
 // Groups whose members are hidden from the default board (off:true), so focusing them pulls from the
 // full fetched universe rather than the visible board.
-const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7", "ai", "healthcare"]);
+const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics"]);
 // Instrument-type groups the user can hide from the "All markets" view (the dynamic "live" filter and
 // "all" itself aren't hideable).
-const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7", "ai", "healthcare"];
+const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics"];
 
 // "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header. Each row can
 // be tapped to focus that group, or (for instrument-type groups) toggled with the eye button to hide
