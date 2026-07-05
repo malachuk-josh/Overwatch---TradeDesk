@@ -3472,7 +3472,14 @@ const DataPointSection = ({ points, onRefresh }) => {
         <Freshness at={at} />
       </div>
       <div className="grid g-2" style={{ alignItems: "start" }}>
-        <Card icon={Activity} title="Internals regime" sub="Breadth, trend state, volatility structure">
+        <Card
+          icon={Activity}
+          title="Internals regime"
+          sub="Breadth, trend state, volatility structure"
+          tools={
+            <InfoTip text="Condenses trend + volatility into one regime read. The Trend/Breadth/Vol scores (-100 to +100) are the desk's own internal math, not a market data point. Breadth participation is how many of the 11 sectors are green — if it's low while the index rallies, that's a divergence: the move lacks real participation. Trend state reads index direction, breadth and VIX pressure together, not price alone. Vol structure watches VIX level plus term structure (contango = calm, backwardation = stress) to size how much patience a level deserves. Leadership/Pressure show the 3 strongest/weakest sectors — where the move is actually coming from. The Desk translation line at the bottom is the plain-English verdict on price vs. participation." />
+          }
+        >
           <InternalsRegime data={data} />
         </Card>
         <Card
