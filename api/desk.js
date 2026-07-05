@@ -1020,21 +1020,44 @@ const HISTW_LOCK_KEY = "overwatch:histw:lock";
 let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
 let _histwWarm = {}; // same shape, weekly bars
 
+// Groups ascending daily bars into ISO weeks (Monday-start, UTC). Weekly candles are built from
+// daily bars ourselves rather than requesting Yahoo's native 1wk interval — Yahoo's own weekly
+// aggregation sometimes appends the current day's raw daily bar in place of a properly aggregated
+// forming-week bar, which corrupts the most recent candle (it renders as a single day's OHLC, not
+// the week's). Aggregating client-side guarantees the forming week's bar is always correct: open
+// from the week's first session so far, high/low across whatever sessions have posted, close from
+// the latest.
+const _weeklyFromDaily = (dailyRows) => {
+  const weeks = [];
+  const byKey = new Map();
+  for (const b of dailyRows) {
+    const d = new Date(b.t * 1000);
+    const day = d.getUTCDay(); // 0=Sun..6=Sat
+    const diffToMonday = (day + 6) % 7;
+    const monday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diffToMonday);
+    const key = Math.floor(monday / 1000);
+    let w = byKey.get(key);
+    if (!w) { w = { t: key, o: b.o, h: b.h, l: b.l, c: b.c }; byKey.set(key, w); weeks.push(w); }
+    else { w.h = Math.max(w.h, b.h); w.l = Math.min(w.l, b.l); w.c = b.c; }
+  }
+  return weeks;
+};
+
 const _histFetchOne = async (symbol, weekly = false) => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
-  // Daily: 15 calendar days guarantees >=7 completed sessions after weekends/holidays. Weekly: Yahoo's
-  // own 1wk interval over 3 months guarantees >=7 completed weeks. Keep the last 7 either way (the
-  // newest is the current forming bar, tying it to the live day/week candle).
+  // Daily: 15 calendar days guarantees >=7 completed sessions after weekends/holidays. Weekly: 3
+  // months of DAILY bars (aggregated into ISO weeks below) guarantees >=7 completed weeks. Keep the
+  // last 7 either way (the newest is the current forming bar, tying it to the live day/week candle).
   const range = weekly ? "3mo" : "15d";
-  const interval = weekly ? "1wk" : "1d";
-  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=${interval}`);
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=1d`);
   const result = payload?.chart?.result?.[0];
   const bars = result?.indicators?.quote?.[0] || {};
   const ts = result?.timestamp || [];
-  const rows = ts
-    .map((t, i) => ({ o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
-    .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+  const daily = ts
+    .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
+    .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite));
+  const rows = (weekly ? _weeklyFromDaily(daily) : daily)
     .map((b) => ({ o: round(b.o * scale, 4), h: round(b.h * scale, 4), l: round(b.l * scale, 4), c: round(b.c * scale, 4) }))
     .slice(-7);
   return rows.length >= 2 ? rows : null;
@@ -1099,17 +1122,18 @@ const fetchHistory = async (symbol, period = "d") => {
     const sym = symbol.toUpperCase();
     const ysym = YAHOO_SYMBOLS[sym] || sym;
     const scale = YAHOO_SCALE[sym] || 1;
-    // Weekly candles use Yahoo's own 1wk interval (7 bars needs ~2 months of range to be safe
-    // across holidays/short weeks) rather than resampling daily bars client-side.
+    // Weekly candles are aggregated from daily bars ourselves (see _weeklyFromDaily) rather than
+    // Yahoo's native 1wk interval, which sometimes appends the current day's raw daily bar in place
+    // of a properly aggregated forming-week bar — that corrupted the most recent weekly candle.
     const range = weekly ? "3mo" : "15d";
-    const interval = weekly ? "1wk" : "1d";
-    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=${interval}`);
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=1d`);
     const result = payload?.chart?.result?.[0];
     const ts = result?.timestamp || [];
     const bars = result?.indicators?.quote?.[0] || {};
-    const candles = ts
+    const daily = ts
       .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
-      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite));
+    const candles = (weekly ? _weeklyFromDaily(daily) : daily)
       .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
       .slice(-7);
     return candles.length ? { symbol: sym, period, candles } : null;
