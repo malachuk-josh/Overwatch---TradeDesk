@@ -2473,9 +2473,9 @@ const callAnthropic = async (prompt) => {
 // ---- Deep Research harness --------------------------------------------------------------------
 // A grounded, bounded, agentic web-research pass on a single instrument. Unlike the thesis call
 // (which reasons over data we already hand it), this one turns on Claude's server-side web_search
-// + web_fetch tools so the model actively searches the live web, reads primary sources, and
-// synthesises a decision-ready brief. The desk's own live tape for the instrument is passed in as
-// grounding context so the research anchors to the real price/levels, not generic web noise.
+// tool so the model actively searches the live web and synthesises a decision-ready brief from the
+// results. The desk's own live tape for the instrument is passed in as grounding context so the
+// research anchors to the real price/levels, not generic web noise.
 //
 // Bounded by design: max_uses caps the agentic loop so a run fits inside the 60s serverless budget
 // (true multi-minute deep research would need an async job + polling, a natural v2). Sonnet is the
@@ -2493,7 +2493,7 @@ Discipline:
 - Actively seek disconfirming evidence — hunt the bear case, don't just confirm a prior.
 - If the web doesn't support a claim, say the evidence is thin rather than inventing it.
 
-Hard budget: this runs inside a 60-second window. You get AT MOST 3 web searches and 1 page fetch, total, for the whole task — spend them well. Default to search results alone; only fetch a page if a snippet genuinely can't answer the question. Do not chain extra searches to "double check" — form the brief from what you already have as soon as it's enough to answer the question. When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
+Hard budget: this runs inside a 60-second window. You get AT MOST 3 web searches, total, for the whole task — no page fetching, work from search results alone. Spend the searches well: don't chain extra ones to "double check" — form the brief from what you already have as soon as it's enough to answer the question. When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
 
 const RESEARCH_SCHEMA = `Respond with ONLY a raw JSON object — no markdown, no commentary before or after. Exact schema:
 {"headline":"<punchy 6-12 word takeaway>","verdict":"bullish|bearish|neutral|mixed","summary":"<3-4 sentence synthesis of what you found and what it means for the instrument>","keyFindings":[{"point":"<a specific, sourced finding>","source":"<publisher name or URL you got it from>"}],"catalysts":[{"when":"<date or timeframe>","event":"<upcoming event>","impact":"<why it matters for price>"}],"risks":["<bear-case / downside bullet>"],"positioning":"<one line on flow, sentiment, short interest or analyst positioning if found, else empty string>","confidence":"high|medium|low — <one clause on why, e.g. thin/conflicting sources>","asOf":"<the recency window your sources actually cover, e.g. 'as of Jul 4 2026, sources from the past 2 weeks'>"}
@@ -2518,14 +2518,13 @@ const callResearch = async ({ prompt, timeoutMs }) => {
       model: process.env.ANTHROPIC_RESEARCH_MODEL || "claude-sonnet-5",
       max_tokens: 3500,
       system: RESEARCH_SYSTEM(dateLine()),
-      // web_search_20260209 / web_fetch_20260209 carry dynamic filtering: Claude filters results
-      // with code before they reach context, for better signal + token efficiency. max_uses bounds
-      // the agentic loop so the whole run reliably fits the serverless budget — each fetch round-trip
-      // can run 10-20s+, so the previous 5 search / 3 fetch ceiling routinely blew past the 55s
-      // internal timeout, burning the tool spend without ever returning a brief.
+      // web_search_20260209 carries dynamic filtering: Claude filters results with code before they
+      // reach context, for better signal + token efficiency. max_uses bounds the agentic loop so the
+      // whole run reliably fits the serverless budget. web_fetch was dropped entirely — a full page
+      // fetch was the single biggest cost/latency driver (a full page in context vs. filtered search
+      // snippets), and search-only still covers the vast majority of research questions.
       tools: [
         { type: "web_search_20260209", name: "web_search", max_uses: 3 },
-        { type: "web_fetch_20260209", name: "web_fetch", max_uses: 1 },
       ],
       messages: [{ role: "user", content: prompt }],
     }),
@@ -2538,12 +2537,12 @@ const callResearch = async ({ prompt, timeoutMs }) => {
   const textBlocks = blocks.filter((b) => b.type === "text" && b.text);
   const finalText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
   const brief = cleanModelJson(finalText);
-  // Ground-truth source list: every unique URL that actually came back from a search/fetch tool
-  // result — the verifiable trail, independent of what the model chose to list in keyFindings.
+  // Ground-truth source list: every unique URL that actually came back from a search tool result —
+  // the verifiable trail, independent of what the model chose to list in keyFindings.
   const sources = [];
   const seen = new Set();
   for (const b of blocks) {
-    const results = (b.type === "web_search_tool_result" || b.type === "web_fetch_tool_result") ? b.content : null;
+    const results = b.type === "web_search_tool_result" ? b.content : null;
     const items = Array.isArray(results) ? results : results ? [results] : [];
     for (const it of items) {
       const url = it?.url || it?.content?.url;
