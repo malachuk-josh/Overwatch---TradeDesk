@@ -1371,7 +1371,7 @@ const ConvictionPips = ({ n, bias }) => {
   );
 };
 
-const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) => {
+const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, period = "d" }) => {
   if (low == null || high == null || price == null || high <= low) return null;
   const open = Number.isFinite(Number(dayOpen))
     ? Number(dayOpen)
@@ -1394,7 +1394,7 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
   const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
   const toneClass = flat ? "flat" : bullish ? "bull" : "bear";
   return (
-    <div className="tk-candle" aria-label={`Daily candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
+    <div className="tk-candle" aria-label={`${period === "w" ? "Weekly" : "Daily"} candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
       <div className="candle-axis" aria-hidden="true">
         <span className="candle-axis-line candle-axis-hi">
           <span className="candle-axis-tag">H</span>
@@ -2457,7 +2457,16 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                       <span style={{ color: chgColor(t.changePct) }}>{t._stale ? "—" : fmtSigned(t.changePct, 2, "%")}</span>
                     </div>
                   </div>
-                  {!t._stale && <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0} />}
+                  {!t._stale && (() => {
+                    const dec = t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0;
+                    // Weekly mode: the card's "day candle" should reflect the current forming week
+                    // (from the same histWeekly series driving the strip above it), not the daily
+                    // session — otherwise the H/L labels contradict the weekly strip right next to them.
+                    const weekBar = stripPeriod === "w" ? (t.histWeekly || [])[(t.histWeekly || []).length - 1] : null;
+                    return weekBar
+                      ? <DayCandle low={weekBar.l} high={weekBar.h} price={t.price} dayOpen={weekBar.o} previousClose={null} decimals={dec} period="w" />
+                      : <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} period="d" />;
+                  })()}
                 </div>
               </div>
             ))}
