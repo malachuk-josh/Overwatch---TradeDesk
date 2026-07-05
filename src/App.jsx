@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
+import Info from "lucide-react/dist/esm/icons/info.mjs";
 import Newspaper from "lucide-react/dist/esm/icons/newspaper.mjs";
 import Crosshair from "lucide-react/dist/esm/icons/crosshair.mjs";
 import CalendarDays from "lucide-react/dist/esm/icons/calendar-days.mjs";
@@ -1117,6 +1118,15 @@ const Freshness = ({ at }) => {
     </span>
   );
 };
+
+// Small hover/focus info popup for a Card's `tools` slot — explains a card's meaning without
+// permanently taking up space. Keyboard-accessible via focus (tabIndex + :focus-within in CSS).
+const InfoTip = ({ text }) => (
+  <span className="info-tip" tabIndex={0}>
+    <Info size={13} />
+    <span className="info-tip-pop">{text}</span>
+  </span>
+);
 
 // Per-symbol freshness chip: LIVE (real-time feed + trading now), a delay tag (delayed feed), or
 // nothing when the instrument's market is closed — then every price is just the last close.
@@ -3465,7 +3475,14 @@ const DataPointSection = ({ points, onRefresh }) => {
         <Card icon={Activity} title="Internals regime" sub="Breadth, trend state, volatility structure">
           <InternalsRegime data={data} />
         </Card>
-        <Card icon={History} title="Positioning & flows" sub="ETF proxies, credit, havens, sentiment components">
+        <Card
+          icon={History}
+          title="Positioning & flows"
+          sub="ETF proxies, credit, havens, sentiment components"
+          tools={
+            <InfoTip text="A proxy read on risk appetite, not real order flow. The posture chip is a weighted score across SPY/QQQ/IWM/HYG (risk-on) vs TLT/GLD/UUP (defensive). Each row below is an ETF's % move plus relative volume, with a plain-English read — watch HYG (credit) vs SPY/QQQ: if credit isn't confirming a stock rally, the move is often fade-prone. The 3 signal tiles come from CNN Fear & Greed's individual components (put/call, junk bond demand, safe-haven demand, momentum, breadth), not the headline number, so they can disagree with it. The notes below are two spreads (growth vs Dow, credit vs duration) plus a sector-breadth count." />
+          }
+        >
           {posSummary ? (
             <div className="flow-summary">
               <span className={`chip ${pos?.posture === "risk-on" ? "b-bull" : pos?.posture === "defensive" ? "b-bear" : "b-brass"}`} style={{ marginRight: 8 }}>{pos?.posture || "mixed"}</span>
