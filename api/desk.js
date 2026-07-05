@@ -881,6 +881,12 @@ const FINNHUB_RT_SYMBOLS = new Set([
   "AVGO", "AMD", "MRVL", "MU", "ASML", "TSM", "ALAB", "CRWV", "VRT", "GEV",
   // Healthcare-infra basket — all US-listed equities, covered by Finnhub's free /quote.
   "UNH", "HCA", "UHS", "MCK", "CAH", "DGX", "TMO", "MDT", "SYK", "ISRG", "WELL", "VTR", "VEEV", "DOCS", "TEM",
+  // Fintech/payments basket — all US-listed equities + one leveraged ETF, covered by Finnhub's free /quote.
+  "ICE", "WU", "SOFI", "AXP", "MA", "V", "COF", "DFS", "AFRM", "PYPL", "PLTU",
+  // Semiconductors basket (beyond the AI-infra crossover names above) — all US-listed.
+  "QCOM", "LRCX", "SMCI", "ON", "TXN", "INTC",
+  // Robotics/automation/defense-tech basket — all US-listed equities + one ETF.
+  "ROBT", "GE", "AXON", "DRS", "TDG", "NOC", "LMT", "RTX", "RCAT", "KTOS", "AVAV",
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 
