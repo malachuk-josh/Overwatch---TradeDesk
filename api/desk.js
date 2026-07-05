@@ -1,3 +1,5 @@
+import { authUserId } from "./_userStore.js";
+
 const SYMBOLS = {
   SPX: "CBOE:SPX",
   DJI: "TVC:DJI",
@@ -3094,7 +3096,13 @@ export default async function handler(req, res) {
     else if (operation === "rotation") data = await fetchSectorRotation();
     else if (operation === "backtest") data = await runBacktest(payload.params);
     else if (operation === "algolive") data = await runAlgoLive(payload.params, payload.action);
-    else if (operation === "research") data = await runResearch(payload);
+    else if (operation === "research") {
+      // Deep research is metered (live web search + fetch on top of the Anthropic call), so it's
+      // gated to signed-in accounts — that's the hook for budgeting/auditing usage per user.
+      const uid = await authUserId(req);
+      if (!uid) return json(res, 401, { error: "Sign in to run deep research — it uses metered API calls." });
+      data = await runResearch(payload);
+    }
     else if (operation === "thesis") {
       const fallback = makeThesis(payload);
       try {
