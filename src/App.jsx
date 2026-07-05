@@ -3471,7 +3471,7 @@ const DataPointSection = ({ points, onRefresh }) => {
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center" }}>
         <Freshness at={at} />
       </div>
-      <div className="grid g-2" style={{ alignItems: "start" }}>
+      <div className="grid g-2">
         <Card
           icon={Activity}
           title="Internals regime"
