@@ -1056,7 +1056,7 @@ const _histFetchOne = async (symbol, period = "d") => {
   // Hourly bars come straight from Yahoo's 1h interval, which (unlike its buggy 1wk aggregation) is
   // reliable — the backtester already uses it. 5 trading days easily yields >=7 hourly bars.
   if (period === "h") {
-    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h&includePrePost=false`);
     const result = payload?.chart?.result?.[0];
     const bars = result?.indicators?.quote?.[0] || {};
     const ts = result?.timestamp || [];
@@ -1150,7 +1150,7 @@ const fetchHistory = async (symbol, period = "d") => {
     const scale = YAHOO_SCALE[sym] || 1;
     // Hourly comes straight from Yahoo's reliable 1h interval (no client-side aggregation needed).
     if (period === "h") {
-      const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+      const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h&includePrePost=false`);
       const result = payload?.chart?.result?.[0];
       const ts = result?.timestamp || [];
       const bars = result?.indicators?.quote?.[0] || {};
@@ -2163,7 +2163,7 @@ const fetchWeeklyBar = async (symbol) => {
 const fetchHourlyBar = async (symbol) => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
-  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h&includePrePost=false`);
   const result = payload?.chart?.result?.[0];
   const ts = result?.timestamp || [];
   const bars = result?.indicators?.quote?.[0] || {};

@@ -2463,14 +2463,22 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                   </div>
                   {!t._stale && (() => {
                     const dec = t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0;
-                    // Weekly/hourly mode: the card's "day candle" should reflect the current forming
-                    // period (from the same series driving the strip above it), not the daily session —
-                    // otherwise the H/L labels contradict the strip right next to them.
+                    // Weekly/hourly mode: the card's "day candle" reflects the current forming period
+                    // (from the same series driving the strip above it), not the daily session — so the
+                    // H/L labels agree with the strip right next to them.
                     const series = stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : null;
                     const bar = series && series.length ? series[series.length - 1] : null;
-                    return bar
-                      ? <DayCandle low={bar.l} high={bar.h} price={t.price} dayOpen={bar.o} previousClose={null} decimals={dec} period={stripPeriod} />
-                      : <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} period="d" />;
+                    // Expand the forming bar to include the live price so the candle always contains the
+                    // current close and never clamps or collapses to a degenerate (high<=low) bar — a
+                    // just-opened hour can post a single tick, which previously made the candle vanish.
+                    if (bar && Number.isFinite(Number(t.price))) {
+                      const hi = Math.max(Number(bar.h), Number(t.price));
+                      const lo = Math.min(Number(bar.l), Number(t.price));
+                      if (hi > lo) return <DayCandle low={lo} high={hi} price={t.price} dayOpen={bar.o} previousClose={null} decimals={dec} period={stripPeriod} />;
+                    }
+                    // Missing or degenerate period bar → fall back to the daily session candle so the
+                    // card's candle never disappears.
+                    return <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} period="d" />;
                   })()}
                 </div>
               </div>
