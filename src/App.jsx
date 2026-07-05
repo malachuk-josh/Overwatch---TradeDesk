@@ -5083,9 +5083,6 @@ const ArchiveTab = ({
   auth = null,
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const [journalOpen, setJournalOpen] = usePersistentState("overwatch:sec:journal", true);
-  const [libraryOpen, setLibraryOpen] = usePersistentState("overwatch:sec:library", false); // collapsed by default
-  const [researchOpen, setResearchOpen] = usePersistentState("overwatch:sec:research", false); // collapsed by default
   const isDesktop = useIsDesktop();
   const collapsedCount = isDesktop ? 7 : 3;
   const filteredHistory = archiveHistory;
@@ -5093,27 +5090,43 @@ const ArchiveTab = ({
   // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
   const showAll = isDesktop || effectiveExpanded;
   const shownHistory = showAll ? filteredHistory : filteredHistory.slice(0, collapsedCount);
+
+  // Library sub-nav — one focused tool at a time instead of a long stack of accordion cards
+  // (mirrors the Thesis Lab / Algo Lab split). Journal leads since it was the section shown
+  // open by default before this became tabbed.
+  const [libTab, setLibTab] = usePersistentState("overwatch:library:toolview", "journal");
+  const LIB_TABS = [
+    { id: "journal", label: "Journal", Icon: Mail },
+    { id: "archive", label: "Thesis Archive", Icon: History },
+    { id: "research", label: "Research", Icon: Globe },
+    { id: "academy", label: "Academy", Icon: GraduationCap },
+  ];
+  const libSeg = (
+    <div className="seg" style={{ maxWidth: 720 }}>
+      {LIB_TABS.map((t) => (
+        <button key={t.id} className={libTab === t.id ? "on" : ""} onClick={() => setLibTab(t.id)}>
+          <t.Icon size={13} /> {t.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Card
-        icon={Mail}
-        title="Jacks Journal"
-        sub="Market wraps delivered by the Overwatch automation — stored in the cloud"
-        collapsible
-        open={journalOpen}
-        onToggle={() => setJournalOpen((o) => !o)}
-      >
-        {journalOpen && <CloudNewsletterList inSplit={inSplit} auth={auth} />}
-      </Card>
-      <Card
-        icon={History}
-        title="Thesis Library"
-        sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
-        collapsible
-        open={libraryOpen}
-        onToggle={() => setLibraryOpen((o) => !o)}
-      >
-        {libraryOpen && (<>
+      {libSeg}
+
+      {libTab === "journal" && (
+        <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
+          <CloudNewsletterList inSplit={inSplit} auth={auth} />
+        </Card>
+      )}
+
+      {libTab === "archive" && (
+        <Card
+          icon={History}
+          title="Thesis Library"
+          sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
+        >
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
@@ -5164,19 +5177,12 @@ const ArchiveTab = ({
             {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - collapsedCount} more</>}
           </button>
         )}
-        </>)}
-      </Card>
-      <Card
-        icon={Globe}
-        title="Research Library"
-        sub="Deep research harness — Sonnet + live web search on a chosen instrument"
-        collapsible
-        open={researchOpen}
-        onToggle={() => setResearchOpen((o) => !o)}
-      >
-        {researchOpen && <ResearchLab market={market} points={points} notify={notify} auth={auth} />}
-      </Card>
-      <AcademyCard />
+        </Card>
+      )}
+
+      {libTab === "research" && <ResearchLab market={market} points={points} notify={notify} auth={auth} />}
+
+      {libTab === "academy" && <AcademyCard />}
     </div>
   );
 };
