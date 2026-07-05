@@ -1017,8 +1017,13 @@ const HIST_LOCK_KEY = "overwatch:hist:lock";
 const HISTW_FRESH_MS = 6 * 60 * 60_000;
 const HISTW_CACHE_KEY = "overwatch:histw:v1";
 const HISTW_LOCK_KEY = "overwatch:histw:lock";
+// Hourly bars turn over every hour; a 15-min window keeps the forming-hour candle reasonably current.
+const HISTH_FRESH_MS = 15 * 60_000;
+const HISTH_CACHE_KEY = "overwatch:histh:v1";
+const HISTH_LOCK_KEY = "overwatch:histh:lock";
 let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
 let _histwWarm = {}; // same shape, weekly bars
+let _histhWarm = {}; // same shape, hourly bars
 
 // Groups ascending daily bars into ISO weeks (Monday-start, UTC). Weekly candles are built from
 // daily bars ourselves rather than requesting Yahoo's native 1wk interval — Yahoo's own weekly
@@ -1043,12 +1048,27 @@ const _weeklyFromDaily = (dailyRows) => {
   return weeks;
 };
 
-const _histFetchOne = async (symbol, weekly = false) => {
+const _histFetchOne = async (symbol, period = "d") => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
+  // Hourly bars come straight from Yahoo's 1h interval, which (unlike its buggy 1wk aggregation) is
+  // reliable — the backtester already uses it. 5 trading days easily yields >=7 hourly bars.
+  if (period === "h") {
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+    const result = payload?.chart?.result?.[0];
+    const bars = result?.indicators?.quote?.[0] || {};
+    const ts = result?.timestamp || [];
+    const rows = ts
+      .map((t, i) => ({ o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
+      .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+      .map((b) => ({ o: round(b.o * scale, 4), h: round(b.h * scale, 4), l: round(b.l * scale, 4), c: round(b.c * scale, 4) }))
+      .slice(-7);
+    return rows.length >= 2 ? rows : null;
+  }
   // Daily: 15 calendar days guarantees >=7 completed sessions after weekends/holidays. Weekly: 3
   // months of DAILY bars (aggregated into ISO weeks below) guarantees >=7 completed weeks. Keep the
   // last 7 either way (the newest is the current forming bar, tying it to the live day/week candle).
+  const weekly = period === "w";
   const range = weekly ? "3mo" : "15d";
   const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=1d`);
   const result = payload?.chart?.result?.[0];
@@ -1063,7 +1083,7 @@ const _histFetchOne = async (symbol, weekly = false) => {
   return rows.length >= 2 ? rows : null;
 };
 
-const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, weekly, label }) => {
+const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, period, expSec, label }) => {
   const wanted = [...new Set(symbols)];
   if (!wanted.length) return {};
   const kvOn = !!(_kvUrl() && _kvToken());
@@ -1085,7 +1105,7 @@ const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, w
     const gotLock = kvOn ? (await _kvCmd(["SET", lockKey, String(Date.now()), "NX", "PX", "12000"])) === "OK" : true;
     if (gotLock) {
       const settled = await Promise.allSettled(stale.map(async (sym) => {
-        const bars = await _histFetchOne(sym, weekly);
+        const bars = await _histFetchOne(sym, period);
         if (!bars) throw new Error("empty history");
         warm[sym] = { bars, ts: Date.now() };
       }));
@@ -1094,7 +1114,7 @@ const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, w
       if (kvOn && failed < stale.length) {
         const persist = {};
         for (const [sym, entry] of Object.entries(warm)) persist[sym] = entry;
-        await _kvCmd(["SET", cacheKey, JSON.stringify(persist), "EX", weekly ? 6 * 3600 : 3600]);
+        await _kvCmd(["SET", cacheKey, JSON.stringify(persist), "EX", String(expSec)]);
       }
     }
   }
@@ -1106,22 +1126,40 @@ const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, w
 
 const primeBoardHistory = (symbols) => _primeBoardHistory(symbols, {
   warm: _histWarm, freshMs: HIST_FRESH_MS, cacheKey: HIST_CACHE_KEY, lockKey: HIST_LOCK_KEY,
-  weekly: false, label: "primeBoardHistory",
+  period: "d", expSec: 3600, label: "primeBoardHistory",
 });
 const primeBoardHistoryWeekly = (symbols) => _primeBoardHistory(symbols, {
   warm: _histwWarm, freshMs: HISTW_FRESH_MS, cacheKey: HISTW_CACHE_KEY, lockKey: HISTW_LOCK_KEY,
-  weekly: true, label: "primeBoardHistoryWeekly",
+  period: "w", expSec: 6 * 3600, label: "primeBoardHistoryWeekly",
+});
+const primeBoardHistoryHourly = (symbols) => _primeBoardHistory(symbols, {
+  warm: _histhWarm, freshMs: HISTH_FRESH_MS, cacheKey: HISTH_CACHE_KEY, lockKey: HISTH_LOCK_KEY,
+  period: "h", expSec: 3600, label: "primeBoardHistoryHourly",
 });
 
-// Last 7 daily OHLC candles for one symbol (includes today's partial candle during the session).
-// Pull ~15 calendar days so weekends/holidays still leave 7 completed trading sessions.
+// Last 7 OHLC candles for one symbol at the requested timeframe (includes the current forming bar).
+// Daily: ~15 calendar days so weekends/holidays still leave 7 sessions. Weekly: 3mo of daily bars
+// aggregated into ISO weeks. Hourly: 5 trading days of Yahoo's native 1h interval.
 const fetchHistory = async (symbol, period = "d") => {
   if (!symbol || typeof symbol !== "string") return null;
-  const weekly = period === "w";
   try {
     const sym = symbol.toUpperCase();
     const ysym = YAHOO_SYMBOLS[sym] || sym;
     const scale = YAHOO_SCALE[sym] || 1;
+    // Hourly comes straight from Yahoo's reliable 1h interval (no client-side aggregation needed).
+    if (period === "h") {
+      const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+      const result = payload?.chart?.result?.[0];
+      const ts = result?.timestamp || [];
+      const bars = result?.indicators?.quote?.[0] || {};
+      const candles = ts
+        .map((t, i) => ({ t, o: bars.open?.[i], h: bars.high?.[i], l: bars.low?.[i], c: bars.close?.[i] }))
+        .filter((b) => [b.o, b.h, b.l, b.c].every(Number.isFinite))
+        .map((b) => ({ t: b.t, o: b.o * scale, h: b.h * scale, l: b.l * scale, c: b.c * scale }))
+        .slice(-7);
+      return candles.length ? { symbol: sym, period, candles } : null;
+    }
+    const weekly = period === "w";
     // Weekly candles are aggregated from daily bars ourselves (see _weeklyFromDaily) rather than
     // Yahoo's native 1wk interval, which sometimes appends the current day's raw daily bar in place
     // of a properly aggregated forming-week bar — that corrupted the most recent weekly candle.
@@ -1687,10 +1725,11 @@ const fetchMarket = async (watchlist = []) => {
   // below just looks each symbol up instead of firing 24 independent Finnhub calls every time. The
   // 7-session history for the card strip is primed alongside it (its own bounded/cached Yahoo pull).
   const symbols = requested.map((i) => i.symbol);
-  const [finnhubQuotes, histMap, histWeeklyMap] = await Promise.all([
+  const [finnhubQuotes, histMap, histWeeklyMap, histHourlyMap] = await Promise.all([
     primeFinnhubQuotes(symbols),
     primeBoardHistory(symbols).catch(() => ({})),
     primeBoardHistoryWeekly(symbols).catch(() => ({})),
+    primeBoardHistoryHourly(symbols).catch(() => ({})),
   ]);
 
   const tickerResults = await Promise.allSettled(
@@ -1732,6 +1771,7 @@ const fetchMarket = async (watchlist = []) => {
         quoteTs: Number.isFinite(Number(result.asOf)) ? Number(result.asOf) : null,
         hist: histMap[item.symbol] || null, // 7-session daily OHLC for the card's mini candle strip
         histWeekly: histWeeklyMap[item.symbol] || null, // 7-week OHLC, same strip toggled to weekly
+        histHourly: histHourlyMap[item.symbol] || null, // 7-hour OHLC, same strip toggled to hourly
       };
     }),
   );
@@ -2115,9 +2155,36 @@ const fetchWeeklyBar = async (symbol) => {
   return { o: s(o), h: s(h), l: s(l), c: s(c), prevClose: s(prevClose), changePct: prevClose ? ((c - prevClose) / prevClose) * 100 : 0 };
 };
 
-// Real support/resistance/pivot for any symbol, computed from its OHLC — daily (live session) or
-// weekly (week-to-date). Gives theses and the level maps concrete levels the same way indexLevels()
-// does for the index complex.
+// Prior COMPLETED hourly OHLC bar for a symbol (the in-progress current hour is skipped), so hourly
+// pivots project from the last full hour's range — the intraday analogue of the weekly pivot.
+// Includes the hour-before's close for the change figure.
+const fetchHourlyBar = async (symbol) => {
+  const ysym = YAHOO_SYMBOLS[symbol] || symbol;
+  const scale = YAHOO_SCALE[symbol] || 1;
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=5d&interval=1h`);
+  const result = payload?.chart?.result?.[0];
+  const ts = result?.timestamp || [];
+  const bars = result?.indicators?.quote?.[0] || {};
+  const closes = bars.close || [];
+  const nowSec = Math.floor(Date.now() / 1000);
+  // A 1h bar's timestamp is its start; it completes one hour later.
+  const complete = (i) => [bars.open?.[i], bars.high?.[i], bars.low?.[i], closes[i]].every(Number.isFinite) && ts[i] + 3600 < nowSec;
+  const done = [];
+  for (let i = 0; i < closes.length; i++) if (complete(i)) done.push(i);
+  let idx = done.length ? done[done.length - 1] : (() => { let j = closes.length - 1; while (j >= 0 && !Number.isFinite(closes[j])) j--; return j; })();
+  if (idx < 0) return null;
+  const o = bars.open[idx], h = bars.high[idx], l = bars.low[idx], c = closes[idx];
+  if (![o, h, l, c].every(Number.isFinite)) return null;
+  let p = idx - 1;
+  while (p >= 0 && !Number.isFinite(closes[p])) p--;
+  const prevClose = p >= 0 ? closes[p] : c;
+  const s = (v) => v * scale;
+  return { o: s(o), h: s(h), l: s(l), c: s(c), prevClose: s(prevClose), changePct: prevClose ? ((c - prevClose) / prevClose) * 100 : 0 };
+};
+
+// Real support/resistance/pivot for any symbol, computed from its OHLC — daily (live session),
+// weekly (last completed week) or hourly (last completed hour). Gives theses and the level maps
+// concrete levels the same way indexLevels() does for the index complex.
 const fetchStockLevels = async (symbol, period = "d") => {
   if (!symbol || typeof symbol !== "string") return null;
   try {
@@ -2129,6 +2196,13 @@ const fetchStockLevels = async (symbol, period = "d") => {
       const levels = indexLevels({ price: w.c, dayHigh: w.h, dayLow: w.l, changePct: w.changePct }, 2);
       if (!levels) return null;
       return { symbol: sym, period: "w", ...levels, ohlc: { o: round(w.o, 2), h: round(w.h, 2), l: round(w.l, 2), c: round(w.prevClose, 2) }, asOf };
+    }
+    if (period === "h") {
+      const hbar = await fetchHourlyBar(sym);
+      if (!hbar) return null;
+      const levels = indexLevels({ price: hbar.c, dayHigh: hbar.h, dayLow: hbar.l, changePct: hbar.changePct }, 2);
+      if (!levels) return null;
+      return { symbol: sym, period: "h", ...levels, ohlc: { o: round(hbar.o, 2), h: round(hbar.h, 2), l: round(hbar.l, 2), c: round(hbar.prevClose, 2) }, asOf };
     }
     const q = await quote(sym);
     const levels = indexLevels({ price: q.price, dayHigh: q.dayHigh, dayLow: q.dayLow, changePct: q.changePct }, 2);
