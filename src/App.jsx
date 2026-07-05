@@ -1394,7 +1394,7 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0, per
   const flat = Math.abs(close - open) < Math.max((high - low) * 0.05, 0.15);
   const toneClass = flat ? "flat" : bullish ? "bull" : "bear";
   return (
-    <div className="tk-candle" aria-label={`${period === "w" ? "Weekly" : "Daily"} candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
+    <div className="tk-candle" aria-label={`${period === "w" ? "Weekly" : period === "h" ? "Hourly" : "Daily"} candlestick with open ${fmtNum(open)}, high ${fmtNum(high)}, low ${fmtNum(low)}, and close ${fmtNum(close)}.`}>
       <div className="candle-axis" aria-hidden="true">
         <span className="candle-axis-line candle-axis-hi">
           <span className="candle-axis-tag">H</span>
@@ -1923,7 +1923,7 @@ const CandleStrip = ({ candles, decimals = 2, live = false, period = "d" }) => {
   const max = Math.max(...candles.map((c) => c.h));
   const yFor = (v) => pad + ((max - v) / (max - min || 1)) * (H - 2 * pad);
   return (
-    <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} ${period === "w" ? "weekly" : "daily"} candles`}>
+    <div className="lm-candles" style={{ height: `${H}px` }} aria-label={`Last ${n} ${period === "w" ? "weekly" : period === "h" ? "hourly" : "daily"} candles`}>
       {candles.map((c, i) => {
         const isLast = i === n - 1;
         const up = c.c >= c.o;
@@ -1934,7 +1934,9 @@ const CandleStrip = ({ candles, decimals = 2, live = false, period = "d" }) => {
         const wickHeight = Math.max(yFor(c.l) - wickTop, 1);
         const bodyTop = yFor(Math.max(c.o, c.c));
         const bodyHeight = Math.max(yFor(Math.min(c.o, c.c)) - bodyTop, 3);
-        const dateLabel = new Date(c.t * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
+        const dateLabel = period === "h"
+          ? new Date(c.t * 1000).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric" })
+          : new Date(c.t * 1000).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" });
         return (
           <div
             key={c.t}
@@ -1975,11 +1977,13 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
   // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
   const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
   const active = pref.sym || defaultSymbol;
-  const period = pref.period === "w" ? "w" : "d"; // d = daily (session), w = weekly (prior week)
+  // d = daily (live session), w = weekly (last completed week), h = hourly (last completed hour)
+  const period = ["d", "w", "h"].includes(pref.period) ? pref.period : "d";
   const setActive = (s) => setPref((p) => ({ ...p, sym: s }));
   const setPeriod = (p2) => setPref((p) => ({ ...p, period: p2 }));
   const symbols = (tickers || []).map((t) => t.symbol);
-  // Weekly always comes from the levels endpoint (the points feed only carries daily index levels).
+  // Only daily reads the shared points feed (which carries daily index levels); weekly/hourly always
+  // come from the levels endpoint, which computes their pivots from the last completed period bar.
   const pointsData = period === "d" ? points?.[active.toLowerCase()] : null;
   const [fetched, setFetched] = useState(null);
   useEffect(() => {
@@ -1997,13 +2001,13 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
   const liveT = (tickers || []).find((x) => x.symbol === active);
   const livePrice = liveT && typeof liveT.price === "number" && !isNaN(liveT.price) ? liveT.price : null;
   const spxData = data && livePrice != null ? { ...data, spot: livePrice } : data;
-  // Weekly OHLC rails come from the fetched weekly bar; daily uses the live session ticker.
-  const ohlc = period === "w" ? (fetchedData?.ohlc || null) : ohlcForSymbol(tickers, active);
+  // Weekly/hourly OHLC rails come from the fetched period bar; daily uses the live session ticker.
+  const ohlc = (period === "w" || period === "h") ? (fetchedData?.ohlc || null) : ohlcForSymbol(tickers, active);
   return (
     <Card
       icon={Crosshair}
       title={`${active} level map`}
-      sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : ""}`.replace(/^ · /, "")}
+      sub={`${liveT?.name || ""}${period === "w" ? " · weekly" : period === "h" ? " · hourly" : ""}`.replace(/^ · /, "")}
       tools={
         <span className="lm-tools">
           <LevelMapCandles symbol={active} tickers={tickers} period={period} />
@@ -2035,8 +2039,8 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
           })()}
         </select>
         <div className="lm-period" role="group" aria-label="Level timeframe">
-          {["d", "w"].map((p) => (
-            <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)} title={p === "d" ? "Daily levels" : "Weekly levels"}>{p.toUpperCase()}</button>
+          {["h", "d", "w"].map((p) => (
+            <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)} title={p === "h" ? "Hourly levels" : p === "d" ? "Daily levels" : "Weekly levels"}>{p.toUpperCase()}</button>
           ))}
         </div>
       </div>
@@ -2392,8 +2396,8 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
             )}
             {tickersOpen && showStrip && (
               <div className="lm-period" role="group" aria-label="Card candle strip timeframe" onClick={(e) => e.stopPropagation()}>
-                {["d", "w"].map((p) => (
-                  <button key={p} className={stripPeriod === p ? "on" : ""} onClick={() => setStripPeriod(p)} title={p === "d" ? "Daily candles in the strip" : "Weekly candles in the strip"}>{p.toUpperCase()}</button>
+                {["h", "d", "w"].map((p) => (
+                  <button key={p} className={stripPeriod === p ? "on" : ""} onClick={() => setStripPeriod(p)} title={p === "h" ? "Hourly candles in the strip" : p === "d" ? "Daily candles in the strip" : "Weekly candles in the strip"}>{p.toUpperCase()}</button>
                 ))}
               </div>
             )}
@@ -2447,7 +2451,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                         })()}
                   </span>
                 </div>
-                {showStrip && !t._stale && <MiniStrip candles={stripPeriod === "w" ? t.histWeekly : t.hist} live={symbolMarketOpen(t.symbol)} />}
+                {showStrip && !t._stale && <MiniStrip candles={stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : t.hist} live={symbolMarketOpen(t.symbol)} />}
                 <div className="tk-body">
                   <div className="tk-left">
                     <div className="tk-name" title={t.name}>{t.name}</div>
@@ -2459,12 +2463,13 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                   </div>
                   {!t._stale && (() => {
                     const dec = t.symbol === "US10Y" ? 3 : (t.symbol === "DXY" || SNAP_ETF_SET.has(t.symbol) || Math.abs(Number(t.price)) < 100) ? 2 : 0;
-                    // Weekly mode: the card's "day candle" should reflect the current forming week
-                    // (from the same histWeekly series driving the strip above it), not the daily
-                    // session — otherwise the H/L labels contradict the weekly strip right next to them.
-                    const weekBar = stripPeriod === "w" ? (t.histWeekly || [])[(t.histWeekly || []).length - 1] : null;
-                    return weekBar
-                      ? <DayCandle low={weekBar.l} high={weekBar.h} price={t.price} dayOpen={weekBar.o} previousClose={null} decimals={dec} period="w" />
+                    // Weekly/hourly mode: the card's "day candle" should reflect the current forming
+                    // period (from the same series driving the strip above it), not the daily session —
+                    // otherwise the H/L labels contradict the strip right next to them.
+                    const series = stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : null;
+                    const bar = series && series.length ? series[series.length - 1] : null;
+                    return bar
+                      ? <DayCandle low={bar.l} high={bar.h} price={t.price} dayOpen={bar.o} previousClose={null} decimals={dec} period={stripPeriod} />
                       : <DayCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} period="d" />;
                   })()}
                 </div>
