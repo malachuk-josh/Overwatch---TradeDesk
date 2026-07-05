@@ -167,6 +167,48 @@ const DEFAULT_WATCHLIST = [
   { symbol: "RCAT", name: "Red Cat Holdings", off: true, cat: "Robotics Automation" },
   { symbol: "KTOS", name: "Kratos Defense & Security Solutions", off: true, cat: "Robotics Automation" },
   { symbol: "AVAV", name: "AeroVironment", off: true, cat: "Robotics Automation" },
+  // Energy / power basket — utilities, IPPs, grid buildout, nuclear/SMR and data-center power
+  // infrastructure. Live-quoted, hidden by default under "Energy Power".
+  { symbol: "ETN", name: "Eaton", off: true, cat: "Energy Power" },
+  { symbol: "CEG", name: "Constellation Energy", off: true, cat: "Energy Power" },
+  { symbol: "NEE", name: "NextEra Energy", off: true, cat: "Energy Power" },
+  { symbol: "BE", name: "Bloom Energy", off: true, cat: "Energy Power" },
+  { symbol: "VST", name: "Vistra Corp", off: true, cat: "Energy Power" },
+  { symbol: "PWR", name: "Quanta Services", off: true, cat: "Energy Power" },
+  { symbol: "FIX", name: "Comfort Systems USA", off: true, cat: "Energy Power" },
+  { symbol: "STRL", name: "Sterling Infrastructure", off: true, cat: "Energy Power" },
+  { symbol: "CCJ", name: "Cameco", off: true, cat: "Energy Power" },
+  { symbol: "LEU", name: "Centrus Energy", off: true, cat: "Energy Power" },
+  { symbol: "SMR", name: "NuScale Power", off: true, cat: "Energy Power" },
+  { symbol: "OKLO", name: "Oklo", off: true, cat: "Energy Power" },
+  { symbol: "POWL", name: "Powell Industries", off: true, cat: "Energy Power" },
+  { symbol: "ARRY", name: "Array Technologies", off: true, cat: "Energy Power" },
+  { symbol: "AROC", name: "Archrock", off: true, cat: "Energy Power" },
+  // Defense-tech basket — AXON, RCAT, KTOS and AVAV stay under "Robotics Automation" rather than
+  // duplicating a symbol across two categories. Live-quoted, hidden by default under "Defense Tech".
+  { symbol: "PLTR", name: "Palantir Technologies", off: true, cat: "Defense Tech" },
+  { symbol: "ONDS", name: "Ondas Holdings", off: true, cat: "Defense Tech" },
+  { symbol: "BBAI", name: "BigBear.ai Holdings", off: true, cat: "Defense Tech" },
+  { symbol: "LDOS", name: "Leidos Holdings", off: true, cat: "Defense Tech" },
+  { symbol: "BAH", name: "Booz Allen Hamilton", off: true, cat: "Defense Tech" },
+  { symbol: "HEI", name: "HEICO Corp", off: true, cat: "Defense Tech" },
+  { symbol: "HWM", name: "Howmet Aerospace", off: true, cat: "Defense Tech" },
+  { symbol: "MRCY", name: "Mercury Systems", off: true, cat: "Defense Tech" },
+  { symbol: "KVHI", name: "KVH Industries", off: true, cat: "Defense Tech" },
+  { symbol: "CDRE", name: "Cadre Holdings", off: true, cat: "Defense Tech" },
+  { symbol: "LHX", name: "L3Harris Technologies", off: true, cat: "Defense Tech" },
+  // Cybersecurity basket — network, endpoint, cloud and identity security vendors. Live-quoted,
+  // hidden by default under "Cybersecurity".
+  { symbol: "PANW", name: "Palo Alto Networks", off: true, cat: "Cybersecurity" },
+  { symbol: "CRWD", name: "CrowdStrike Holdings", off: true, cat: "Cybersecurity" },
+  { symbol: "FTNT", name: "Fortinet", off: true, cat: "Cybersecurity" },
+  { symbol: "ZS", name: "Zscaler", off: true, cat: "Cybersecurity" },
+  { symbol: "OKTA", name: "Okta", off: true, cat: "Cybersecurity" },
+  { symbol: "S", name: "SentinelOne", off: true, cat: "Cybersecurity" },
+  { symbol: "CSCO", name: "Cisco Systems", off: true, cat: "Cybersecurity" },
+  { symbol: "FFIV", name: "F5, Inc.", off: true, cat: "Cybersecurity" },
+  { symbol: "NET", name: "Cloudflare", off: true, cat: "Cybersecurity" },
+  { symbol: "RBRK", name: "Rubrik", off: true, cat: "Cybersecurity" },
   // Select Sector SPDR ETFs — live-quoted (Finnhub) and shipped on the board but hidden by default.
   // They power the Sector Focus panel on Market Pulse; flip any on from Settings to add a ticker card.
   { symbol: "XLK", name: "Technology Sector SPDR", off: true },
@@ -181,7 +223,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 130; // DEFAULT_WATCHLIST is 97 entries; leaves headroom for custom additions
+const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 133 entries; leaves headroom for custom additions
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
@@ -2027,6 +2069,9 @@ const SNAP_HEALTH_SET = watchlistCatSet("Healthcare");
 const SNAP_FINTECH_SET = watchlistCatSet("Fintech Payments");
 const SNAP_SEMI_SET = watchlistCatSet("Semiconductors");
 const SNAP_ROBOTICS_SET = watchlistCatSet("Robotics Automation");
+const SNAP_ENERGY_SET = watchlistCatSet("Energy Power");
+const SNAP_DEFENSE_SET = watchlistCatSet("Defense Tech");
+const SNAP_CYBER_SET = watchlistCatSet("Cybersecurity");
 const SNAP_FILTER_OPTIONS = [
   { key: "all", label: "All markets", short: "Markets" },
   { key: "live", label: "Live now", short: "Live" },
@@ -2040,6 +2085,9 @@ const SNAP_FILTER_OPTIONS = [
   { key: "fintech", label: "Fintech Payments", short: "Fintech" },
   { key: "semis", label: "Semiconductors", short: "Semis" },
   { key: "robotics", label: "Robotics Automation", short: "Robotics" },
+  { key: "energy", label: "Energy Power", short: "Energy" },
+  { key: "defense", label: "Defense Tech", short: "Defense" },
+  { key: "cyber", label: "Cybersecurity", short: "Cyber" },
 ];
 const SNAP_FILTER_TEST = {
   live: (t) => symbolMarketOpen(t.symbol),
@@ -2053,13 +2101,16 @@ const SNAP_FILTER_TEST = {
   fintech: (t) => SNAP_FINTECH_SET.has(t.symbol),
   semis: (t) => SNAP_SEMI_SET.has(t.symbol),
   robotics: (t) => SNAP_ROBOTICS_SET.has(t.symbol),
+  energy: (t) => SNAP_ENERGY_SET.has(t.symbol),
+  defense: (t) => SNAP_DEFENSE_SET.has(t.symbol),
+  cyber: (t) => SNAP_CYBER_SET.has(t.symbol),
 };
 // Groups whose members are hidden from the default board (off:true), so focusing them pulls from the
 // full fetched universe rather than the visible board.
-const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics"]);
+const SNAP_FROM_HIDDEN = new Set(["sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics", "energy", "defense", "cyber"]);
 // Instrument-type groups the user can hide from the "All markets" view (the dynamic "live" filter and
 // "all" itself aren't hideable).
-const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics"];
+const SNAP_HIDEABLE = ["indexes", "futures", "etfs", "sectors", "mag7", "ai", "healthcare", "fintech", "semis", "robotics", "energy", "defense", "cyber"];
 
 // "Markets" dropdown that replaces the old Live-markets toggle in the snapshot header. Each row can
 // be tapped to focus that group, or (for instrument-type groups) toggled with the eye button to hide

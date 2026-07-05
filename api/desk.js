@@ -887,6 +887,12 @@ const FINNHUB_RT_SYMBOLS = new Set([
   "QCOM", "LRCX", "SMCI", "ON", "TXN", "INTC",
   // Robotics/automation/defense-tech basket — all US-listed equities + one ETF.
   "ROBT", "GE", "AXON", "DRS", "TDG", "NOC", "LMT", "RTX", "RCAT", "KTOS", "AVAV",
+  // Energy/power basket — all US-listed equities.
+  "ETN", "CEG", "NEE", "BE", "VST", "PWR", "FIX", "STRL", "CCJ", "LEU", "SMR", "OKLO", "POWL", "ARRY", "AROC",
+  // Defense-tech basket — all US-listed equities.
+  "PLTR", "ONDS", "BBAI", "LDOS", "BAH", "HEI", "HWM", "MRCY", "KVHI", "CDRE", "LHX",
+  // Cybersecurity basket — all US-listed equities.
+  "PANW", "CRWD", "FTNT", "ZS", "OKTA", "S", "CSCO", "FFIV", "NET", "RBRK",
 ]);
 const REALTIME_CRYPTO = new Set(["BTC", "ETH"]);
 
