@@ -1417,11 +1417,20 @@ const DayCandle = ({ low, high, price, dayOpen, previousClose, decimals = 0 }) =
 // price scale (window min-low … max-high) so the strip reads as the recent path, not five loose
 // boxes. The newest candle carries a "now" marker (and a live pulse when the market's open) to tie
 // it to the live day candle on the right. Same bull/bear/flat colours as the day candle.
-const MiniStrip = ({ candles, live = false }) => {
+const MiniStrip = ({ candles, live = false, livePrice = null }) => {
+  const bars = Array.isArray(candles) ? candles.slice() : [];
+  // Tie the newest (forming) candle to the live price so it reflects the current move and always
+  // carries a real range — otherwise a just-started period (e.g. the current week for futures) can be
+  // a zero-range bar that gets dropped below and never renders. Close tracks live; H/L expand to it.
+  const lp = Number(livePrice);
+  if (bars.length && Number.isFinite(lp)) {
+    const last = bars[bars.length - 1];
+    bars[bars.length - 1] = { ...last, c: lp, h: Math.max(Number(last.h), lp), l: Math.min(Number(last.l), lp) };
+  }
   // Drop degenerate zero-range (o=h=l=c) bars: Yahoo's intraday feed appends a flat placeholder for
   // the current/last period (esp. hourly, and on a closed market), which would otherwise render as a
   // meaningless blue doji at the end of the strip.
-  const clean = (Array.isArray(candles) ? candles : []).filter((c) => Number(c.h) > Number(c.l));
+  const clean = bars.filter((c) => Number(c.h) > Number(c.l));
   if (clean.length < 2) return null;
   const lo = Math.min(...clean.map((c) => c.l));
   const hi = Math.max(...clean.map((c) => c.h));
@@ -1920,10 +1929,19 @@ const lmDecimals = (symbol, tickers) => {
 // the level-map header (the most recent session/week is the last, still-forming candle). Rendered
 // in HTML with the exact same wick/body classes as the Market Pulse ticker-card candle, so the
 // gradient bodies, inset borders, glow and bull/bear/flat tones match one-for-one.
-const CandleStrip = ({ candles, decimals = 2, live = false, period = "d" }) => {
+const CandleStrip = ({ candles, decimals = 2, live = false, period = "d", livePrice = null }) => {
+  const bars = Array.isArray(candles) ? candles.slice() : [];
+  // Tie the newest (forming) candle to the live price so it reflects the current move and always
+  // carries a real range — a just-started period (e.g. the current week for futures) would otherwise
+  // be a zero-range bar that gets dropped below and never renders.
+  const lp = Number(livePrice);
+  if (bars.length && Number.isFinite(lp)) {
+    const last = bars[bars.length - 1];
+    bars[bars.length - 1] = { ...last, c: lp, h: Math.max(Number(last.h), lp), l: Math.min(Number(last.l), lp) };
+  }
   // Drop degenerate zero-range (h<=l) bars — Yahoo's intraday feed appends a flat placeholder for the
   // current/last period (esp. hourly, and on a closed market) that would render as a blank blue doji.
-  const clean = (Array.isArray(candles) ? candles : []).filter((c) => Number(c.h) > Number(c.l));
+  const clean = bars.filter((c) => Number(c.h) > Number(c.l));
   if (!clean.length) return null;
   const H = 72, n = clean.length, pad = 5;
   const min = Math.min(...clean.map((c) => c.l));
@@ -1972,8 +1990,8 @@ const LevelMapCandles = ({ symbol, tickers, period = "d" }) => {
     return () => { dead = true; };
   }, [symbol, period]);
   const dec = lmDecimals(symbol, tickers);
-  if (hist?.candles?.length) return <CandleStrip candles={hist.candles} decimals={dec} live={symbolMarketOpen(symbol)} period={period} />;
   const t = (tickers || []).find((x) => x.symbol === symbol);
+  if (hist?.candles?.length) return <CandleStrip candles={hist.candles} decimals={dec} live={symbolMarketOpen(symbol)} period={period} livePrice={t?.price} />;
   if (!t) return null;
   return (
     <MiniCandle low={t.dayLow} high={t.dayHigh} price={t.price} dayOpen={t.dayOpen} previousClose={t.previousClose} decimals={dec} live={symbolMarketOpen(symbol)} />
@@ -2458,7 +2476,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                         })()}
                   </span>
                 </div>
-                {showStrip && !t._stale && <MiniStrip candles={stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : t.hist} live={symbolMarketOpen(t.symbol)} />}
+                {showStrip && !t._stale && <MiniStrip candles={stripPeriod === "w" ? t.histWeekly : stripPeriod === "h" ? t.histHourly : t.hist} live={symbolMarketOpen(t.symbol)} livePrice={t.price} />}
                 <div className="tk-body">
                   <div className="tk-left">
                     <div className="tk-name" title={t.name}>{t.name}</div>
