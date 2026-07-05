@@ -4511,7 +4511,6 @@ const fmtVideoDuration = (seconds) => {
 };
 
 const AcademyCard = () => {
-  const [open, setOpen] = usePersistentState("overwatch:sec:academy", false); // collapsed by default
   const [active, setActive] = useState(null);
   // Only the "On the Desk" capstone has its coming-soon (unpublished) videos stripped; every other
   // section keeps its roadmap tiles.
@@ -4536,11 +4535,7 @@ const AcademyCard = () => {
       title="Academy"
       sub="Educational trading videos — produced in-house"
       tools={<span className="chip b-brass" style={{ fontSize: 10 }} title="Lessons published so far">{readyCount}/{totalCount} live</span>}
-      collapsible
-      open={open}
-      onToggle={() => setOpen((o) => !o)}
     >
-      {open && (<>
       <div style={{ marginBottom: 14 }}>
         <div className="academy-progress"><span style={{ width: `${pctReady}%` }} /></div>
         <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
@@ -4582,7 +4577,6 @@ const AcademyCard = () => {
           </div>
         ))}
       </div>
-      </>)}
 
       {active && (
         <div className="academy-modal" onClick={() => setActive(null)}>
@@ -4933,7 +4927,9 @@ const ResearchLab = ({ market, points, notify, auth }) => {
     })();
   }, [signedIn]);
 
-  const viewed = viewingId ? reports.find((r) => r._id === viewingId) : run.data;
+  // Nothing generated this session and nothing explicitly recalled — default to the most recent
+  // saved brief (newest-first), same behavior as the Thesis Lab defaulting to the latest archived thesis.
+  const viewed = viewingId ? reports.find((r) => r._id === viewingId) : (run.data || reports[0] || null);
   const showBrief = run.status === "loading" || run.status === "error" || !!viewed;
 
   const applyPreset = (p) => { setQuestion(p.q(cfg.symbol)); setViewingId(null); };
