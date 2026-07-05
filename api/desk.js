@@ -1004,23 +1004,31 @@ const primeFinnhubQuotes = async (symbols) => {
   return out;
 };
 
-// --- Daily history strip (7-session OHLC per board symbol) --------------------------------------
+// --- Daily/weekly history strip (7-bar OHLC per board symbol) ------------------------------------
 // Powers the ticker-card mini candle strip. Live prices come from Finnhub/scanner, which carry no
 // history, so the strip's bars come from Yahoo independently. Daily bars change at most once per
-// session, so we refresh at most once per FRESH window across ALL instances (shared Redis blob +
-// warm mirror + a short lock) — mirroring the Finnhub quote cache. Yahoo is hit a few times an hour
-// at most, not once per market sync. Fail-soft: a missing symbol just renders no strip on its card.
+// session (weekly, once per week), so each period refreshes at most once per its own FRESH window
+// across ALL instances (shared Redis blob + warm mirror + a short lock) — mirroring the Finnhub
+// quote cache. Fail-soft: a missing symbol just renders no strip on its card.
 const HIST_FRESH_MS = 20 * 60_000;
 const HIST_CACHE_KEY = "overwatch:hist:v2"; // v2: 7-session bars (v1 held 5, discard on deploy)
 const HIST_LOCK_KEY = "overwatch:hist:lock";
+// Weekly bars barely move intra-week, so a far longer freshness window keeps Yahoo call volume low.
+const HISTW_FRESH_MS = 6 * 60 * 60_000;
+const HISTW_CACHE_KEY = "overwatch:histw:v1";
+const HISTW_LOCK_KEY = "overwatch:histw:lock";
 let _histWarm = {}; // { SYM: { bars:[{o,h,l,c}], ts } }
+let _histwWarm = {}; // same shape, weekly bars
 
-const _histFetchOne = async (symbol) => {
+const _histFetchOne = async (symbol, weekly = false) => {
   const ysym = YAHOO_SYMBOLS[symbol] || symbol;
   const scale = YAHOO_SCALE[symbol] || 1;
-  // 15 calendar days guarantees >=7 completed sessions after weekends/holidays; keep the last 7
-  // (the newest is today's forming candle during the session, tying it to the live day candle).
-  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=15d&interval=1d`);
+  // Daily: 15 calendar days guarantees >=7 completed sessions after weekends/holidays. Weekly: Yahoo's
+  // own 1wk interval over 3 months guarantees >=7 completed weeks. Keep the last 7 either way (the
+  // newest is the current forming bar, tying it to the live day/week candle).
+  const range = weekly ? "3mo" : "15d";
+  const interval = weekly ? "1wk" : "1d";
+  const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ysym)}?range=${range}&interval=${interval}`);
   const result = payload?.chart?.result?.[0];
   const bars = result?.indicators?.quote?.[0] || {};
   const ts = result?.timestamp || [];
@@ -1032,17 +1040,17 @@ const _histFetchOne = async (symbol) => {
   return rows.length >= 2 ? rows : null;
 };
 
-const primeBoardHistory = async (symbols) => {
+const _primeBoardHistory = async (symbols, { warm, freshMs, cacheKey, lockKey, weekly, label }) => {
   const wanted = [...new Set(symbols)];
   if (!wanted.length) return {};
   const kvOn = !!(_kvUrl() && _kvToken());
-  const isFresh = (sym) => _histWarm[sym] && Date.now() - _histWarm[sym].ts < HIST_FRESH_MS;
+  const isFresh = (sym) => warm[sym] && Date.now() - warm[sym].ts < freshMs;
 
   if (kvOn && !wanted.every(isFresh)) {
-    const blob = await _kvGetJson(HIST_CACHE_KEY);
+    const blob = await _kvGetJson(cacheKey);
     if (blob && typeof blob === "object") {
       for (const [sym, entry] of Object.entries(blob)) {
-        if (entry && Number.isFinite(entry.ts) && (!_histWarm[sym] || entry.ts > _histWarm[sym].ts)) _histWarm[sym] = entry;
+        if (entry && Number.isFinite(entry.ts) && (!warm[sym] || entry.ts > warm[sym].ts)) warm[sym] = entry;
       }
     }
   }
@@ -1051,27 +1059,36 @@ const primeBoardHistory = async (symbols) => {
   if (stale.length) {
     // Only one instance refetches per window; others serve the cached bars (or none). With Redis
     // off there's a single instance anyway, so just refetch.
-    const gotLock = kvOn ? (await _kvCmd(["SET", HIST_LOCK_KEY, String(Date.now()), "NX", "PX", "12000"])) === "OK" : true;
+    const gotLock = kvOn ? (await _kvCmd(["SET", lockKey, String(Date.now()), "NX", "PX", "12000"])) === "OK" : true;
     if (gotLock) {
       const settled = await Promise.allSettled(stale.map(async (sym) => {
-        const bars = await _histFetchOne(sym);
+        const bars = await _histFetchOne(sym, weekly);
         if (!bars) throw new Error("empty history");
-        _histWarm[sym] = { bars, ts: Date.now() };
+        warm[sym] = { bars, ts: Date.now() };
       }));
       const failed = settled.filter((r) => r.status === "rejected").length;
-      if (failed) console.error(`primeBoardHistory: ${failed}/${stale.length} history fetches failed — the strip is skipped for those symbols.`);
+      if (failed) console.error(`${label}: ${failed}/${stale.length} history fetches failed — the strip is skipped for those symbols.`);
       if (kvOn && failed < stale.length) {
         const persist = {};
-        for (const [sym, entry] of Object.entries(_histWarm)) persist[sym] = entry;
-        await _kvCmd(["SET", HIST_CACHE_KEY, JSON.stringify(persist), "EX", "3600"]);
+        for (const [sym, entry] of Object.entries(warm)) persist[sym] = entry;
+        await _kvCmd(["SET", cacheKey, JSON.stringify(persist), "EX", weekly ? 6 * 3600 : 3600]);
       }
     }
   }
 
   const out = {};
-  for (const sym of wanted) if (_histWarm[sym]) out[sym] = _histWarm[sym].bars;
+  for (const sym of wanted) if (warm[sym]) out[sym] = warm[sym].bars;
   return out;
 };
+
+const primeBoardHistory = (symbols) => _primeBoardHistory(symbols, {
+  warm: _histWarm, freshMs: HIST_FRESH_MS, cacheKey: HIST_CACHE_KEY, lockKey: HIST_LOCK_KEY,
+  weekly: false, label: "primeBoardHistory",
+});
+const primeBoardHistoryWeekly = (symbols) => _primeBoardHistory(symbols, {
+  warm: _histwWarm, freshMs: HISTW_FRESH_MS, cacheKey: HISTW_CACHE_KEY, lockKey: HISTW_LOCK_KEY,
+  weekly: true, label: "primeBoardHistoryWeekly",
+});
 
 // Last 7 daily OHLC candles for one symbol (includes today's partial candle during the session).
 // Pull ~15 calendar days so weekends/holidays still leave 7 completed trading sessions.
@@ -1646,9 +1663,10 @@ const fetchMarket = async (watchlist = []) => {
   // below just looks each symbol up instead of firing 24 independent Finnhub calls every time. The
   // 7-session history for the card strip is primed alongside it (its own bounded/cached Yahoo pull).
   const symbols = requested.map((i) => i.symbol);
-  const [finnhubQuotes, histMap] = await Promise.all([
+  const [finnhubQuotes, histMap, histWeeklyMap] = await Promise.all([
     primeFinnhubQuotes(symbols),
     primeBoardHistory(symbols).catch(() => ({})),
+    primeBoardHistoryWeekly(symbols).catch(() => ({})),
   ]);
 
   const tickerResults = await Promise.allSettled(
@@ -1688,7 +1706,8 @@ const fetchMarket = async (watchlist = []) => {
         delaySec,
         delayed: delaySec >= 60,
         quoteTs: Number.isFinite(Number(result.asOf)) ? Number(result.asOf) : null,
-        hist: histMap[item.symbol] || null, // 7-session OHLC for the card's mini candle strip
+        hist: histMap[item.symbol] || null, // 7-session daily OHLC for the card's mini candle strip
+        histWeekly: histWeeklyMap[item.symbol] || null, // 7-week OHLC, same strip toggled to weekly
       };
     }),
   );

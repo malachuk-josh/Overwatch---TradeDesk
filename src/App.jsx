@@ -2216,6 +2216,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
   const [marketFilter, setMarketFilter] = usePersistentState("overwatch:snap:filter", "all"); // snapshot "Markets" dropdown (expanded only)
   const [hiddenGroups, setHiddenGroups] = usePersistentState("overwatch:snap:hidden", []); // groups excluded from the "All markets" view
   const [showStrip, setShowStrip] = usePersistentState("overwatch:snap:strip", true); // 7-session candle strip on each card
+  const [stripPeriod, setStripPeriod] = usePersistentState("overwatch:snap:stripperiod", "d"); // d = daily, w = weekly candles in the strip
   const toggleHiddenGroup = useCallback((key) => setHiddenGroups((prev) => {
     const set = new Set(Array.isArray(prev) ? prev : []);
     if (set.has(key)) set.delete(key); else set.add(key);
@@ -2389,6 +2390,13 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                 <CandlestickChart size={13} /> 7d
               </button>
             )}
+            {tickersOpen && showStrip && (
+              <div className="lm-period" role="group" aria-label="Card candle strip timeframe" onClick={(e) => e.stopPropagation()}>
+                {["d", "w"].map((p) => (
+                  <button key={p} className={stripPeriod === p ? "on" : ""} onClick={() => setStripPeriod(p)} title={p === "d" ? "Daily candles in the strip" : "Weekly candles in the strip"}>{p.toUpperCase()}</button>
+                ))}
+              </div>
+            )}
             {tickersOpen && (
               <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} hidden={hiddenGroups} onToggleHide={toggleHiddenGroup} />
             )}
@@ -2439,7 +2447,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
                         })()}
                   </span>
                 </div>
-                {showStrip && !t._stale && <MiniStrip candles={t.hist} live={symbolMarketOpen(t.symbol)} />}
+                {showStrip && !t._stale && <MiniStrip candles={stripPeriod === "w" ? t.histWeekly : t.hist} live={symbolMarketOpen(t.symbol)} />}
                 <div className="tk-body">
                   <div className="tk-left">
                     <div className="tk-name" title={t.name}>{t.name}</div>
@@ -4757,7 +4765,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
   const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
-  const collapsedCount = 8; // default visible entries before "show more" (mobile) / scroll (desktop)
+  const collapsedCount = 9; // default visible entries before "show more" (mobile) / scroll (desktop)
   const canDelete = auth?.email && auth.email.toLowerCase() === JOURNAL_ADMIN_EMAIL;
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -4852,7 +4860,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
 
   return (
     <>
-      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 426 : "none", overflowY: showAll ? "auto" : "visible" }}>
+      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 480 : "none", overflowY: showAll ? "auto" : "visible" }}>
         {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
             <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
@@ -5198,7 +5206,7 @@ const ArchiveTab = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
-  const collapsedCount = 8; // default visible entries before "show more" (mobile) / scroll (desktop)
+  const collapsedCount = 9; // default visible entries before "show more" (mobile) / scroll (desktop)
   const filteredHistory = archiveHistory;
   const effectiveExpanded = expanded;
   // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
@@ -5244,7 +5252,7 @@ const ArchiveTab = ({
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
         )}
-        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 426 : "none", overflowY: showAll ? "auto" : "visible" }}>
+        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 480 : "none", overflowY: showAll ? "auto" : "visible" }}>
           {shownHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
