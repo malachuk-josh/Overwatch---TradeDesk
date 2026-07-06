@@ -907,6 +907,25 @@ input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radiu
 .seg button.on.sg-bear{background:var(--bear-dim);color:var(--bear)}
 .lab-field{margin-top:16px}
 .lab-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:7px;display:block}
+
+/* Consolidated Thesis Inputs card — two-column body that collapses to one in the narrow sidebar */
+.ti-body{display:grid;grid-template-columns:repeat(auto-fit,minmax(232px,1fr));gap:4px 22px;align-items:start}
+.ti-col{min-width:0;display:flex;flex-direction:column}
+.ti-sec{display:flex;align-items:center;gap:7px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:0 0 9px}
+.ti-sec .ti-ln{flex:1;height:1px;background:var(--line)}
+.ti-alloc{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--brass);border:1px solid rgba(59,130,246,.4);background:var(--brass-dim);border-radius:7px;padding:3px 8px;font-variant-numeric:tabular-nums}
+.ti-alloc.bad{color:var(--bear);border-color:var(--bear-dim);background:var(--bear-dim)}
+.ti-presets{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:11px}
+.ti-preset{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--panel2);border:1px solid var(--line2);border-radius:7px;padding:7px 4px;cursor:pointer;transition:color .12s,background .12s,border-color .12s}
+.ti-preset:hover{color:var(--text)}
+.ti-preset.on{color:var(--brass);background:var(--brass-dim);border-color:rgba(59,130,246,.4)}
+.ti-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.ti-chip{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:6px;padding:3px 7px;display:inline-flex;gap:5px}
+.ti-chip .k{color:var(--faint)}
+.ti-add{width:100%;font-size:11.5px;font-weight:600;color:var(--muted);background:none;border:1px dashed var(--line2);border-radius:8px;padding:9px;cursor:pointer;margin-top:16px;transition:color .12s,border-color .12s}
+.ti-add:hover{color:var(--brass);border-color:var(--brass)}
+.ti-x{margin-left:auto;background:none;border:none;color:var(--faint);cursor:pointer;font-size:12px;line-height:1;padding:0 2px}
+.ti-x:hover{color:var(--bear)}
 textarea.bd-ta{
   width:100%;min-height:84px;resize:vertical;background:var(--panel2);border:1px solid var(--line2);
   border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:10px 12px;outline:none;line-height:1.5;
