@@ -3120,7 +3120,7 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
       `Headline balance ${Math.round(newsScore)}`,
       `Positioning score ${posScore}`,
       eventPenalty ? `Event risk penalty ${eventPenalty}` : null,
-      points?.internals?.volDetail ? `VIX ${points.internals.volDetail.vix} · ${points.internals.volDetail.zone} · ${points.internals.volDetail.structure}${points.internals.volDetail.premiumLabel ? ` · EQ ${points.internals.volDetail.vixEq} · ${points.internals.volDetail.premiumLabel} (${fmtSigned(points.internals.volDetail.premium, 1)})` : ""}` : `VIX ${round(points?.vix?.spot || 0)} · ${points?.vix?.structure || "mixed"}`,
+      points?.internals?.volDetail ? `VIX ${points.internals.volDetail.vix} · ${points.internals.volDetail.zone} · ${points.internals.volDetail.structure}${points.internals.volDetail.premiumLabel ? ` · EQ ${points.internals.volDetail.vixEq} · ${points.internals.volDetail.premiumLabel} (${signed(points.internals.volDetail.premium, 1)})` : ""}` : `VIX ${round(points?.vix?.spot || 0)} · ${points?.vix?.structure || "mixed"}`,
       `${risk} risk posture`,
     ].filter(Boolean),
     bullCase: [
@@ -3222,7 +3222,7 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   const vixRead = [
     vixZone ? `${vixZone.charAt(0).toUpperCase()}${vixZone.slice(1)}` : null,
     vixStr || null,
-    vPrem && vEq != null ? `${vPrem} vs EQ ${vEq} (${fmtSigned(vPremVal, 1)})` : null,
+    vPrem && vEq != null ? `${vPrem} vs EQ ${vEq} (${signed(vPremVal, 1)})` : null,
     Number(vixPrice) > 25 ? "risk-off bias" : Number(vixPrice) > 18 ? "watchful" : "calm",
   ].filter(Boolean).join(" · ");
 
