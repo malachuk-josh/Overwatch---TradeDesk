@@ -4807,7 +4807,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
   }, [closeToken]);
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
-  const collapsedCount = 9; // default visible entries before "show more" (mobile) / scroll (desktop)
+  const collapsedCount = 12;
   const canDelete = auth?.email && auth.email.toLowerCase() === JOURNAL_ADMIN_EMAIL;
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -5250,7 +5250,7 @@ const ArchiveTab = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
-  const collapsedCount = 9; // default visible entries before "show more" (mobile) / scroll (desktop)
+  const collapsedCount = 12;
   const filteredHistory = archiveHistory;
   const effectiveExpanded = expanded;
   // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
