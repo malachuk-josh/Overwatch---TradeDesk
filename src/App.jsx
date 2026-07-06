@@ -529,6 +529,25 @@ const stampNow = () =>
 // Sortable ET calendar-date key (YYYY-MM-DD) for same-day / past-day comparisons.
 const etDateKey = (d = new Date()) => d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 
+// Minutes-since-ET-midnight (0–1439) for a given instant. Used to decide whether the 4:00pm ET
+// cash close (960) has passed — thesis outcomes are graded at the closing bell, not the next open.
+const etMinutesOfDay = (d = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit", minute: "2-digit" }).formatToParts(d);
+  const h = Number(parts.find((p) => p.type === "hour")?.value) % 24;
+  const m = Number(parts.find((p) => p.type === "minute")?.value);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+};
+const ET_CLOSE_MIN = 16 * 60; // 4:00pm ET regular-session close
+
+// Next calendar-day ET key (a lower bound only — the actual next trading session is resolved by
+// matching against real daily bars, so weekends/holidays fall out naturally).
+const nextEtDateKey = (key) => {
+  const [y, m, d] = String(key).split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + 1);
+  return dt.toISOString().slice(0, 10);
+};
+
 // First price-like number in a free-text level line ("5900 then 5940" → 5900).
 const parseFirstPrice = (text) => {
   const m = String(text || "").replace(/,/g, "").match(/\d{1,6}(?:\.\d+)?/);
@@ -5257,6 +5276,18 @@ const ArchiveTab = ({
   const showAll = isDesktop || effectiveExpanded;
   const shownHistory = showAll ? filteredHistory : filteredHistory.slice(0, collapsedCount);
 
+  // Scoreboard — roll the graded thesis calls into a hit/miss/flat record. Hit rate excludes flats
+  // (a flat push is neither right nor wrong), so it reads as "of the calls with a real direction,
+  // how many closed the right way."
+  const gradedStats = useMemo(() => {
+    const outcomes = filteredHistory.filter((e) => (!e._type || e._type === "thesis") && e._outcome);
+    const hit = outcomes.filter((e) => e._outcome.result === "hit").length;
+    const miss = outcomes.filter((e) => e._outcome.result === "miss").length;
+    const flat = outcomes.filter((e) => e._outcome.result === "flat").length;
+    const decisive = hit + miss;
+    return { hit, miss, flat, graded: outcomes.length, hitRate: decisive ? Math.round((hit / decisive) * 100) : null };
+  }, [filteredHistory]);
+
   // Library sub-nav — one focused tool at a time instead of a long stack of accordion cards
   // (mirrors the Thesis Lab / Algo Lab split). Journal leads since it was the section shown
   // open by default before this became tabbed.
@@ -5300,9 +5331,28 @@ const ArchiveTab = ({
           icon={History}
           title="Thesis Library"
           sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
+          tools={
+            <InfoTip text="Every thesis is graded against the S&P/instrument's official 4:00pm ET close, not the next open. A call made during the session is judged on that same day's close; one made after 4:00pm ET is judged on the next trading day's close. HIT = price closed the called direction (up for bullish, down for bearish) by more than 0.2%. MISS = it closed the opposite way (or, for a neutral call, moved more than ±0.35%). FLAT = a directional call that closed within ±0.2% — a push that counts for neither. Hit rate = HITs ÷ (HITs + MISSes), so flats are excluded." />
+          }
         >
         {!archiveHistory.length && (
           <div style={{ color: C.muted, fontSize: 12.5 }}>Every thesis lands here automatically.</div>
+        )}
+        {gradedStats.graded > 0 && (
+          <div className="thesis-scoreboard">
+            <div className="tsb-rate">
+              <span className="tsb-rate-v" style={{ color: gradedStats.hitRate == null ? C.muted : gradedStats.hitRate >= 50 ? C.bull : C.bear }}>
+                {gradedStats.hitRate == null ? "—" : `${gradedStats.hitRate}%`}
+              </span>
+              <span className="tsb-rate-k">hit rate</span>
+            </div>
+            <div className="tsb-rec">
+              <span className="chip" style={{ fontSize: 10.5, color: OUTCOME_META.hit.color, borderColor: OUTCOME_META.hit.color + "66" }}>{gradedStats.hit} HIT</span>
+              <span className="chip" style={{ fontSize: 10.5, color: OUTCOME_META.miss.color, borderColor: OUTCOME_META.miss.color + "66" }}>{gradedStats.miss} MISS</span>
+              <span className="chip" style={{ fontSize: 10.5, color: OUTCOME_META.flat.color, borderColor: OUTCOME_META.flat.color + "66" }}>{gradedStats.flat} FLAT</span>
+              <span style={{ fontSize: 10.5, color: C.muted, marginLeft: 2 }}>· graded at close</span>
+            </div>
+          </div>
         )}
         <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 702 : "none", overflowY: showAll ? "auto" : "visible" }}>
           {shownHistory.map((entry) => {
@@ -6523,33 +6573,65 @@ export default function Overwatch() {
     // Set up once per Pulse entry; latest state is read from the ref inside maybeRefresh.
   }, [storageReady, tab]);
 
-  /* Outcome grading — once a thesis's session date has passed, grade its directional call against
-     the instrument's current price (first sync of a later ET day). Deterministic, no API cost. */
+  /* Outcome grading — grade each thesis's directional call against the OFFICIAL 4:00pm ET closing
+     bell, not the next open. A thesis generated during the session is judged on that same day's
+     close; one generated after the close (>4:00pm ET) is judged on the next trading day's close.
+     The reference is the real daily-close bar for the target session (from the history feed), so it
+     is deterministic and independent of when the user happens to sync. Runs on each desk sync. */
   useEffect(() => {
-    if (!storageReady || !market.data) return;
-    const today = etDateKey();
-    let changed = false;
-    const graded = archiveHistory.map((e) => {
-      if (e._type && e._type !== "thesis") return e;
-      if (e._outcome || !(e._spotAtGen > 0)) return e;
-      const key = e._dateKey || (e._ts ? etDateKey(new Date(e._ts)) : null);
-      if (!key || key >= today) return e;
-      const spot = deskLiveContext(market.data, points.data, e._instrument || e.instrument).spot;
-      if (!(spot > 0)) return e;
-      const changePct = ((spot - e._spotAtGen) / e._spotAtGen) * 100;
-      // Directional grade: did price move the called way? ±0.2% is a flat push; a neutral call
-      // is a hit when the move stayed inside ±0.35%.
-      const result = e.bias === "neutral"
-        ? (Math.abs(changePct) <= 0.35 ? "hit" : "miss")
-        : Math.abs(changePct) <= 0.2 ? "flat"
-          : (changePct > 0) === (e.bias === "bullish") ? "hit" : "miss";
-      changed = true;
-      return { ...e, _outcome: { gradedAt: Date.now(), refSpot: e._spotAtGen, evalSpot: spot, changePct, result } };
-    });
-    if (changed) setArchiveHistory(graded);
-    // archiveHistory intentionally not a dep — this only reacts to fresh prices; grading writes back once.
+    if (!storageReady) return;
+    const pending = archiveHistory.filter(
+      (e) => (!e._type || e._type === "thesis") && !e._outcome && e._spotAtGen > 0 && e._ts
+    );
+    if (!pending.length) return;
+
+    let cancelled = false;
+    (async () => {
+      // Pull daily closes once per distinct instrument among the ungraded theses.
+      const instruments = [...new Set(pending.map((e) => e._instrument || e.instrument || "SPX"))];
+      const histByInst = {};
+      await Promise.all(
+        instruments.map(async (inst) => { histByInst[inst] = await fetchHistoryCached(inst, "d").catch(() => null); })
+      );
+      if (cancelled) return;
+
+      const nowKey = etDateKey();
+      const closedNow = etMinutesOfDay() >= ET_CLOSE_MIN;
+      // A session's close is available once its ET day is in the past, or it is today and the
+      // 4:00pm bell has rung.
+      const sessionClosed = (key) => key < nowKey || (key === nowKey && closedNow);
+
+      let changed = false;
+      const graded = archiveHistory.map((e) => {
+        if ((e._type && e._type !== "thesis") || e._outcome || !(e._spotAtGen > 0) || !e._ts) return e;
+        const inst = e._instrument || e.instrument || "SPX";
+        const candles = histByInst[inst]?.candles;
+        if (!candles?.length) return e;
+        // Target close date: same-day close if generated before 4:00pm ET, otherwise the next session.
+        const genKey = etDateKey(new Date(e._ts));
+        const target = etMinutesOfDay(new Date(e._ts)) < ET_CLOSE_MIN ? genKey : nextEtDateKey(genKey);
+        // First completed daily bar on/after the target date (skips weekends/holidays naturally).
+        const bar = candles.find((c) => {
+          const k = etDateKey(new Date(c.t * 1000));
+          return k >= target && sessionClosed(k);
+        });
+        if (!bar || !(bar.c > 0)) return e;
+        const changePct = ((bar.c - e._spotAtGen) / e._spotAtGen) * 100;
+        // Directional grade: did price close the called way? ±0.2% is a flat push; a neutral call
+        // is a hit when the close stayed inside ±0.35%.
+        const result = e.bias === "neutral"
+          ? (Math.abs(changePct) <= 0.35 ? "hit" : "miss")
+          : Math.abs(changePct) <= 0.2 ? "flat"
+            : (changePct > 0) === (e.bias === "bullish") ? "hit" : "miss";
+        changed = true;
+        return { ...e, _outcome: { gradedAt: Date.now(), refSpot: e._spotAtGen, evalSpot: bar.c, evalKey: etDateKey(new Date(bar.t * 1000)), atClose: true, changePct, result } };
+      });
+      if (!cancelled && changed) setArchiveHistory(graded);
+    })();
+    return () => { cancelled = true; };
+    // archiveHistory intentionally not a dep — this reacts to syncs; grading writes back once per entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageReady, market.data, points.data]);
+  }, [storageReady, market.data]);
 
   /* Level alert — while a thesis is on the tape, watch its action level against the focus
      instrument's live price on every refresh; fire a banner + toast when price crosses it. */

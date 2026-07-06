@@ -1003,6 +1003,17 @@ textarea.bd-ta:focus{border-color:var(--brass)}
 }
 .hist-row:hover{border-color:var(--line2);background:var(--panel3)}
 .hist-row.viewing{border-color:var(--brass)}
+/* Thesis Library scoreboard — hit-rate headline + hit/miss/flat record above the archive list. */
+.thesis-scoreboard{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  margin-bottom:12px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),transparent),var(--panel2);
+}
+.tsb-rate{display:flex;align-items:baseline;gap:6px;flex:none}
+.tsb-rate-v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.tsb-rate-k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.tsb-rec{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+
 /* Scrollable journal/library list — pad the right so rows don't sit under the scrollbar. */
 .hist-scroll{padding-right:4px;scrollbar-width:thin;scrollbar-color:var(--line2) transparent;overscroll-behavior:contain}
 .hist-scroll::-webkit-scrollbar{width:8px}
