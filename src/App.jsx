@@ -10,7 +10,6 @@ import Mail from "lucide-react/dist/esm/icons/mail.mjs";
 import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw.mjs";
 import Settings from "lucide-react/dist/esm/icons/settings.mjs";
 import X from "lucide-react/dist/esm/icons/x.mjs";
-import GraduationCap from "lucide-react/dist/esm/icons/graduation-cap.mjs";
 import PlayCircle from "lucide-react/dist/esm/icons/play-circle.mjs";
 import Lock from "lucide-react/dist/esm/icons/lock.mjs";
 import WifiOff from "lucide-react/dist/esm/icons/wifi-off.mjs";
@@ -4673,154 +4672,6 @@ const downloadPDF = (html, filename) => {
    TAB — ARCHIVES
    ================================================================ */
 
-/* ----------------------------------------------------------------
-   ACADEMY — curated educational videos (YouTube unlisted embeds)
-
-   To add a lesson: upload the HeyGen export to YouTube as *Unlisted*,
-   copy the video ID from the share URL (the part after `?v=` or after
-   `youtu.be/`), and paste it into `embedId` below. Leave `embedId` empty
-   to show the lesson as a "Coming soon" placeholder tile.
-   ---------------------------------------------------------------- */
-const ACADEMY_MODULES = [
-  {
-    id: "desk-school",
-    title: "Desk School with Jack",
-    level: "Literacy",
-    summary: "The vocabulary the dashboard assumes you know — taught from the ground up.",
-    videos: [
-      { id: "a1", title: "Stock Market Liquidity", summary: "Bid/ask, spread, the order book, depth, slippage and volume — the foundation for reading levels and fills.", durationSec: 0, embedId: "UxdQCZNIJFk", tags: ["liquidity"] },
-      { id: "a2", title: "What Is a “Daily Bias”?", summary: "Bullish, neutral, bearish — why pros set a directional bias pre-market. It's the desk's core output: the Daily Bias score.", durationSec: 0, embedId: "", tags: ["bias"] },
-      { id: "a3", title: "Market Regimes & the VIX", summary: "Calm / Normal / Elevated / Stress, volatility, and risk-on vs risk-off — what powers the Current Regime read and the VIX tile.", durationSec: 0, embedId: "", tags: ["volatility"] },
-      { id: "a4", title: "Support, Resistance & Pivots", summary: "Key levels, pivots, and how an “action level” is set — the backbone of the level map and the PIVOT timeframe.", durationSec: 0, embedId: "", tags: ["levels"] },
-      { id: "a5", title: "The Instruments That Move Markets", summary: "ES/NQ/YM, the Dollar Index, the 10-Year yield, Gold, WTI and Bitcoin — and how they interrelate (intermarket). The whole Market Pulse grid.", durationSec: 0, embedId: "", tags: ["intermarket"] },
-      { id: "a6", title: "Macro Drivers & Event Risk", summary: "CPI, FOMC, NFP — why the calendar dictates the day. Feeds the Calendar tab and the Event Risk lens.", durationSec: 0, embedId: "", tags: ["macro"] },
-      { id: "a7", title: "Sentiment & Positioning (Flows)", summary: "Sentiment gauges, flow proxies and contrarian reads — the Sentiment and Positioning/Flows lenses.", durationSec: 0, embedId: "", tags: ["sentiment"] },
-      { id: "a8", title: "Risk Appetite: Risk-On vs Risk-Off", summary: "How capital rotates and how to read cross-asset signals — the risk-appetite radar.", durationSec: 0, embedId: "", tags: ["risk"] },
-      { id: "a9", title: "Building Conviction", summary: "What conviction means, the factors that score it, and when to size up vs stand aside — the Score · Conviction /10 mechanic.", durationSec: 0, embedId: "", tags: ["conviction"] },
-    ],
-  },
-  {
-    id: "using-overwatch",
-    title: "Using Overwatch",
-    level: "Walkthrough",
-    summary: "Product walkthroughs — how to actually drive the desk.",
-    videos: [
-      { id: "b1", title: "Overwatch in 90 Seconds", summary: "The elevator pitch — what the desk does and who it's for.", durationSec: 0, embedId: "", tags: ["overview"] },
-      { id: "b2", title: "The Morning Routine", summary: "The full pipeline: sync data → call the bias → build the thesis → publish the note.", durationSec: 0, embedId: "", tags: ["workflow"] },
-      { id: "b3", title: "Market Pulse Deep-Dive", summary: "Reading the instrument grid, the sessions (pre-market / open / after-hours) and Prev / 1W / 1M / Pivot.", durationSec: 0, embedId: "", tags: ["market-pulse"] },
-      { id: "b4", title: "Inside the Thesis Lab", summary: "Turning the five lenses into a structured thesis and game plan.", durationSec: 0, embedId: "", tags: ["thesis"] },
-      { id: "b5", title: "Publishing the Morning Note", summary: "The newsletter output and how desk notes feed the synthesis.", durationSec: 0, embedId: "", tags: ["newsletter"] },
-    ],
-  },
-  {
-    id: "on-the-desk",
-    title: "On the Desk",
-    level: "Capstone",
-    summary: "The applied finale — literacy meets product in a real session.",
-    videos: [
-      { id: "c1", title: "A Day on the Overwatch Desk", summary: "Jack runs a real morning end-to-end, tying the literacy back to the product.", durationSec: 0, embedId: "", tags: ["capstone"] },
-    ],
-  },
-];
-
-const fmtVideoDuration = (seconds) => {
-  const n = Number(seconds) || 0;
-  if (n <= 0) return null;
-  const m = Math.floor(n / 60);
-  const s = n % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
-};
-
-const AcademyCard = () => {
-  const [active, setActive] = useState(null);
-  // Only the "On the Desk" capstone has its coming-soon (unpublished) videos stripped; every other
-  // section keeps its roadmap tiles.
-  const modules = ACADEMY_MODULES.map((mod) =>
-    mod.id === "on-the-desk" ? { ...mod, videos: (mod.videos || []).filter((v) => v.embedId) } : mod
-  );
-  const allVideos = modules.flatMap((mod) => mod.videos || []);
-  const readyCount = allVideos.filter((v) => v.embedId).length;
-  const totalCount = allVideos.length || 1;
-  const pctReady = Math.round((readyCount / totalCount) * 100);
-
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e) => { if (e.key === "Escape") setActive(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active]);
-
-  return (
-    <Card
-      icon={GraduationCap}
-      title="Academy"
-      sub="Educational trading videos — produced in-house"
-      tools={<span className="chip b-brass" style={{ fontSize: 10 }} title="Lessons published so far">{readyCount}/{totalCount} live</span>}
-    >
-      <div style={{ marginBottom: 14 }}>
-        <div className="academy-progress"><span style={{ width: `${pctReady}%` }} /></div>
-        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>
-          {readyCount} of {totalCount} lessons published — the curriculum below fills in as new videos drop.
-        </div>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {modules.map((mod) => (
-          <div key={mod.id}>
-            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10, flexWrap: "wrap" }}>
-              <span className="disp" style={{ fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{mod.title}</span>
-              {mod.level && <span className="chip b-brass" style={{ fontSize: 10 }}>{mod.level}</span>}
-              {mod.summary && <span style={{ fontSize: 11.5, color: C.muted }}>{mod.summary}</span>}
-            </div>
-            <div className="academy-grid">
-              {(mod.videos || []).map((v, vi) => {
-                const ready = !!v.embedId;
-                const thumb = ready ? `https://img.youtube.com/vi/${v.embedId}/hqdefault.jpg` : null;
-                const dur = fmtVideoDuration(v.durationSec);
-                return (
-                  <button
-                    key={v.id}
-                    className={`academy-card${ready ? "" : " coming"}`}
-                    onClick={() => ready && setActive(v)}
-                    disabled={!ready}
-                    title={ready ? v.title : "Coming soon"}
-                  >
-                    <span className="academy-thumb" style={thumb ? { backgroundImage: `url(${thumb})` } : undefined}>
-                      <span className="academy-ep">{String(vi + 1).padStart(2, "0")}</span>
-                      {ready ? <PlayCircle size={34} className="academy-play" /> : <span className="academy-soon"><Lock size={11} /> Coming soon</span>}
-                      {dur && <span className="academy-dur">{dur}</span>}
-                    </span>
-                    <span className="academy-title">{v.title}</span>
-                    {v.summary && <span className="academy-sub">{v.summary}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {active && (
-        <div className="academy-modal" onClick={() => setActive(null)}>
-          <div className="academy-modal-inner" onClick={(e) => e.stopPropagation()}>
-            <div className="academy-modal-head">
-              <span className="disp" style={{ fontWeight: 600, fontSize: 15 }}>{active.title}</span>
-              <button className="btn btn-ghost btn-sm" onClick={() => setActive(null)} title="Close"><X size={16} /></button>
-            </div>
-            <div className="academy-player">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${active.embedId}?autoplay=1&rel=0`}
-                title={active.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-            {active.summary && <div style={{ padding: "12px 16px", fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{active.summary}</div>}
-          </div>
-        </div>
-      )}
-    </Card>
-  );
-};
 
 // Per-type identity for Jacks Journal rows: a distinct icon + color so the wrap / pre-market /
 // prediction-market entries are scannable at a glance instead of all reading as the same chip.
@@ -5314,11 +5165,12 @@ const ArchiveTab = ({
   // (mirrors the Thesis Lab / Algo Lab split). Journal leads since it was the section shown
   // open by default before this became tabbed.
   const [libTab, setLibTab] = usePersistentState("overwatch:library:toolview", "journal");
+  // Academy was retired; migrate anyone whose stored view still points at it back to the Journal.
+  useEffect(() => { if (libTab === "academy") setLibTab("journal"); }, [libTab, setLibTab]);
   const LIB_TABS = [
     { id: "journal", label: "Journal", Icon: Mail },
     { id: "archive", label: "Thesis Archive", Icon: History },
     { id: "research", label: "Research", Icon: Globe },
-    { id: "academy", label: "Academy", Icon: GraduationCap },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
@@ -5400,8 +5252,6 @@ const ArchiveTab = ({
       )}
 
       {libTab === "research" && <ResearchLab market={market} points={points} notify={notify} auth={auth} />}
-
-      {libTab === "academy" && <AcademyCard />}
     </div>
   );
 };
