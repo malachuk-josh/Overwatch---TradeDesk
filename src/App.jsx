@@ -1053,9 +1053,33 @@ These are YOUR recent calls. In "deskRead", reference them for continuity: name 
   const stockLevelsLine = focusLevels
     ? `${focus.symbol} live levels (use these exact numbers for the action level and targets): spot ${fmtNum(focusLevels.spot, 2)}, pivot ${fmtNum(focusLevels.pivot, 2)}, supports ${(focusLevels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(focusLevels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"} (as of ${focusLevels.asOf || "now"}).`
     : "";
+  // Focus-level stale-cash guard: overnight, a cash focus (SPY/QQQ/DIA/SPX/NDX) is frozen at its last
+  // 4:00pm ET close while its own futures proxy trades the new session live. The model must read the
+  // futures as the forward read-through, not price a phantom spread against the stale cash quote.
+  const focusStaleNote = (timing?.staleCashRisk && !isStock && focus.group !== "futures" && focus.futures && focus.futures !== focus.symbol)
+    ? `\nOVERNIGHT — READ-THROUGH, NOT A SPREAD: the cash market is CLOSED, so ${focus.symbol}'s quote above is its last 4:00pm ET regular-session close (frozen), while ${focus.futures} trades tonight's new session live. Use ${focus.futures} as the live read-through for where ${focus.symbol} will OPEN. Do NOT treat the gap between ${focus.symbol}'s stale close and ${focus.futures}'s live price — or their differing % changes — as a spread, divergence or dislocation to fade; it is just the overnight move / a new futures day.`
+    : "";
+  // Stale-cash spread guard: when the cash session is closed, a cash leg (ETF/index/stock) is frozen
+  // at its last 4:00pm ET close while a futures leg trades the new overnight session. Their prices and
+  // % changes are measured over different windows, so the raw gap between them is a session-boundary
+  // artifact (a new futures day), NOT a tradeable relative-value spread. Warn the model explicitly —
+  // and hardest when the two legs track the SAME underlying (e.g. QQQ & NQ), where no independent
+  // spread exists at all overnight.
+  const pairCfg = pair ? thesisInstrumentConfig(pair.symbol) : null;
+  const focusIsFut = focus.group === "futures";
+  const pairIsFut = pairCfg?.group === "futures";
+  const mixedCashFutures = !!timing?.staleCashRisk && pairCfg && (focusIsFut !== pairIsFut);
+  const sameUnderlying = pairCfg && focus.futures && focus.futures === pairCfg.futures;
+  const cashLeg = focusIsFut ? pair?.symbol : focus.symbol;
+  const futLeg = focusIsFut ? focus.symbol : pair?.symbol;
+  const staleSpreadNote = !mixedCashFutures ? "" : sameUnderlying
+    ? `
+IMPORTANT — NO OVERNIGHT SPREAD: ${futLeg} is the futures proxy for ${cashLeg} (same underlying). The cash market is CLOSED, so ${cashLeg}'s quote is its last 4:00pm ET regular-session close while ${futLeg} is trading tonight's new session. There is NO real relative-value spread between them right now — any price or percentage difference is just the overnight gap / new futures day, NOT a dislocation to fade. Treat ${futLeg} as the live read-through for where ${cashLeg} will open; do not manufacture a pairs trade or call a spread between them.`
+    : `
+NOTE — STALE-CASH SPREAD: the cash market is CLOSED, so ${cashLeg} shows its last regular-session close while ${futLeg} trades live in the new overnight session. Their percentage changes are measured over different windows — do not treat the raw gap between them as a clean relative-value spread; lean on ${futLeg}'s live session for the real-time read.`;
   const pairBlock = pair ? `
 === PAIRED INSTRUMENT (relative-value context) ===
-The trader is weighing ${focus.symbol} alongside ${pair.symbol} (${pair.name})${pair.spot ? `, trading near ${fmtNum(pair.spot, 2)}` : ""}.${pair.levels ? ` ${pair.symbol} levels: pivot ${fmtNum(pair.levels.pivot, 2)}, supports ${(pair.levels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(pair.levels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}.` : ""}
+The trader is weighing ${focus.symbol} alongside ${pair.symbol} (${pair.name})${pair.spot ? `, trading near ${fmtNum(pair.spot, 2)}` : ""}.${pair.levels ? ` ${pair.symbol} levels: pivot ${fmtNum(pair.levels.pivot, 2)}, supports ${(pair.levels.supports || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}, resistances ${(pair.levels.resistances || []).map((x) => fmtNum(x, 2)).join(" / ") || "n/a"}.` : ""}${staleSpreadNote}
 In "pairRead", give a concise relative-value read: how ${focus.symbol} is likely to perform RELATIVE to ${pair.symbol} today (e.g. favour long ${focus.symbol} / short ${pair.symbol} or the reverse), the correlation or divergence to watch, and the key level on each leg. Keep the headline bias, score and levels focused on ${focus.symbol}; the pair read is an additional relative-value angle, not the primary call.
 ` : "";
   return `You are ${trader.name}, head trader at Overwatch Intelligence's desk. Build today's daily bias thesis for trading ${focus.focusLabel}. Today is ${dateLine()}.
@@ -1079,7 +1103,7 @@ Pillar weights (0-100, higher = more influence on the call): Technicals ${eff.we
 These weights already fold ${trader.name}'s natural emphasis on ${eff.emphasis} into the desk's manual sliders — score with them, and let that emphasis show in which drivers you rank first.
 Directional lean: ${lean === "auto" ? "none — derive direction purely from the data" : `trader is leaning ${lean} — stress-test that lean against the data and push back if it is not justified`}.
 Risk appetite: ${risk}.
-Primary instrument focus: ${focus.symbol} (${focus.name})${focusSpot ? `, currently trading near ${fmtNum(focusSpot, 2)}` : ""} with ${focus.futures} futures as the ${isStock ? "index hedge" : "live execution"} proxy when relevant.
+Primary instrument focus: ${focus.symbol} (${focus.name})${focusSpot ? `, currently trading near ${fmtNum(focusSpot, 2)}` : ""} with ${focus.futures} futures as the ${isStock ? "index hedge" : "live execution"} proxy when relevant.${focusStaleNote}
 ${isStock ? `IMPORTANT — ${focus.symbol} is a SINGLE STOCK. The support/resistance/pivot numbers in the data above (SPX / NDX / DJI) are INDEX levels, NOT ${focus.symbol}'s — use the index internals only as macro proxy context and say so. ${stockLevelsLine ? `${stockLevelsLine} Build the action level, upside and downside targets, game plan, invalidation and watch list from THESE ${focus.symbol} numbers — give specific prices, not vague descriptions.` : `Build the levels around ${focus.symbol}'s OWN price${focusSpot ? ` (live near ${fmtNum(focusSpot, 2)})` : ""} and your knowledge of its recent range, with specific prices.`} NEVER quote an index level as if it were ${focus.symbol}'s level. Your "Technicals" pillar evidence for ${focus.symbol} is its own price/level data (above) plus your knowledge of its recent range and catalysts — NOT index breadth/trend, which is macro/sector regime context, not a technical read on ${focus.symbol} itself. Don't substitute one for the other.` : ""}
 Trader notes: ${notes ? notes : "none"}.
 ${deskContext ? `
