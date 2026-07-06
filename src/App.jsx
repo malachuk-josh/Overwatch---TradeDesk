@@ -2538,7 +2538,14 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
         )}
       </div>
       <div className="grid g-market-read">
-        <Card icon={Newspaper} title="Wire sentiment" sub="Net tone across pulled headlines">
+        <Card
+          icon={Newspaper}
+          title="Wire sentiment"
+          sub="Net tone across pulled headlines"
+          tools={
+            <InfoTip text="The net tone of the headlines the desk pulled this session. Each headline is classified bullish / neutral / bearish for US equity risk by the news synthesis, and the donut shows the mix; the net read is the bullish-minus-bearish count. It's a quick gauge of whether the news flow is leaning risk-on or risk-off: a strongly one-sided wire tends to precede or confirm a directional tape, while a balanced/mixed wire argues for range-trading until a fresh catalyst breaks it." />
+          }
+        >
           <SentimentDonut headlines={news?.headlines || []} />
           {news?.mood && (
             <div style={{ marginTop: 13, paddingTop: 13, borderTop: "1px dashed var(--line)", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
@@ -2546,10 +2553,24 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
             </div>
           )}
         </Card>
-        <Card icon={Shield} title="Volatility regime" sub="VIX zone + structure">
+        <Card
+          icon={Shield}
+          title="Volatility regime"
+          sub="VIX zone + structure"
+          tools={
+            <InfoTip text="The VIX is the options market's expected 30-day volatility for the S&P 500 — the 'fear gauge,' priced off SPX option premiums. The needle bins it into zones: Calm (<15), Normal (15–20), Elevated (20–28), Stress (28+). Low VIX = complacent, trend-friendly tape where dips get bought; high or rising VIX = stress, wider ranges and faster reversals, so levels deserve less patience. Term structure matters too — backwardation (the front month priced above later months) flags acute near-term fear, while contango is the calm default." />
+          }
+        >
           <VixGauge value={vix?.price ?? null} structure={vixHint} />
         </Card>
-        <Card icon={Sparkles} title="Fear & Greed Index" sub="CNN market sentiment">
+        <Card
+          icon={Sparkles}
+          title="Fear & Greed Index"
+          sub="CNN market sentiment"
+          tools={
+            <InfoTip text="CNN's Fear & Greed Index — one 0–100 score blended from seven inputs: market momentum (S&P vs its 125-day average), stock-price strength (52-week highs vs lows), breadth (advancing vs declining volume), the put/call ratio, market volatility (VIX), safe-haven demand (stocks vs bonds returns), and junk-bond demand (credit spreads). 0 = extreme fear, 100 = extreme greed. It's best read as a contrarian gauge: extreme fear often marks capitulation lows (a bounce setup), extreme greed marks crowded, complacent tops (fade-prone), and the middle is neutral." />
+          }
+        >
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
