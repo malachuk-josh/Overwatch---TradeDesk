@@ -4074,7 +4074,7 @@ const FeedToggle = ({ on, onToggle, summary }) => (
 
 /* ---------- Options pricing calculator ---------- */
 
-const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, heading = null, showFeed = true, symbol = null, onPickTicker = null, pickExclude = null, thesis = null }) => {
+const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = false, onFeedToggle = null, symbol = null, onPickTicker = null, pickExclude = null, thesis = null }) => {
   const { S, sigma, r, q, days, T } = resolveEnv(env, live);
   // Match-thesis affordance: only offered when the thesis on screen was generated for this same
   // instrument, so "Target" / "Invalidation" pulls the desk's own levels rather than a stale read.
@@ -4097,28 +4097,33 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
   const itm = K < S ? (opt.type === "call" ? "in" : "out of") : K > S ? (opt.type === "call" ? "out of" : "in") : "at";
 
   return (
-    <div>
-      {heading && <div className="opt-leg-heading">{heading}</div>}
-      <div className="grid g-2" style={{ alignItems: "start" }}>
-      <Card
-        icon={Calculator}
-        title="Inputs"
-        sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}
-        tools={inputsDirty ? <button className="btn btn-ghost btn-sm" title="Reset all calculator inputs to defaults" onClick={onReset}><RotateCcw size={12} /> Reset</button> : null}
-      >
-        {onPickTicker && (
-          <div className="lab-field" style={{ marginBottom: 14 }}>
-            <span className="lab-label">Ticker</span>
-            <InstrumentSelect value={symbol} onChange={onPickTicker} exclude={pickExclude} />
+    <Card
+      icon={Calculator}
+      title="Options calculator"
+      sub={`${live.cfg?.label || "—"} @ ${fmtNum(live.spot ?? 0, 2)} · auto-filled from the live feed — override any field`}
+      tools={inputsDirty ? <button className="btn btn-ghost btn-sm" title="Reset all calculator inputs to defaults" onClick={onReset}><RotateCcw size={12} /> Reset</button> : null}
+    >
+      <div className="opt-consol">
+        {/* contract selection */}
+        <div className="opt-row2">
+          {onPickTicker && (
+            <div className="opt-block">
+              <span className="lab-label">Ticker</span>
+              <InstrumentSelect value={symbol} onChange={onPickTicker} exclude={pickExclude} />
+            </div>
+          )}
+          <div className="opt-block">
+            <span className="lab-label">Contract</span>
+            <div className="seg">
+              {["call", "put"].map((ty) => (
+                <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
+              ))}
+            </div>
           </div>
-        )}
-        <div className="seg" style={{ marginBottom: 14 }}>
-          {["call", "put"].map((ty) => (
-            <button key={ty} className={opt.type === ty ? "on" : ""} onClick={() => setOpt("type", ty)}>{ty.toUpperCase()}</button>
-          ))}
         </div>
+
         {(thesisTarget || thesisInvalidation) && (
-          <div className="lab-field" style={{ marginBottom: 14 }}>
+          <div className="opt-block">
             <span className="lab-label">Match thesis</span>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {thesisTarget && (
@@ -4134,20 +4139,27 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
             </div>
           </div>
         )}
-        <div className="grid g-3" style={{ gap: 10 }}>
-          <NumField label="Spot" value={env.spot} placeholder={fmtNum(live.spot ?? 0, 2)} onChange={(v) => setEnv("spot", v)} />
-          <NumField label="Strike" value={opt.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(v) => setOpt("strike", v)} />
-          <NumField label="Days" hint="to expiry" value={env.days} placeholder="30" onChange={(v) => setEnv("days", v)} />
-          <NumField label="Impl vol" suffix="%" value={env.sigmaPct} placeholder={fmtNum(live.sigmaPct ?? 20, 1)} onChange={(v) => setEnv("sigmaPct", v)} />
-          <NumField label="Rate" suffix="%" value={env.ratePct} placeholder={fmtNum(live.ratePct ?? 4.3, 2)} onChange={(v) => setEnv("ratePct", v)} />
-          <NumField label="Div yld" suffix="%" value={env.divPct} placeholder="1.3" onChange={(v) => setEnv("divPct", v)} />
-        </div>
-        {live.isStock && !env.sigmaPct && (
-          <div style={{ marginTop: 8, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-            VIX is index implied vol, not {live.cfg?.label}'s — enter {live.cfg?.label}'s own IV for accurate Greeks.
+
+        {/* pricing environment */}
+        <div className="opt-block">
+          <span className="lab-label">Pricing inputs</span>
+          <div className="opt-fields">
+            <NumField label="Spot" value={env.spot} placeholder={fmtNum(live.spot ?? 0, 2)} onChange={(v) => setEnv("spot", v)} />
+            <NumField label="Strike" value={opt.strike} placeholder={fmtNum(roundStrike(S), 0)} onChange={(v) => setOpt("strike", v)} />
+            <NumField label="Days" hint="to expiry" value={env.days} placeholder="30" onChange={(v) => setEnv("days", v)} />
+            <NumField label="Impl vol" suffix="%" value={env.sigmaPct} placeholder={fmtNum(live.sigmaPct ?? 20, 1)} onChange={(v) => setEnv("sigmaPct", v)} />
+            <NumField label="Rate" suffix="%" value={env.ratePct} placeholder={fmtNum(live.ratePct ?? 4.3, 2)} onChange={(v) => setEnv("ratePct", v)} />
+            <NumField label="Div yld" suffix="%" value={env.divPct} placeholder="1.3" onChange={(v) => setEnv("divPct", v)} />
           </div>
-        )}
-        <div className="lab-field">
+          {live.isStock && !env.sigmaPct && (
+            <div style={{ marginTop: 8, fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
+              VIX is index implied vol, not {live.cfg?.label}'s — enter {live.cfg?.label}'s own IV for accurate Greeks.
+            </div>
+          )}
+        </div>
+
+        {/* implied vol solver */}
+        <div className="opt-block">
           <span className="lab-label">Implied vol solver</span>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <input className="bd-in mono-in" style={{ textTransform: "none" }} type="number" inputMode="decimal" placeholder="market option price" value={opt.marketPrice} onChange={(e) => setOpt("marketPrice", e.target.value)} />
@@ -4161,47 +4173,56 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
               : "Enter a quoted price to back out its implied volatility."}
           </div>
         </div>
-        {showFeed && (
-          <div className="lab-field" style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <button
-              onClick={() => setOpt("feed", !opt.feed)}
-              style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: opt.feed ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
-              title="Include this options scenario when feeding the thesis"
-            >
-              <span style={{ position: "absolute", top: 2.5, left: opt.feed ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
-            </button>
-            <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
-              <b style={{ color: "var(--text)" }}>Add this scenario to the thesis</b> — includes this specific options scenario in the desk-tools bundle.
-              {opt.feed && !feedOn && (
-                <span style={{ color: C.brass }}> Turn on “Send desk tools to the thesis” above for this to apply.</span>
-              )}
-            </span>
-          </div>
-        )}
-      </Card>
 
-      <Card icon={Sigma} title="Theoretical value & Greeks" sub={`${opt.type.toUpperCase()} ${fmtNum(K, 0)} · ${days}d · IV ${fmtNum(sigma * 100, 1)}%`}>
-        {!valid ? (
-          <EmptyState icon={Calculator} title="Need a spot price" body="Sync the Market Pulse so the calculator can read a live spot, or type one into the Spot field." />
-        ) : (
+        {/* theoretical value & Greeks */}
+        <div className="opt-divider" />
+        <div className="opt-block">
+          <span className="lab-label" style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <Sigma size={12} /> Theoretical value &amp; Greeks — {opt.type.toUpperCase()} {fmtNum(K, 0)} · {days}d · IV {fmtNum(sigma * 100, 1)}%
+          </span>
+          {!valid ? (
+            <EmptyState icon={Calculator} title="Need a spot price" body="Sync the Market Pulse so the calculator can read a live spot, or type one into the Spot field." />
+          ) : (
+            <>
+              <div className="opt-fields">
+                <ToolStat k="Theo price" v={fmtNum(bs.price, 2)} color={C.brass} sub={`${fmtUsd(bs.price * 100, 0)} / contract`} />
+                <ToolStat k="Delta" v={fmtNum(bs.delta, 3)} sub="per $1 spot" />
+                <ToolStat k="Gamma" v={fmtNum(bs.gamma, 4)} sub="Δ change / $1" />
+                <ToolStat k="Theta" v={fmtNum(bs.theta, 2)} color={C.bear} sub="decay / day" />
+                <ToolStat k="Vega" v={fmtNum(bs.vega, 2)} sub="per 1 vol pt" />
+                <ToolStat k="Rho" v={fmtNum(bs.rho, 2)} sub="per 1% rate" />
+              </div>
+              <div style={{ marginTop: 13, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+                Spot is <b style={{ color: "var(--text)" }}>{fmtNum((moneyness || 0) * 100, 1)}%</b> of strike — this {opt.type} is <b style={{ color: itm === "in" ? C.bull : itm === "out of" ? C.bear : C.brass }}>{itm}-the-money</b>.
+                {" "}One contract controls {fmtUsd(S * 100, 0)} of notional.
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* feed into thesis — single toggle */}
+        {onFeedToggle && (
           <>
-            <div className="grid g-3" style={{ gap: 10 }}>
-              <ToolStat k="Theo price" v={fmtNum(bs.price, 2)} color={C.brass} sub={`${fmtUsd(bs.price * 100, 0)} / contract`} />
-              <ToolStat k="Delta" v={fmtNum(bs.delta, 3)} sub="per $1 spot" />
-              <ToolStat k="Gamma" v={fmtNum(bs.gamma, 4)} sub="Δ change / $1" />
-              <ToolStat k="Theta" v={fmtNum(bs.theta, 2)} color={C.bear} sub="decay / day" />
-              <ToolStat k="Vega" v={fmtNum(bs.vega, 2)} sub="per 1 vol pt" />
-              <ToolStat k="Rho" v={fmtNum(bs.rho, 2)} sub="per 1% rate" />
-            </div>
-            <div style={{ marginTop: 13, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-              Spot is <b style={{ color: "var(--text)" }}>{fmtNum((moneyness || 0) * 100, 1)}%</b> of strike — this {opt.type} is <b style={{ color: itm === "in" ? C.bull : itm === "out of" ? C.bear : C.brass }}>{itm}-the-money</b>.
-              {" "}One contract controls {fmtUsd(S * 100, 0)} of notional.
+            <div className="opt-divider" />
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <button
+                onClick={() => onFeedToggle(!feedOn)}
+                style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: feedOn ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+                title="Feed this options scenario into the AI thesis"
+                aria-pressed={feedOn}
+              >
+                <span style={{ position: "absolute", top: 2.5, left: feedOn ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+              </button>
+              <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
+                <b style={{ color: "var(--text)" }}>Feed this scenario into the thesis</b> — {feedOn
+                  ? <>the next run will reference this <span style={{ color: C.brass }}>{opt.type.toUpperCase()} {fmtNum(K, 0)}</span> setup.</>
+                  : "the desk calls the bias without the options scenario."}
+              </span>
             </div>
           </>
         )}
-      </Card>
       </div>
-    </div>
+    </Card>
   );
 };
 
@@ -4242,12 +4263,14 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const [secShown, setSecShown] = useState(() => !!secondary && secondary !== instrument);
   const [noteShown, setNoteShown] = useState(() => !!(notes && notes.trim()));
   const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "synthesis");
+  // The Options Calc used to be its own sub-tab; it now lives inline in Synthesis. Migrate any stored
+  // "options" view back to Synthesis so a returning user doesn't land on a dead tab.
+  useEffect(() => { if (toolView === "options") setToolView("synthesis"); }, [toolView, setToolView]);
   // Thesis Lab sub-nav. Synthesis leads: it's the tab's core job and the default landing view, so the
-  // first tab, the default, and the primary CTA all line up. Algo Lab sits last — standalone research
-  // that doesn't feed the thesis.
+  // first tab, the default, and the primary CTA all line up — the options calculator is folded into it.
+  // Algo Lab sits last — standalone research that doesn't feed the thesis.
   const TOOL_TABS = [
     { id: "synthesis", label: "Synthesis", Icon: Sparkles },
-    { id: "options", label: "Options Calc", Icon: Calculator },
     { id: "algo", label: "Algo Lab", Icon: Bot },
   ];
   const toolSeg = (
@@ -4295,51 +4318,31 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   useEffect(() => {
     setDeskTools((d) => (d.env.spot === "" && d.env.sigmaPct === "") ? d : ({ ...d, env: { ...d.env, spot: "", sigmaPct: "" } }));
   }, [instrument, setDeskTools]);
-  // Same for the secondary leg's calculator environment.
-  useEffect(() => {
-    setDeskTools((d) => (d.env2.spot === "" && d.env2.sigmaPct === "") ? d : ({ ...d, env2: { ...d.env2, spot: "", sigmaPct: "" } }));
-  }, [secondary, setDeskTools]);
   const setEnv = (k, val) => setDeskTools((d) => ({ ...d, env: { ...d.env, [k]: val } }));
   const setOpt = (k, val) => setDeskTools((d) => ({ ...d, options: { ...d.options, [k]: val } }));
-  const setEnv2 = (k, val) => setDeskTools((d) => ({ ...d, env2: { ...d.env2, [k]: val } }));
-  const setOpt2 = (k, val) => setDeskTools((d) => ({ ...d, options2: { ...d.options2, [k]: val } }));
   // Reset the options calculator's inputs (shared pricing environment + option fields) to defaults,
   // which also restores the auto-fill-from-live-feed behavior for spot/IV/rate.
   const resetOptionsCalc = () => setDeskTools((d) => ({ ...d, env: { ...DEFAULT_DESK_TOOLS.env }, options: { ...DEFAULT_DESK_TOOLS.options } }));
-  const resetOptionsCalc2 = () => setDeskTools((d) => ({ ...d, env2: { ...DEFAULT_DESK_TOOLS.env2 }, options2: { ...DEFAULT_DESK_TOOLS.options2 } }));
-  const setFeed = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on }));
-  const feedSummary = deskTools.options.feed ? "options scenario" : "nothing yet — toggle the options scenario";
+  // The options calculator now carries a single feed toggle: flipping it drives both the master
+  // "send desk tools" switch and the per-scenario flag together, so one control feeds the thesis.
+  const feedActive = deskTools.feedToThesis && !!deskTools.options.feed;
+  const setFeedCombined = (on) => setDeskTools((d) => ({ ...d, feedToThesis: on, options: { ...d.options, feed: on } }));
   const weightSum = Math.round(FACTORS.reduce((s, f) => s + (Number(weights[f.key]) || 0), 0));
   // Once a thesis is on the tape (or one is loading / errored), split into controls-left + output-right.
   // Before that, the controls ride consolidated across the top instead of leaving a big empty pane.
   const showSplit = !!t || thesis.status === "loading" || thesis.status === "error";
 
-  if (toolView !== "synthesis") {
+  if (toolView === "algo") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {toolSeg}
-        {toolView === "options" && <FeedToggle on={deskTools.feedToThesis} onToggle={setFeed} summary={feedSummary} />}
-        {toolView === "algo" && (
-          <>
-            <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
-              <Bot size={14} color={C.brass} />
-              <span style={{ fontSize: 12.5, color: C.muted }}>
-                Standalone research — the Algo Lab backtests and monitors your scalper independently; it is not fed into the thesis synthesis.
-              </span>
-            </div>
-            <StrategyLabTab notify={notify} />
-          </>
-        )}
-        {toolView === "options" && (
-          hasSecondary ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} heading={`Primary · ${live.cfg?.label || activeInstrument.name}`} symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} thesis={t} />
-              <OptionsCalculator env={deskTools.env2} setEnv={setEnv2} opt={deskTools.options2} setOpt={setOpt2} onReset={resetOptionsCalc2} live={live2} heading={`Secondary · ${live2.cfg?.label || secondary}`} showFeed={false} symbol={secondary} onPickTicker={setSecondary} pickExclude={instrument} />
-            </div>
-          ) : (
-            <OptionsCalculator env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc} live={live} feedOn={deskTools.feedToThesis} symbol={instrument} onPickTicker={setInstrument} thesis={t} />
-          )
-        )}
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
+          <Bot size={14} color={C.brass} />
+          <span style={{ fontSize: 12.5, color: C.muted }}>
+            Standalone research — the Algo Lab backtests and monitors your scalper independently; it is not fed into the thesis synthesis.
+          </span>
+        </div>
+        <StrategyLabTab notify={notify} />
       </div>
     );
   }
@@ -4347,17 +4350,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {toolSeg}
-      {deskTools.feedToThesis && (
-        <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
-          <Scale size={14} color={C.brass} />
-          <span style={{ fontSize: 12.5, color: C.muted }}>
-            Desk tools are feeding the synthesis — {feedSummary} will be referenced in the next thesis run.
-          </span>
-        </div>
-      )}
     <div className={showSplit ? "grid g-thesis" : ""} style={showSplit ? { alignItems: "start" } : undefined}>
-      {/* controls — stacked sidebar once a thesis is up, one full-width band when idle */}
-      <div style={showSplit ? { display: "flex", flexDirection: "column", gap: 14 } : undefined}>
+      {/* controls — thesis inputs + the options calculator stacked below it */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Card
           icon={FlaskConical}
           title="Thesis inputs"
@@ -4439,6 +4434,13 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           </button>
           {!anyData && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, textAlign: "center" }}>Sync at least one data module first — the desk won't call a bias blind.</div>}
         </Card>
+
+        {/* options calculator — consolidated single card, sits right below the thesis inputs */}
+        <OptionsCalculator
+          env={deskTools.env} setEnv={setEnv} opt={deskTools.options} setOpt={setOpt} onReset={resetOptionsCalc}
+          live={live} feedOn={feedActive} onFeedToggle={setFeedCombined}
+          symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} thesis={t}
+        />
       </div>
 
       {/* output — only once a thesis exists / is loading / errored */}
