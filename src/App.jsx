@@ -4704,11 +4704,18 @@ const useIsDesktop = (bp = 768) => {
 // (api/archive/delete.js) — this is just what shows the control.
 const JOURNAL_ADMIN_EMAIL = "malachuk@gmail.com";
 
-const CloudNewsletterList = ({ inSplit = false, auth = null }) => {
+const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   // Persist the open newsletter so a refresh reopens the reader instead of dumping you back to the list.
   const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
+  // Re-clicking the Jack's Journal tab bumps closeToken — close the open letter, a second way out of the
+  // reader alongside Esc and the X. Skip the initial mount so a persisted-open letter stays open.
+  const closeMounted = useRef(false);
+  useEffect(() => {
+    if (!closeMounted.current) { closeMounted.current = true; return; }
+    setPreviewId(null);
+  }, [closeToken]);
   const [expanded, setExpanded] = useState(false);
   const isDesktop = useIsDesktop();
   const collapsedCount = 9; // default visible entries before "show more" (mobile) / scroll (desktop)
@@ -5167,15 +5174,22 @@ const ArchiveTab = ({
   const [libTab, setLibTab] = usePersistentState("overwatch:library:toolview", "journal");
   // Academy was retired; migrate anyone whose stored view still points at it back to the Journal.
   useEffect(() => { if (libTab === "academy") setLibTab("journal"); }, [libTab, setLibTab]);
+  // Re-clicking the Jack's Journal tab while it's already active closes any open letter — bump a token
+  // the reader listens on, so tapping the tab is a second way to get back to the list.
+  const [journalCloseToken, setJournalCloseToken] = useState(0);
   const LIB_TABS = [
-    { id: "journal", label: "Journal", Icon: Mail },
+    { id: "journal", label: "Jack's Journal", Icon: Mail },
     { id: "archive", label: "Thesis Archive", Icon: History },
     { id: "research", label: "Research", Icon: Globe },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
       {LIB_TABS.map((t) => (
-        <button key={t.id} className={libTab === t.id ? "on" : ""} onClick={() => setLibTab(t.id)}>
+        <button
+          key={t.id}
+          className={libTab === t.id ? "on" : ""}
+          onClick={() => (t.id === "journal" && libTab === "journal" ? setJournalCloseToken((n) => n + 1) : setLibTab(t.id))}
+        >
           <t.Icon size={13} /> {t.label}
         </button>
       ))}
@@ -5187,8 +5201,8 @@ const ArchiveTab = ({
       {libSeg}
 
       {libTab === "journal" && (
-        <Card icon={Mail} title="Jacks Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
-          <CloudNewsletterList inSplit={inSplit} auth={auth} />
+        <Card icon={Mail} title="Jack's Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
+          <CloudNewsletterList inSplit={inSplit} auth={auth} closeToken={journalCloseToken} />
         </Card>
       )}
 
