@@ -896,11 +896,11 @@ const condensePoints = (p) => {
   return `SPX LEVELS: spot ${fmtNum(p.spx?.spot)}, pivot ${fmtNum(p.spx?.pivot)}, supports ${(p.spx?.supports || []).map((v) => fmtNum(v)).join("/")}, resistances ${(p.spx?.resistances || []).map((v) => fmtNum(v)).join("/")}
 NDX LEVELS: spot ${fmtNum(p.ndx?.spot)}, pivot ${fmtNum(p.ndx?.pivot)}, supports ${(p.ndx?.supports || []).map((v) => fmtNum(v)).join("/")}, resistances ${(p.ndx?.resistances || []).map((v) => fmtNum(v)).join("/")}
 DJI LEVELS: spot ${fmtNum(p.dji?.spot)}, pivot ${fmtNum(p.dji?.pivot)}, supports ${(p.dji?.supports || []).map((v) => fmtNum(v)).join("/")}, resistances ${(p.dji?.resistances || []).map((v) => fmtNum(v)).join("/")}
-VIX: ${fmtNum(p.vix?.spot)} (${p.vix?.structure || "?"}) — ${p.vix?.note || ""}
+VIX: ${fmtNum(p.vix?.spot)} (${p.vix?.structure || "?"}) — ${p.vix?.note || ""}${p.vix?.vix3m != null ? ` VIX3M: ${fmtNum(p.vix.vix3m, 1)}` : ""}${p.vix?.vixEq != null ? ` EQ: ${fmtNum(p.vix.vixEq, 1)}` : ""}${p.vix?.premiumLabel ? ` Premium: ${fmtSigned(p.vix.premium, 1)} (${p.vix.premiumLabel})` : ""}
 INTERNALS: put/call ${fmtNum(p.internals?.putCall)} (${p.internals?.putCallRead || ""}); breadth: ${p.internals?.breadth || ""}; trend: ${p.internals?.trend || ""}${p.internals?.divergence ? `\nDIVERGENCE (reconcile this — do not narrate one side without the other): ${p.internals.divergence}` : ""}
 BREADTH DETAIL: ${breadth ? `${breadth.advancers}/${breadth.total} sectors positive (${breadth.pctPositive}%), avg sector change ${fmtSigned(breadth.avgChange, 2, "%")}, score ${breadth.score}, ${breadth.tone}. ${breadth.read || ""} Distribution: ${dist}. Leaders: ${(breadth.strongest || []).map((s) => `${s.name} ${fmtSigned(s.changePct, 2, "%")}`).join(", ")}. Laggards: ${(breadth.weakest || []).map((s) => `${s.name} ${fmtSigned(s.changePct, 2, "%")}`).join(", ")}. Sector tape: ${sectorLine}` : "Breadth detail unavailable."}
 TREND DETAIL: ${trend ? `${trend.state} with trend score ${trend.score}; index tone ${fmtSigned(trend.indexTone, 2, "%")}. ${trend.read || ""} Components: ${(trend.components || []).join("; ")}` : "Trend detail unavailable."}
-VOL DETAIL: ${vol ? `VIX ${fmtNum(vol.vix, 1)}; zone ${vol.zone}; structure ${vol.structure}; vol pressure score ${vol.score}. ${vol.read || ""}` : "Vol detail unavailable."}
+VOL DETAIL: ${vol ? `VIX ${fmtNum(vol.vix, 1)}; zone ${vol.zone}; structure ${vol.structure}${vol.structureRatio != null ? ` (VIX/VIX3M ${vol.structureRatio})` : ""}; vol score ${vol.score}${vol.realizedVol != null ? `; 20d RV ${fmtNum(vol.realizedVol, 1)}` : ""}${vol.vixEq != null ? `; EQ ${fmtNum(vol.vixEq, 1)}` : ""}${vol.premium != null ? `; premium ${fmtSigned(vol.premium, 1)} (${vol.premiumLabel})` : ""}. ${vol.read || ""}` : "Vol detail unavailable."}
 CALENDAR: ${calendarRows.join("; ")}
 POSITIONING: ${pos}`;
 };
@@ -1223,25 +1223,29 @@ const arcPath = (cx, cy, r, a0, a1) => {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1} ${y1}`;
 };
 
-const VixGauge = ({ value, structure }) => {
+const VixGauge = ({ value, structure, vixData }) => {
   const lo = 10, hi = 45;
   const v = value == null ? null : clamp(value, lo, hi);
   const deg = v == null ? 0 : ((v - lo) / (hi - lo)) * 180;
+  const eqVal = vixData?.vixEq;
+  const eqDeg = eqVal != null ? ((clamp(eqVal, lo, hi) - lo) / (hi - lo)) * 180 : null;
   const zones = [
-    { a0: 0, a1: ((15 - lo) / (hi - lo)) * 180, c: C.bull, t: "Calm" },
-    { a0: ((15 - lo) / (hi - lo)) * 180, a1: ((20 - lo) / (hi - lo)) * 180, c: C.info, t: "Normal" },
-    { a0: ((20 - lo) / (hi - lo)) * 180, a1: ((28 - lo) / (hi - lo)) * 180, c: C.brass, t: "Elevated" },
-    { a0: ((28 - lo) / (hi - lo)) * 180, a1: 180, c: C.bear, t: "Stress" },
+    { a0: 0, a1: ((16 - lo) / (hi - lo)) * 180, c: C.bull, t: "Calm" },
+    { a0: ((16 - lo) / (hi - lo)) * 180, a1: ((21 - lo) / (hi - lo)) * 180, c: C.info, t: "Normal" },
+    { a0: ((21 - lo) / (hi - lo)) * 180, a1: ((27 - lo) / (hi - lo)) * 180, c: C.brass, t: "Elevated" },
+    { a0: ((27 - lo) / (hi - lo)) * 180, a1: 180, c: C.bear, t: "Stress" },
   ];
-  const zone = v == null ? null : value < 15 ? zones[0] : value < 20 ? zones[1] : value < 28 ? zones[2] : zones[3];
+  const zone = v == null ? null : value < 16 ? zones[0] : value < 21 ? zones[1] : value < 27 ? zones[2] : zones[3];
+  const premLabel = vixData?.premiumLabel;
+  const premChip = premLabel === "rich" ? "b-bear" : premLabel === "cheap" ? "b-bull" : "b-brass";
   return (
     <div style={{ textAlign: "center" }}>
-      <svg viewBox="0 0 220 124" style={{ width: "100%", maxWidth: 250, display: "block", margin: "0 auto" }}>
+      <svg viewBox="0 0 220 130" style={{ width: "100%", maxWidth: 260, display: "block", margin: "0 auto" }}>
         {zones.map((z, i) => (
           <path key={i} d={arcPath(110, 106, 82, z.a0 + 1.5, z.a1 - 1.5)} stroke={z.c} strokeWidth="11" fill="none" strokeLinecap="round" opacity="0.32" />
         ))}
         {zone && <path d={arcPath(110, 106, 82, zone.a0 + 1.5, zone.a1 - 1.5)} stroke={zone.c} strokeWidth="11" fill="none" strokeLinecap="round" />}
-        {[10, 15, 20, 28, 45].map((tick) => {
+        {[10, 16, 21, 27, 45].map((tick) => {
           const a = ((clamp(tick, lo, hi) - lo) / (hi - lo)) * 180;
           const [tx, ty] = polar(110, 106, 98, a);
           return (
@@ -1250,6 +1254,11 @@ const VixGauge = ({ value, structure }) => {
             </text>
           );
         })}
+        {eqDeg != null && (
+          <g style={{ transform: `rotate(${eqDeg}deg)`, transformOrigin: "110px 106px", transition: "transform 1s cubic-bezier(.22,1,.36,1)" }}>
+            <line x1="110" y1="106" x2="42" y2="106" stroke={C.brass} strokeWidth="1.5" strokeDasharray="4 3" strokeLinecap="round" opacity="0.55" />
+          </g>
+        )}
         <g style={{ transform: `rotate(${deg}deg)`, transformOrigin: "110px 106px", transition: "transform 1s cubic-bezier(.22,1,.36,1)" }}>
           <line x1="110" y1="106" x2="38" y2="106" stroke="#E2E8F0" strokeWidth="2.5" strokeLinecap="round" />
         </g>
@@ -1257,10 +1266,16 @@ const VixGauge = ({ value, structure }) => {
         <text x="110" y="88" textAnchor="middle" fontSize="24" fontWeight="700" fill={zone ? zone.c : "#94A3B8"} fontFamily="JetBrains Mono, monospace">
           {value == null ? "—" : fmtNum(value, 2)}
         </text>
+        {eqVal != null && (
+          <text x="110" y="126" textAnchor="middle" fontSize="7.5" fill="#64748B" fontFamily="JetBrains Mono, monospace" letterSpacing=".06em">
+            SPOT ━━  EQ {fmtNum(eqVal, 1)} ╌╌
+          </text>
+        )}
       </svg>
       <div style={{ display: "flex", justifyContent: "center", gap: 9, marginTop: 2, flexWrap: "wrap" }}>
-        {zone && <span className={`chip ${value < 20 ? "b-bull" : value < 28 ? "b-brass" : "b-bear"}`}>{zone.t}</span>}
+        {zone && <span className={`chip ${value < 21 ? "b-bull" : value < 27 ? "b-brass" : "b-bear"}`}>{zone.t}</span>}
         {structure && <span className="chip b-info">{structure}</span>}
+        {premLabel && <span className={`chip ${premChip}`}>{premLabel}</span>}
       </div>
     </div>
   );
@@ -1526,13 +1541,18 @@ const buildSessionRead = ({ market, points, news }) => {
   const laggard = sectors.at(-1);
   const structure = points?.vix?.structure || (Number(vix?.price) > 25 ? "backwardation" : Number(vix?.price) < 16 ? "contango" : "flat");
   const vixPrice = Number(vix?.price);
+  const vixPrem = points?.vix?.premiumLabel;
+  const vixEqVal = points?.vix?.vixEq;
+  const vixPremNum = points?.vix?.premium;
   const volRead = !Number.isFinite(vixPrice)
     ? "Volatility data is still loading."
-    : vixPrice >= 25
-      ? `Volatility is elevated at VIX ${fmtNum(vixPrice, 1)}, so moves can stay fast.`
-      : vixPrice <= 16
-        ? `Volatility is calm at VIX ${fmtNum(vixPrice, 1)}.`
-        : `Volatility is manageable at VIX ${fmtNum(vixPrice, 1)}.`;
+    : vixPrem && vixEqVal != null
+      ? `VIX ${fmtNum(vixPrice, 1)} is ${vixPrem} vs EQ ${fmtNum(vixEqVal, 1)} (${fmtSigned(vixPremNum, 1)}). ${structure === "contango" ? "Term structure is orderly." : structure === "backwardation" ? "Term structure is inverted — near-term stress." : "Term structure is flat."}`
+      : vixPrice >= 25
+        ? `Volatility is elevated at VIX ${fmtNum(vixPrice, 1)}, so moves can stay fast.`
+        : vixPrice <= 16
+          ? `Volatility is calm at VIX ${fmtNum(vixPrice, 1)}.`
+          : `Volatility is manageable at VIX ${fmtNum(vixPrice, 1)}.`;
   const breadthText = String(points?.internals?.breadth || `${greenCount}/${totalCount} sectors green`).replace(/[.\s]+$/, "");
   const breadthPlain = sectors.length ? `${greenCount}/${totalCount} major sectors higher` : breadthText;
   const breadthRead = sectors.length
@@ -1567,7 +1587,9 @@ const buildSessionRead = ({ market, points, news }) => {
     {
       key: "Volatility",
       value: `VIX ${fmtNum(vix?.price, 1)}`,
-      note: structure === "backwardation" ? "Stress is elevated." : structure === "contango" ? "No panic signal right now." : "Stress is balanced.",
+      note: vixPrem && vixEqVal != null
+        ? `${vixPrem} vs EQ ${fmtNum(vixEqVal, 1)} · ${structure}`
+        : structure === "backwardation" ? "Stress is elevated." : structure === "contango" ? "No panic signal right now." : "Stress is balanced.",
     },
     {
       key: "Breadth",
@@ -2568,10 +2590,10 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           title="Volatility regime"
           sub="VIX zone + structure"
           tools={
-            <InfoTip text="The VIX is the options market's expected 30-day volatility for the S&P 500 — the 'fear gauge,' priced off SPX option premiums. The needle bins it into zones: Calm (<15), Normal (15–20), Elevated (20–28), Stress (28+). Low VIX = complacent, trend-friendly tape where dips get bought; high or rising VIX = stress, wider ranges and faster reversals, so levels deserve less patience. Term structure matters too — backwardation (the front month priced above later months) flags acute near-term fear, while contango is the calm default." />
+            <InfoTip text="The VIX is the options market's expected 30-day volatility for the S&P 500 — the 'fear gauge,' priced off SPX option premiums. The solid needle bins it into zones: Calm (<16), Normal (16–21), Elevated (21–27), Stress (27+). Low VIX = complacent, trend-friendly tape where dips get bought; high or rising VIX = stress, wider ranges and faster reversals, so levels deserve less patience. VIX EQ (the dashed needle) is the desk's fair-value estimate for the VIX, built from 20-day realized volatility plus a term-structure and regime adjustment — it answers 'where should the VIX be trading given how the market is actually moving?' The gap between them is the volatility risk premium: VIX above EQ (rich) means options are over-pricing near-term risk, a tailwind for premium sellers and a contrarian tell that fear may be overdone; VIX below EQ (cheap) means the market is under-pricing risk, so hedges are on sale and complacency is a warning. Term structure matters too — backwardation (the front month priced above later months, ratio > 1.05) flags acute near-term fear, while contango (ratio < 0.95) is the calm default." />
           }
         >
-          <VixGauge value={vix?.price ?? null} structure={vixHint} />
+          <VixGauge value={vix?.price ?? null} structure={vixHint} vixData={points?.vix} />
         </Card>
         <Card
           icon={Sparkles}
@@ -3371,9 +3393,6 @@ const VolStructureMap = ({ detail = {} }) => {
     { label: "Stress", min: 27, max: 40 },
   ];
   const vix = Number(detail.vix);
-  // The bands render as equal-width columns, so position the marker by the band VIX falls into and
-  // its fraction within that band — not a raw vix/40 scale (which misaligned the marker with the
-  // bands and barely moved across the realistic VIX range, making it look frozen).
   const n = bands.length;
   const slot = 100 / n;
   let marker = null;
@@ -3390,6 +3409,11 @@ const VolStructureMap = ({ detail = {} }) => {
     marker = clamp(marker, 0, 100);
   }
   const zone = detail.zone || (Number.isFinite(vix) ? bands.find((b) => vix >= b.min && vix < b.max)?.label?.toLowerCase() : null);
+  const { vix3m, vix6m, premium, premiumLabel, realizedVol, vixEq, structure, structureRatio } = detail;
+  const hasTermData = Number.isFinite(vix3m);
+  const hasPremium = premium != null && Number.isFinite(premium);
+  const premPct = hasPremium ? clamp(50 + (premium / 16) * 50, 2, 98) : 50;
+  const premColor = premiumLabel === "rich" ? C.bear : premiumLabel === "cheap" ? C.bull : C.brass;
   return (
     <div className="vol-map">
       <div className="vol-map-top">
@@ -3405,6 +3429,67 @@ const VolStructureMap = ({ detail = {} }) => {
         ))}
         {marker != null && <span className="vol-marker" style={{ left: `${marker}%` }} title={`VIX ${fmtNum(vix, 1)}`} />}
       </div>
+
+      {hasTermData && (
+        <div className="vol-term-strip">
+          <div className="vol-term-cell">
+            <span className="vol-term-label">VIX (30d)</span>
+            <span className="vol-term-val">{fmtNum(vix, 1)}</span>
+          </div>
+          <div className="vol-term-cell">
+            <span className="vol-term-label">VIX3M</span>
+            <span className="vol-term-val">{fmtNum(vix3m, 1)}</span>
+            <span className="vol-term-delta">{fmtSigned(vix3m - vix, 1)} vs VIX</span>
+          </div>
+          {Number.isFinite(vix6m) && (
+            <div className="vol-term-cell">
+              <span className="vol-term-label">VIX6M</span>
+              <span className="vol-term-val">{fmtNum(vix6m, 1)}</span>
+              <span className="vol-term-delta">{fmtSigned(vix6m - vix3m, 1)} vs 3M</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {hasTermData && structure && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginTop: 8 }}>
+          <span className={`chip ${structure === "contango" ? "b-bull" : structure === "backwardation" ? "b-bear" : "b-brass"}`}>{structure}</span>
+          <span style={{ fontSize: 11, color: C.muted }}>
+            {structureRatio != null ? `VIX/VIX3M ratio ${structureRatio}` : ""}
+            {structure === "contango" ? " — orderly forward curve" : structure === "backwardation" ? " — inverted, near-term stress" : " — transitional"}
+          </span>
+        </div>
+      )}
+
+      {hasPremium && (
+        <div className="vol-premium">
+          <div className="vol-premium-head">
+            <span className="vol-premium-label">Vol risk premium</span>
+            <span className="vol-premium-val" style={{ color: premColor }}>
+              {fmtSigned(premium, 1)} {premiumLabel}
+            </span>
+          </div>
+          <div className="vol-premium-eq">
+            <span>EQ {vixEq != null ? fmtNum(vixEq, 1) : "—"}</span>
+            <span>RV {realizedVol != null ? fmtNum(realizedVol, 1) : "—"}</span>
+          </div>
+          <div className="vol-premium-bar">
+            <div className="vol-premium-center" />
+            {premium > 0 ? (
+              <div className="vol-premium-fill" style={{ left: "50%", width: `${premPct - 50}%`, background: `${premColor}22`, borderRadius: "0 5px 5px 0" }} />
+            ) : (
+              <div className="vol-premium-fill" style={{ left: `${premPct}%`, width: `${50 - premPct}%`, background: `${premColor}22`, borderRadius: "5px 0 0 5px" }} />
+            )}
+            <span className="vol-premium-marker" style={{ left: `${premPct}%` }} />
+          </div>
+          <div className="vol-premium-labels">
+            <span>cheap</span>
+            <span>fair</span>
+            <span>rich</span>
+          </div>
+        </div>
+      )}
+
       <div className="vol-map-read">{detail.read || "Volatility structure is still resolving."}</div>
     </div>
   );
@@ -3467,7 +3552,10 @@ const InternalsRegime = ({ data }) => {
         <div className="internals-tile">
           <span>Vol structure</span>
           <b style={{ color: volColor }}>{vol.structure || data?.vix?.structure || "—"}</b>
-          <small>VIX {fmtNum(vol.vix ?? data?.vix?.spot, 1)} · {vol.zone || "zone pending"}</small>
+          <small>
+            VIX {fmtNum(vol.vix ?? data?.vix?.spot, 1)} · {vol.zone || "zone pending"}
+            {vol.premiumLabel && ` · ${vol.premiumLabel}`}
+          </small>
         </div>
       </div>
 
