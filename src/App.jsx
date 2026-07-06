@@ -3228,7 +3228,7 @@ const RRG_QUADRANTS = {
 // RRG plot: each sector's weekly (RS-ratio, RS-momentum) trail vs SPY. Center (100,100) splits the
 // four quadrants; sectors typically rotate clockwise Improving → Leading → Weakening → Lagging.
 const RotationGraph = ({ sectors, focus, onFocus }) => {
-  const W = 640, H = 396, P = { t: 20, r: 15, b: 29, l: 38 };
+  const W = 640, H = 376, P = { t: 20, r: 15, b: 29, l: 38 };
   const pts = sectors.flatMap((s) => s.tail);
   const extX = Math.max(3, ...pts.map((p) => Math.abs(p.ratio - 100))) * 1.18;
   const extY = Math.max(1.6, ...pts.map((p) => Math.abs(p.momentum - 100))) * 1.18;
