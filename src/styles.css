@@ -458,6 +458,12 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 /* ---------- session read ---------- */
 .session-summary{font-size:14px;line-height:1.6;color:var(--text);font-weight:500}
 .opt-leg-heading{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--brass);margin-bottom:9px}
+/* Consolidated options calculator — single card, container-responsive so it works full-width and in the narrow thesis sidebar */
+.opt-consol{display:flex;flex-direction:column;gap:15px}
+.opt-block{display:flex;flex-direction:column;gap:7px;min-width:0}
+.opt-row2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.opt-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+.opt-divider{height:1px;background:var(--line);margin:1px 0}
 .tkr-picker{position:relative;display:block}
 .tkr-picker-btn{display:flex;align-items:center;gap:9px;cursor:pointer;text-align:left;width:100%}
 .tkr-picker-sym{font-weight:700;color:var(--text);flex:none}
