@@ -267,6 +267,17 @@ const MAX_PILLAR = 70; // no single pillar may exceed this share of the budget
 // Fixed budget: the five pillars always sum to WEIGHT_TOTAL, starting evenly split.
 const DEFAULT_WEIGHTS = PILLAR_KEYS.reduce((acc, k) => ({ ...acc, [k]: WEIGHT_TOTAL / PILLAR_KEYS.length }), {});
 
+// One-tap pillar-mix presets for the consolidated Thesis Inputs card. Each set sums to WEIGHT_TOTAL
+// and respects MAX_PILLAR; drag the radar afterward to hand-tune. Balanced is the even split.
+const THESIS_PRESETS = [
+  { id: "balanced", label: "Balanced", w: { ...DEFAULT_WEIGHTS } },
+  { id: "tape", label: "Tape-led", w: { technicals: 45, macro: 12, sentiment: 13, positioning: 20, eventRisk: 10 } },
+  { id: "macro", label: "Macro-led", w: { technicals: 12, macro: 45, sentiment: 13, positioning: 22, eventRisk: 8 } },
+  { id: "riskoff", label: "Risk-off", w: { technicals: 18, macro: 20, sentiment: 14, positioning: 20, eventRisk: 28 } },
+];
+const weightsMatchPreset = (weights, preset) =>
+  PILLAR_KEYS.every((k) => Math.round(Number(weights[k]) || 0) === Math.round(preset[k]));
+
 // Largest-remainder integer rounding of float shares to hit an exact integer total.
 const roundShares = (entries, total) => {
   const floors = entries.map((e) => ({ ...e, f: Math.floor(e.v), r: e.v - Math.floor(e.v) }));
@@ -4226,6 +4237,10 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     : null;
   const inputsDirty = !viewing && thesis.status === "ready" && !!thesis.data && currentSig !== thesisSig;
   const activeInstrument = thesisInstrumentConfig(instrument);
+  // Progressive disclosure for the consolidated inputs card — the optional RV leg and desk note stay
+  // tucked behind a "+ add" affordance until wanted, but auto-open if a value is already present.
+  const [secShown, setSecShown] = useState(() => !!secondary && secondary !== instrument);
+  const [noteShown, setNoteShown] = useState(() => !!(notes && notes.trim()));
   const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "synthesis");
   // Thesis Lab sub-nav. Synthesis leads: it's the tab's core job and the default landing view, so the
   // first tab, the default, and the primary CTA all line up. Algo Lab sits last — standalone research
@@ -4340,71 +4355,82 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           </span>
         </div>
       )}
-    <div className={showSplit ? "grid g-thesis" : "grid g-thesis-top"} style={{ alignItems: "start" }}>
-      {/* controls — stacked sidebar once a thesis is up, 3-up band across the top when idle */}
-      <div style={showSplit ? { display: "flex", flexDirection: "column", gap: 14 } : { display: "contents" }}>
+    <div className={showSplit ? "grid g-thesis" : ""} style={showSplit ? { alignItems: "start" } : undefined}>
+      {/* controls — stacked sidebar once a thesis is up, one full-width band when idle */}
+      <div style={showSplit ? { display: "flex", flexDirection: "column", gap: 14 } : undefined}>
         <Card
           icon={FlaskConical}
-          title="Pillar weights"
-          sub={`Drag the points — fixed 100-point budget, raising one pillar pulls equally from the rest (max ${MAX_PILLAR}% each)`}
-          tools={<button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>}
+          title="Thesis inputs"
+          sub="Weight the pillars, pick the instrument, set the desk stance — then call the bias"
+          tools={
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className={`ti-alloc${weightSum === WEIGHT_TOTAL ? "" : " bad"}`}>{weightSum}/{WEIGHT_TOTAL}</span>
+              <button className="btn btn-ghost btn-sm" title="Reset to an even split" onClick={() => setWeights({ ...DEFAULT_WEIGHTS })}><RotateCcw size={12} /> Even</button>
+            </span>
+          }
         >
-          <FactorRadarChart weights={weights} onChange={setWeights} scores={pillarScores} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
-            <span className="lab-label" style={{ margin: 0 }}>Allocated</span>
-            <span className="mono" style={{ fontSize: 12, color: weightSum === WEIGHT_TOTAL ? C.brass : C.bear }}>{weightSum} / {WEIGHT_TOTAL}</span>
-          </div>
-          <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px dashed var(--line)", fontSize: 11, color: C.muted, lineHeight: 1.5 }}>
-            Pillars read the <b style={{ color: "var(--text)" }}>broad-market regime</b> (tape, breadth, VIX, flows, calendar) — the focus instrument sets the levels and execution proxy, not the pillar scores.
-          </div>
-        </Card>
-        <Card icon={NotebookPen} title="Instrument focus" sub="Choose which instrument the thesis is built for">
-          <InstrumentSelect value={instrument} onChange={setInstrument} />
-          <div style={{ marginTop: 12, fontSize: 12.5, color: C.muted }}>
-            Primary build target: <span style={{ color: "var(--text)" }}>{activeInstrument.name}</span>
-            {activeInstrument.futures !== activeInstrument.symbol && (
-              <> with {activeInstrument.futures} as the {activeInstrument.group === "stock" ? "index hedge" : "live execution"} proxy</>
-            )}.
-            {activeInstrument.group === "stock" && <> Single stock — priced live for the lab tools (kept off the Market Pulse grid).</>}
-          </div>
-          <div className="lab-field">
-            <span className="lab-label">Pair with — optional relative-value leg</span>
-            <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" />
-            {secondary && secondary !== instrument && (
-              <div style={{ marginTop: 8, fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
-                Adds a relative-value read ({activeInstrument.symbol} vs {thesisInstrumentConfig(secondary).symbol}) to the thesis. The primary call stays built for {activeInstrument.symbol}.
+          <div className="ti-body">
+            {/* pillar mix — radar is the fine-tune surface; presets set the mix in a tap */}
+            <div className="ti-col">
+              <div className="ti-sec">Pillar mix<span className="ti-ln" /><InfoTip text={`Fixed ${WEIGHT_TOTAL}-point budget across the five pillars — raise one and it pulls equally from the rest (max ${MAX_PILLAR}% each). Pillars read the broad-market regime: tape, breadth, VIX, flows, calendar. Drag the radar points to hand-tune.`} /></div>
+              <FactorRadarChart weights={weights} onChange={setWeights} scores={pillarScores} />
+              <div className="ti-presets">
+                {THESIS_PRESETS.map((p) => (
+                  <button key={p.id} className={`ti-preset${weightsMatchPreset(weights, p.w) ? " on" : ""}`} onClick={() => setWeights({ ...p.w })}>{p.label}</button>
+                ))}
               </div>
-            )}
-          </div>
-        </Card>
-        <Card icon={Crosshair} title="Desk stance">
-          <span className="lab-label">Desk lead — whose psychology and strategy write the call</span>
-          <select className="bd-in" value={persona} onChange={(e) => setPersona(e.target.value)}>
-            {Object.entries(PERSONAS).map(([id, p]) => (
-              <option key={id} value={id}>{p.name}</option>
-            ))}
-          </select>
-          <div style={{ fontSize: 11, color: C.muted, marginTop: 7, marginBottom: 14, lineHeight: 1.5 }}>
-            {(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).style}
-          </div>
-          <span className="lab-label">Directional lean</span>
-          <div className="seg">
-            {["auto", "bull", "neutral", "bear"].map((l) => (
-              <button key={l} className={`${lean === l ? "on" : ""} ${l === "bull" ? "sg-bull" : l === "bear" ? "sg-bear" : ""}`} onClick={() => setLean(l)}>
-                {l === "auto" ? "Let data decide" : l}
-              </button>
-            ))}
-          </div>
-          {lean !== "auto" && (
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 7, lineHeight: 1.5 }}>
-              Your lean is a tiebreaker layered on top of the weighted data — it tilts the score, but the desk will push back and flag the conflict if the pillars disagree.
             </div>
-          )}
-          <div className="lab-field">
-            <span className="lab-label">Desk notes — fed into the synthesis</span>
-            <textarea className="bd-ta" placeholder="e.g. TD Sequential 9 printed on the daily. Respecting 2-hr max hold today." value={notes} onChange={(e) => setNotes(e.target.value)} />
+
+            {/* instrument focus + desk stance */}
+            <div className="ti-col">
+              <div className="ti-sec">Instrument focus<span className="ti-ln" /><InfoTip text={`Primary build target: ${activeInstrument.name}${activeInstrument.futures !== activeInstrument.symbol ? ` — ${activeInstrument.futures} is the ${activeInstrument.group === "stock" ? "index-hedge" : "live-execution"} proxy` : ""}. The focus instrument sets the levels and execution proxy, not the pillar scores.`} /></div>
+              <InstrumentSelect value={instrument} onChange={setInstrument} />
+              <div className="ti-chips">
+                <span className="ti-chip"><span className="k">target</span> {activeInstrument.symbol}</span>
+                {activeInstrument.futures !== activeInstrument.symbol && (
+                  <span className="ti-chip"><span className="k">{activeInstrument.group === "stock" ? "hedge" : "exec"}</span> {activeInstrument.futures}</span>
+                )}
+                {activeInstrument.group === "stock" && <span className="ti-chip"><span className="k">off-grid</span> single stock</span>}
+                {secondary && secondary !== instrument && <span className="ti-chip"><span className="k">RV</span> {activeInstrument.symbol}÷{thesisInstrumentConfig(secondary).symbol}</span>}
+              </div>
+
+              {secShown ? (
+                <div className="lab-field">
+                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Relative-value leg<button className="ti-x" title="Remove the RV leg" onClick={() => { setSecondary(""); setSecShown(false); }}>✕</button></span>
+                  <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" exclude={instrument} />
+                </div>
+              ) : (
+                <button className="ti-add" onClick={() => setSecShown(true)}>+ Pair a relative-value leg</button>
+              )}
+
+              <div className="lab-field">
+                <span className="lab-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>Desk lead + lean<InfoTip text={(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).style} /></span>
+                <select className="bd-in" value={persona} onChange={(e) => setPersona(e.target.value)}>
+                  {Object.entries(PERSONAS).map(([id, p]) => (
+                    <option key={id} value={id}>{p.name}</option>
+                  ))}
+                </select>
+                <div className="seg" style={{ marginTop: 8 }}>
+                  {["auto", "bull", "neutral", "bear"].map((l) => (
+                    <button key={l} className={`${lean === l ? "on" : ""} ${l === "bull" ? "sg-bull" : l === "bear" ? "sg-bear" : ""}`} onClick={() => setLean(l)}>
+                      {l === "auto" ? "Data decides" : l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {(noteShown || (notes && notes.trim())) ? (
+                <div className="lab-field">
+                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Desk note — fed into the synthesis<button className="ti-x" title="Remove the desk note" onClick={() => { setNotes(""); setNoteShown(false); }}>✕</button></span>
+                  <textarea className="bd-ta" placeholder="e.g. TD Sequential 9 printed on the daily. Respecting 2-hr max hold today." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </div>
+              ) : (
+                <button className="ti-add" onClick={() => setNoteShown(true)}>+ Add a desk note</button>
+              )}
+            </div>
           </div>
-          <button className={`btn btn-brass${inputsDirty ? " btn-dirty" : ""}`} style={{ width: "100%", justifyContent: "center", marginTop: 15, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData} title={!anyData ? "Sync data first" : inputsDirty ? "Inputs changed since the last run" : ""}>
+
+          <button className={`btn btn-brass${inputsDirty ? " btn-dirty" : ""}`} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData} title={!anyData ? "Sync data first" : inputsDirty ? "Inputs changed since the last run" : ""}>
             {thesis.status === "loading"
               ? <><RefreshCw size={15} className="spin" /> Synthesizing…</>
               : inputsDirty
