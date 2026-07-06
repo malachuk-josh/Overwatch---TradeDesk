@@ -2223,7 +2223,47 @@ const avg = (values) => {
   return clean.length ? clean.reduce((sum, value) => sum + value, 0) / clean.length : 0;
 };
 
-const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed }) => {
+// ── VIX term structure + equilibrium model ──────────────────────────────────
+// Fetch CBOE VIX term structure indices (^VIX3M, ^VIX6M) from Yahoo — same API
+// as the existing ^VIX / ^GSPC fetches. Returns { vix3m, vix6m } or nulls.
+const fetchVixTermStructure = async () => {
+  try {
+    const [res3m, res6m] = await Promise.all([
+      fetchJson("https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX3M?range=2d&interval=1d"),
+      fetchJson("https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX6M?range=2d&interval=1d"),
+    ]);
+    const last = (r) => {
+      const closes = r?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || [];
+      for (let i = closes.length - 1; i >= 0; i--) if (Number.isFinite(closes[i])) return closes[i];
+      return null;
+    };
+    return { vix3m: last(res3m), vix6m: last(res6m) };
+  } catch { return { vix3m: null, vix6m: null }; }
+};
+
+// 20-day realized vol from SPX daily closes (annualised std dev of log returns).
+const fetchRealizedVol = async (lookback = 20) => {
+  try {
+    const payload = await fetchJson(`https://query2.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=2mo&interval=1d`);
+    const closes = (payload?.chart?.result?.[0]?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
+    if (closes.length < lookback + 1) return null;
+    const recent = closes.slice(-(lookback + 1));
+    const logReturns = [];
+    for (let i = 1; i < recent.length; i++) logReturns.push(Math.log(recent[i] / recent[i - 1]));
+    const mean = logReturns.reduce((s, v) => s + v, 0) / logReturns.length;
+    const variance = logReturns.reduce((s, v) => s + (v - mean) ** 2, 0) / (logReturns.length - 1);
+    return round(Math.sqrt(variance) * Math.sqrt(252) * 100, 1);
+  } catch { return null; }
+};
+
+// VIX Equilibrium = Realized Vol + structure adjustment + regime anchor.
+const computeVixEq = (realizedVol, structure) => {
+  if (!Number.isFinite(realizedVol)) return null;
+  const structAdj = structure === "contango" ? 2.0 : structure === "flat" ? 4.0 : 6.0;
+  return round(realizedVol + structAdj + 1.4, 1);
+};
+
+const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed, termStructure, realizedVol }) => {
   const sectorRows = sectors
     .filter((item) => item && Number.isFinite(Number(item.changePct)))
     .map((item) => ({ name: item.name, changePct: round(item.changePct) }))
@@ -2261,7 +2301,14 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed }) => {
       ? `Trend is defensive: index pressure and ${breadthTone} argue against chasing bounces without confirmation.`
       : `Trend is range-bound: index direction and breadth are not aligned enough to make a clean directional call.`;
 
-  const structure = vixPrice < 19 ? "contango" : vixPrice < 27 ? "flat" : "backwardation";
+  // Term structure from real CBOE indices (VIX/VIX3M ratio), with heuristic fallback.
+  const vix3m = Number(termStructure?.vix3m);
+  const vix6m = Number(termStructure?.vix6m);
+  const hasTermData = Number.isFinite(vix3m) && Number.isFinite(vixPrice);
+  const structureRatio = hasTermData ? round(vixPrice / vix3m, 3) : null;
+  const structure = hasTermData
+    ? (structureRatio < 0.95 ? "contango" : structureRatio > 1.05 ? "backwardation" : "flat")
+    : (vixPrice < 19 ? "contango" : vixPrice < 27 ? "flat" : "backwardation");
   const volZone = !Number.isFinite(vixPrice)
     ? "unknown"
     : vixPrice < 16
@@ -2271,10 +2318,33 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed }) => {
         : vixPrice < 27
           ? "elevated"
           : "stress";
-  const volScore = Number.isFinite(vixPrice)
-    ? round(clamp((vixPrice - 18) * 7 + (structure === "backwardation" ? 22 : structure === "contango" ? -12 : 6), -100, 100), 0)
-    : 0;
-  const volRead = structure === "backwardation"
+
+  // VIX Equilibrium + premium (vol risk premium signal).
+  const rv = Number.isFinite(Number(realizedVol)) ? Number(realizedVol) : null;
+  const vixEq = computeVixEq(rv, structure);
+  const premium = Number.isFinite(vixEq) && Number.isFinite(vixPrice)
+    ? round(vixPrice - vixEq, 1) : null;
+  const premiumLabel = premium == null ? null
+    : premium >= 2.0 ? "rich"
+    : premium <= -2.0 ? "cheap"
+    : "fair";
+
+  // Composite vol score: zone (40%) + premium (35%) + structure (25%).
+  const zoneScore = Number.isFinite(vixPrice)
+    ? clamp((vixPrice - 18) * 7, -100, 100) : 0;
+  const premiumScore = premium != null
+    ? clamp(premium * 12, -100, 100) : 0;
+  const structureScore = structure === "backwardation" ? 40
+    : structure === "contango" ? -25 : 8;
+  const volScore = round(clamp(zoneScore * 0.4 + premiumScore * 0.35 + structureScore * 0.25, -100, 100), 0);
+
+  const volRead = premiumLabel === "rich"
+    ? `VIX is ${Math.abs(premium)} pts above equilibrium (${vixEq}) — the market is over-pricing near-term risk. ${structure === "contango" ? "Term structure is orderly, reinforcing mean-reversion odds." : structure === "backwardation" ? "But term structure is inverted, so the stress may be justified." : "Term structure is flat, so the premium could persist."}`
+    : premiumLabel === "cheap"
+    ? `VIX is ${Math.abs(premium)} pts below equilibrium (${vixEq}) — implied vol is under-pricing risk relative to realized moves. ${structure === "backwardation" ? "Inverted term structure adds to the concern." : "Complacency can resolve abruptly if a catalyst hits."}`
+    : premium != null
+    ? `VIX is near equilibrium (${vixEq}) — implied vol is fairly priced. ${structure === "contango" ? "Orderly term structure supports levels-based trading." : structure === "backwardation" ? "But inverted term structure argues for caution despite fair pricing." : "Direction needs confirmation before adding risk."}`
+    : structure === "backwardation"
     ? "Front-loaded volatility is warning that liquidity can stay unstable and failed breaks can travel fast."
     : structure === "contango"
       ? "Volatility is orderly enough for levels to matter, as long as breadth confirms the move."
@@ -2342,6 +2412,13 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed }) => {
     volDetail: {
       vix: Number.isFinite(vixPrice) ? round(vixPrice, 1) : null,
       structure,
+      structureRatio,
+      vix3m: Number.isFinite(vix3m) ? round(vix3m, 1) : null,
+      vix6m: Number.isFinite(vix6m) ? round(vix6m, 1) : null,
+      realizedVol: rv,
+      vixEq,
+      premium,
+      premiumLabel,
       zone: volZone,
       score: volScore,
       read: volRead,
@@ -2453,6 +2530,8 @@ const fetchPoints = async () => {
     const calendarPromise = fetchEconomicCalendar().catch(() => buildSampleCalendar());
     const flowPromise = fetchFlowScan().catch(() => null);
     const fearGreedPromise = fetchFearGreed().catch(() => SAMPLE_FEAR_GREED);
+    const termStructurePromise = fetchVixTermStructure();
+    const realizedVolPromise = fetchRealizedVol();
     const scan = await fetchScan();
     const spx = scan.get(SYMBOLS.SPX);
     const ndx = scan.get(SYMBOLS.NDX);
@@ -2471,7 +2550,9 @@ const fetchPoints = async () => {
     });
     const calendarData = await calendarPromise;
     const fearGreed = await fearGreedPromise;
-    const internals = buildInternals({ spx, ndx, dji, vix, sectors, fearGreed });
+    const termStructure = await termStructurePromise;
+    const realizedVol = await realizedVolPromise;
+    const internals = buildInternals({ spx, ndx, dji, vix, sectors, fearGreed, termStructure, realizedVol });
     const positioning = buildPositioning({ flowScan: await flowPromise, fearGreed, sectors });
     return {
       spx: indexLevels(spx),
@@ -2485,12 +2566,15 @@ const fetchPoints = async () => {
       ym: indexLevels(ym),
       vix: {
         spot: round(vix.price),
+        vix3m: internals.volDetail.vix3m,
+        vix6m: internals.volDetail.vix6m,
         structure: internals.volDetail.structure,
-        note: internals.volDetail.structure === "contango"
-          ? "The volatility curve is consistent with orderly risk pricing."
-          : internals.volDetail.structure === "backwardation"
-            ? "Front-loaded volatility points to immediate stress and unstable liquidity."
-            : "Volatility is elevated enough to demand confirmation at key levels.",
+        structureRatio: internals.volDetail.structureRatio,
+        realizedVol: internals.volDetail.realizedVol,
+        vixEq: internals.volDetail.vixEq,
+        premium: internals.volDetail.premium,
+        premiumLabel: internals.volDetail.premiumLabel,
+        note: internals.volDetail.read,
       },
       internals,
       calendar: calendarData.flat,
@@ -2519,7 +2603,14 @@ const fetchPoints = async () => {
       es: null,
       nq: null,
       ym: null,
-      vix: { spot: vix.price, structure: internals.volDetail.structure, note: "Sample volatility state: elevated enough to keep intraday ranges wide." },
+      vix: {
+        spot: vix.price,
+        vix3m: null, vix6m: null,
+        structure: internals.volDetail.structure,
+        structureRatio: null,
+        realizedVol: null, vixEq: null, premium: null, premiumLabel: null,
+        note: "Sample volatility state: elevated enough to keep intraday ranges wide.",
+      },
       internals,
       calendar: sampleCalendar.flat,
       calendarGroups: sampleCalendar.groups,
@@ -3029,7 +3120,7 @@ const makeThesis = ({ market, news, points, timing, weights = {}, lean = "auto",
       `Headline balance ${Math.round(newsScore)}`,
       `Positioning score ${posScore}`,
       eventPenalty ? `Event risk penalty ${eventPenalty}` : null,
-      points?.internals?.volDetail ? `VIX ${points.internals.volDetail.vix} · ${points.internals.volDetail.zone} · ${points.internals.volDetail.structure}` : `VIX ${round(points?.vix?.spot || 0)} · ${points?.vix?.structure || "mixed"}`,
+      points?.internals?.volDetail ? `VIX ${points.internals.volDetail.vix} · ${points.internals.volDetail.zone} · ${points.internals.volDetail.structure}${points.internals.volDetail.premiumLabel ? ` · EQ ${points.internals.volDetail.vixEq} · ${points.internals.volDetail.premiumLabel} (${fmtSigned(points.internals.volDetail.premium, 1)})` : ""}` : `VIX ${round(points?.vix?.spot || 0)} · ${points?.vix?.structure || "mixed"}`,
       `${risk} risk posture`,
     ].filter(Boolean),
     bullCase: [
@@ -3125,7 +3216,15 @@ const makeTradePlan = ({ market, news, points, thesis }) => {
   const vixPrice = vix?.price || points?.vix?.spot;
   const vixZone = points?.internals?.volDetail?.zone || "";
   const vixStr = points?.vix?.structure || "";
-  const vixRead = [vixZone ? `${vixZone.charAt(0).toUpperCase()}${vixZone.slice(1)}` : null, vixStr || null, Number(vixPrice) > 25 ? "risk-off bias" : Number(vixPrice) > 18 ? "watchful" : "calm"].filter(Boolean).join(" · ");
+  const vPrem = points?.internals?.volDetail?.premiumLabel;
+  const vEq = points?.internals?.volDetail?.vixEq;
+  const vPremVal = points?.internals?.volDetail?.premium;
+  const vixRead = [
+    vixZone ? `${vixZone.charAt(0).toUpperCase()}${vixZone.slice(1)}` : null,
+    vixStr || null,
+    vPrem && vEq != null ? `${vPrem} vs EQ ${vEq} (${fmtSigned(vPremVal, 1)})` : null,
+    Number(vixPrice) > 25 ? "risk-off bias" : Number(vixPrice) > 18 ? "watchful" : "calm",
+  ].filter(Boolean).join(" · ");
 
   const sortedSectors = [...(market?.sectors || [])].filter((s) => Number.isFinite(Number(s.changePct))).sort((a, b) => Number(b.changePct) - Number(a.changePct));
   const leaders = sortedSectors.slice(0, 2).map((s) => s.name).join(", ") || "N/A";
