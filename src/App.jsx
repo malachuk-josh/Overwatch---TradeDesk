@@ -5214,6 +5214,7 @@ const ResearchLab = ({ market, points, notify, auth }) => {
       </div>
 
       <div className="grid g-2" style={{ alignItems: "start", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
           <div className="lab-field" style={{ marginTop: 0 }}>
             <span className="lab-label">Instrument</span>
@@ -5246,9 +5247,29 @@ const ResearchLab = ({ market, points, notify, auth }) => {
             {run.status === "loading" ? <><RefreshCw size={15} className="spin" /> Researching {cfg.symbol}…</> : <><Search size={15} /> Run deep research</>}
           </button>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
-            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Briefs are saved below on this device.
+            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Briefs are saved below, synced to your account.
           </div>
         </Card>
+
+        {reports.length > 0 && (
+          <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, synced to your account`}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {reports.map((r) => {
+                const vColor = researchVerdictColor(r.verdict);
+                return (
+                  <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => openReport(r)}>
+                    <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+                    <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+                    <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+                    <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+                    <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+        </div>
 
         <Card
           icon={Search}
@@ -5264,25 +5285,6 @@ const ResearchLab = ({ market, points, notify, auth }) => {
           )}
         </Card>
       </div>
-
-      {reports.length > 0 && (
-        <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, synced to your account`}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {reports.map((r) => {
-              const vColor = researchVerdictColor(r.verdict);
-              return (
-                <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => openReport(r)}>
-                  <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
-                  <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
-                  <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
-                  <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
-                  <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
     </div>
   );
 };
