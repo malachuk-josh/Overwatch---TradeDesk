@@ -1237,6 +1237,7 @@ const VixGauge = ({ value, structure, vixData }) => {
   ];
   const zone = v == null ? null : value < 16 ? zones[0] : value < 21 ? zones[1] : value < 27 ? zones[2] : zones[3];
   const premLabel = vixData?.premiumLabel;
+  const premVal = vixData?.premium;
   const premChip = premLabel === "rich" ? "b-bear" : premLabel === "cheap" ? "b-bull" : "b-brass";
   return (
     <div style={{ textAlign: "center" }}>
@@ -1275,7 +1276,7 @@ const VixGauge = ({ value, structure, vixData }) => {
       <div style={{ display: "flex", justifyContent: "center", gap: 9, marginTop: 2, flexWrap: "wrap" }}>
         {zone && <span className={`chip ${value < 21 ? "b-bull" : value < 27 ? "b-brass" : "b-bear"}`}>{zone.t}</span>}
         {structure && <span className="chip b-info">{structure}</span>}
-        {premLabel && <span className={`chip ${premChip}`}>{premLabel}</span>}
+        {premLabel && <span className={`chip ${premChip}`}>{premLabel}{Number.isFinite(premVal) ? ` ${premVal > 0 ? "+" : ""}${fmtNum(premVal, 1)}` : ""}</span>}
       </div>
     </div>
   );
