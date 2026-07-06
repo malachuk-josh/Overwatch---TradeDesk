@@ -6801,15 +6801,16 @@ export default function Overwatch() {
     THESIS_STOCK_SET.forEach((s) => { if (!visible.has(s)) hidden.add(s); });
     return hidden;
   }, [watchlist]);
-  // Ordered to mirror the desk workflow: read continuity in the Library first, establish the regime on
-  // Market Pulse, screen the News, confirm event risk on the Calendar, then build in the Thesis Lab.
+  // Ordered to mirror the desk workflow: establish the regime on Market Pulse, read continuity in the
+  // Library, screen the News, confirm event risk on the Calendar, review the Charts, then build the
+  // call last in the Thesis Lab — the end of the workflow.
   const TABS = [
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !hiddenSymbols.has(t.symbol)).length || null },
     { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
-    { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
+    { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
   ];
 
   // Render a tab's content by id. `nav` navigates the SAME pane this content lives in (setTab for the
