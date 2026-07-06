@@ -2553,10 +2553,24 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <FearGreedGauge data={data?.fearGreed} />
         </Card>
       </div>
-      <Card icon={Gauge} title="Market breadth" sub="Participation & live SPDR sector performance">
+      <Card
+        icon={Gauge}
+        title="Market breadth"
+        sub="Participation & live SPDR sector performance"
+        tools={
+          <InfoTip text="How broadly the tape is participating, measured across the 11 S&P sector ETFs. The headline count is how many sectors are green right now (plus their average move); the meter is the % of sectors positive. A rally with most sectors green is broad and healthier — a move carried by only one or two sectors is narrow and more fade-prone. The bars below break out each sector's change so you can see who's leading and who's dragging." />
+        }
+      >
         <MarketBreadth data={points} tickers={data?.tickers || []} />
       </Card>
-      <Card icon={Orbit} title="Sector rotation" sub="Where money is rotating — weekly relative strength vs SPY (RRG)">
+      <Card
+        icon={Orbit}
+        title="Sector rotation"
+        sub="Where money is rotating — weekly relative strength vs SPY (RRG)"
+        tools={
+          <InfoTip text="A Relative Rotation Graph (RRG): each sector plotted vs the S&P two ways — horizontal is relative strength (out- vs under-performing SPY), vertical is momentum (is that relative strength rising or falling). The center is SPY itself. Sectors typically rotate clockwise through four quadrants: Improving (turning up) → Leading (strong & accelerating) → Weakening (strong but slowing) → Lagging (weak & falling). Each trail is the recent weekly path, so you can see which sectors money is rotating into vs out of." />
+        }
+      >
         <SectorRotation />
       </Card>
       <DataPointSection points={pointsState} onRefresh={onRefresh} />
