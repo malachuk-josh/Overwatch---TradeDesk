@@ -4945,7 +4945,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
 
   return (
     <>
-      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 702 : "none", overflowY: showAll ? "auto" : "visible" }}>
+      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 648 : "none", overflowY: showAll ? "auto" : "visible" }}>
         {shown.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
             <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
@@ -5378,7 +5378,7 @@ const ArchiveTab = ({
             </div>
           </div>
         )}
-        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 702 : "none", overflowY: showAll ? "auto" : "visible" }}>
+        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 648 : "none", overflowY: showAll ? "auto" : "visible" }}>
           {shownHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
