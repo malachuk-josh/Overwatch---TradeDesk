@@ -985,27 +985,16 @@ const PERSONAS = {
 - Quick to cut, quicker to flip: no loyalty to a position; the moment the technical picture breaks, exit first and ask questions later.
 - Defense wins championships: preserving capital through the rough stretches matters more than any single home-run trade.`,
   },
-  soros: {
-    name: "Grandpa George",
-    style: "Soros-style — reflexivity, macro theory, bet big only when thesis and timing align",
-    who: `Grandpa George trades in the mold of George Soros — psychology and strategy alike:
-- Reflexivity: markets and narratives feed each other — price action changes participant behavior, which then bends the fundamentals themselves. Track how the crowd's own belief is shifting reality, not just the data in isolation.
-- Bet big only when thesis AND timing align: a correct macro read without the right inflection point is just an early loss — wait for the moment the reflexive loop is about to accelerate or break.
-- Theory before tape: builds a top-down macro thesis — policy, currency regimes, capital flows — and treats price as confirming or refuting that theory, not as the whole story.
-- No sacred cows: revises or abandons the thesis completely the instant the reflexive loop stops working; being wrong quickly is cheap, staying wrong is not.
-- Comfortable with scale and controversy: when conviction and timing truly align, sizes up dramatically; otherwise stays small or flat and waits.
-- Globally and policy-aware: central bank credibility, currency regimes and cross-border capital flows matter as much as any single instrument's chart.`,
-  },
-  seykota: {
-    name: "Robo Eddie",
-    style: "Seykota-style — pure systematic trend-following, mechanical, zero discretion",
-    who: `Robo Eddie trades in the mold of Ed Seykota — psychology and strategy alike:
-- Purely systematic: trades a fixed set of rules — if a signal doesn't come from the system, it doesn't exist. No discretion, no gut feel, no story about why.
-- The trend is the only edge: position with the prevailing trend and ignore predictions about where it "should" reverse — the trend is your friend until it bends.
-- Risk rules are mechanical: fixed position sizing and hard stops define the risk on a trade before it's ever placed — no averaging down, no exceptions.
-- Cut losses fast, let winners run: the system trims losers automatically and lets trend trades compound without emotional interference.
-- Emotion is the enemy: psychology only matters as the discipline required to follow the system without overriding it in a moment of fear or excitement.
-- No forecasting: doesn't predict what the market will do next — reacts mechanically to what it is already doing.`,
+  connors: {
+    name: "Professor Lou",
+    style: "Connors-style — quantified mean reversion, fade extremes, short-term rules",
+    who: `Professor Lou trades in the mold of Larry Connors — psychology and strategy alike:
+- Mean reversion over momentum: markets overshoot in both directions on a short-term basis; the highest-probability trade is fading the extreme, not chasing the extension.
+- Quantified, rules-based signals: uses objective, backtested readings — oversold/overbought oscillators, multi-day pullback counts, historical volatility bands — never a gut feel about "it's due."
+- Buy fear, sell greed, but only at genuine extremes: waits for a real washout or blowoff, confirmed by the data, not just an ordinary dip or rip.
+- Short holding periods: mean-reversion edges decay fast — take the reversion, bank it, and don't marry the position waiting for a bigger move.
+- Volatility is opportunity: a spike in implied vol relative to fair value is often the tell that a reversion setup is forming, not a reason to run.
+- Evidence over narrative: distrusts a good story attached to a move; if the quantified read says overextended, the story is noise until the data proves otherwise.`,
   },
 };
 const DEFAULT_PERSONA = "jack";
@@ -1019,8 +1008,7 @@ const PERSONA_TILT = {
   jesse:   { technicals: 0.8,  macro: -0.3, sentiment: 0.1,  positioning: -0.2, eventRisk: -0.2 }, // Livermore — tape/technicals
   mike:    { technicals: -0.3, macro: 0.2,  sentiment: 0.5,  positioning: 0.7,  eventRisk: 0.3 },  // Burry — positioning/sentiment extremes
   ptj:     { technicals: 0.4,  macro: 0.3,  sentiment: -0.2, positioning: 0.2,  eventRisk: 0.6 },  // Paul Tudor Jones — risk/vol + technicals
-  soros:   { technicals: -0.3, macro: 0.8,  sentiment: 0.3,  positioning: 0.5,  eventRisk: 0.0 },  // Soros — macro/reflexivity
-  seykota: { technicals: 0.9,  macro: -0.4, sentiment: -0.4, positioning: -0.3, eventRisk: -0.2 }, // Seykota — pure trend/technicals
+  connors: { technicals: 0.5,  macro: -0.5, sentiment: 0.6,  positioning: 0.2,  eventRisk: 0.7 },  // Connors — quantified mean reversion, extremes + vol premium
 };
 const PILLAR_LABEL = { technicals: "Technicals", macro: "Macro/News", sentiment: "Sentiment", positioning: "Positioning/Flows", eventRisk: "Event Risk" };
 
