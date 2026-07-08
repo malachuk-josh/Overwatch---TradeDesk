@@ -4427,9 +4427,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // building it) and is the default landing view; Algo Lab sits in the middle (standalone — it doesn't
   // feed the thesis); Synthesis — the options calculator folded in — closes the loop as the final step.
   const TOOL_TABS = [
-    { id: "research", label: "Research", Icon: Globe },
+    { id: "research", label: "Research Lab", Icon: Globe },
     { id: "algo", label: "Algo Lab", Icon: Bot },
-    { id: "synthesis", label: "Synthesis", Icon: Sparkles },
+    { id: "synthesis", label: "Synthesis Lab", Icon: Sparkles },
   ];
   const toolSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
