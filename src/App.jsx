@@ -442,7 +442,7 @@ const HISTORY_KEY = "overwatch:history";
 const ARCHIVE_KEY = "overwatch:archive";
 const TAB_KEY = "overwatch:tab";
 // Valid tab ids — layout restore is validated against these so a stale/bad id can't blank the view.
-const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis", "charts"];
+const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis"];
 const safeTab = (id, fallback = "pulse") => (LAYOUT_TAB_IDS.includes(id) ? id : fallback);
 const TOP_ASSET_CARD_ORDER = ["SPX", "SPY", "ES", "NDX", "QQQ", "NQ", "DJI", "DIA", "YM"];
 
@@ -5769,311 +5769,6 @@ const Toasts = ({ items }) => (
 );
 
 /* ================================================================
-   TAB — CHARTS
-   ================================================================ */
-
-const CHART_PRESETS = [
-  { symbol: "AMEX:SPY",       label: "SPY" },
-  { symbol: "NASDAQ:QQQ",     label: "QQQ" },
-  { symbol: "AMEX:DIA",       label: "DIA" },
-  { symbol: "AMEX:IWM",       label: "IWM" },
-  { symbol: "NASDAQ:AAPL",    label: "AAPL" },
-  { symbol: "NASDAQ:MSFT",    label: "MSFT" },
-  { symbol: "NASDAQ:NVDA",    label: "NVDA" },
-  { symbol: "NASDAQ:AMZN",    label: "AMZN" },
-  { symbol: "NASDAQ:META",    label: "META" },
-  { symbol: "NASDAQ:GOOGL",   label: "GOOGL" },
-  { symbol: "NASDAQ:TSLA",    label: "TSLA" },
-  { symbol: "COINBASE:BTCUSD", label: "BTC" },
-];
-
-// Map a thesis instrument to the chart it should feature. Index futures have no direct preset, so
-// they proxy to their tracking ETF (ES→SPY, NQ→QQQ, …) — the same chart a trader reads them against.
-const THESIS_CHART_SYMBOL = {
-  SPY: "AMEX:SPY", QQQ: "NASDAQ:QQQ", DIA: "AMEX:DIA", IWM: "AMEX:IWM",
-  ES: "AMEX:SPY", NQ: "NASDAQ:QQQ", YM: "AMEX:DIA", RTY: "AMEX:IWM",
-  AAPL: "NASDAQ:AAPL", MSFT: "NASDAQ:MSFT", NVDA: "NASDAQ:NVDA", AMZN: "NASDAQ:AMZN",
-  META: "NASDAQ:META", GOOGL: "NASDAQ:GOOGL", TSLA: "NASDAQ:TSLA",
-};
-
-const TV_INTERVALS = [
-  { value: "5",   label: "5m" },
-  { value: "15",  label: "15m" },
-  { value: "60",  label: "1H" },
-  { value: "D",   label: "1D" },
-  { value: "W",   label: "1W" },
-];
-
-let tvScriptPromise = null;
-const loadTvScript = () => {
-  if (window.TradingView) return Promise.resolve();
-  if (tvScriptPromise) return tvScriptPromise;
-  tvScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://s3.tradingview.com/tv.js";
-    script.async = true;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-  return tvScriptPromise;
-};
-
-const TradingViewChart = ({ symbol, lightMode, interval = "D", prefix = "tv-chart" }) => {
-  const containerRef = useRef(null);
-  const widgetRef = useRef(null);
-  // Mask the widget while it (re)initializes — a theme/symbol/interval change tears the iframe down
-  // and rebuilds it, during which TradingView briefly paints "O0 H0 L0 C0" before its data loads.
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    let cancelled = false;
-    let revealTimer = null;
-    let pollTimer = null;
-    setLoading(true);
-    containerRef.current.innerHTML = "";
-    loadTvScript().then(() => {
-      if (cancelled || !containerRef.current || !window.TradingView) return;
-      widgetRef.current = new window.TradingView.widget({
-        container_id: containerRef.current.id,
-        symbol,
-        interval,
-        timezone: "America/New_York",
-        theme: lightMode ? "light" : "dark",
-        style: "1",
-        locale: "en",
-        toolbar_bg: lightMode ? "#FFFFFF" : "#0D1117",
-        hide_side_toolbar: false,
-        allow_symbol_change: true,
-        save_image: false,
-        autosize: true,
-        studies: ["MASimple@tv-basicstudies"],
-      });
-    });
-    // Drop the skeleton once the widget iframe exists plus a short beat for its first real paint;
-    // a hard fallback guarantees it never sticks if detection misses.
-    const start = Date.now();
-    const poll = () => {
-      if (cancelled) return;
-      if (containerRef.current?.querySelector("iframe")) {
-        revealTimer = setTimeout(() => !cancelled && setLoading(false), 700);
-        return;
-      }
-      if (Date.now() - start > 12000) { setLoading(false); return; }
-      pollTimer = setTimeout(poll, 150);
-    };
-    poll();
-    return () => {
-      cancelled = true;
-      clearTimeout(revealTimer);
-      clearTimeout(pollTimer);
-      widgetRef.current = null;
-    };
-  }, [symbol, lightMode, interval]);
-
-  const id = `${prefix}-${symbol.replace(/[^a-zA-Z0-9]/g, "-")}`;
-  return (
-    <div style={{ position: "relative", height: "100%", width: "100%" }}>
-      <div ref={containerRef} id={id} style={{ height: "100%", width: "100%" }} />
-      {loading && <div className="tv-skeleton" aria-hidden="true"><RefreshCw size={16} className="spin" /> Loading chart…</div>}
-    </div>
-  );
-};
-
-const ChartsTab = ({ lightMode, compact = false, focusSymbol = null }) => {
-  const isMobileView = typeof window !== "undefined" && window.innerWidth < 768;
-  const [selected, setSelected] = useState(() => {
-    const valid = new Set(CHART_PRESETS.map((p) => p.symbol));
-    try {
-      const saved = JSON.parse(localStorage.getItem("overwatch:charts") || "null");
-      if (Array.isArray(saved)) {
-        const kept = saved.filter((s) => valid.has(s));
-        if (kept.length) return kept;
-      }
-    } catch {}
-    return ["AMEX:SPY", "NASDAQ:QQQ", "AMEX:DIA", "AMEX:IWM"];
-  });
-  const [interval, setInterval] = useState("D");
-  const [layout, setLayout] = usePersistentState("overwatch:charts:layout", "auto"); // regular: auto | 1 | 2 | 3
-  const [splitLayout, setSplitLayout] = usePersistentState("overwatch:charts:splitlayout", "1"); // split pane: 1 | 2
-  const [activeSymbol, setActiveSymbol] = useState(() => selected[0] || "AMEX:SPY");
-  const [fsSymbol, setFsSymbol] = useState(null);
-
-  // Mobile-only: size the chart frame to fill exactly the space between itself and the floating
-  // bottom nav (measured live, not guessed via a fixed calc()), so the interval toggles + chart +
-  // symbol strip all fit above the nav with no vertical swipe needed. The page can still scroll to
-  // reveal the footer disclaimer below the nav — that's fine, only the interactive chart shouldn't
-  // require it.
-  const mobileFrameWrapRef = useRef(null);
-  const mobileStripRef = useRef(null);
-  const [mobileFrameH, setMobileFrameH] = useState(420);
-  useEffect(() => {
-    if (!isMobileView) return;
-    const recalc = () => {
-      const frameEl = mobileFrameWrapRef.current;
-      const stripEl = mobileStripRef.current;
-      if (!frameEl) return;
-      const navEl = document.querySelector(".bd-bottom-nav");
-      const navRect = navEl?.getBoundingClientRect();
-      // Hidden/absent nav (display:none) reports an all-zero rect — fall back to a sane clearance.
-      const navTop = navRect && navRect.height > 0 ? navRect.top : window.innerHeight - 100;
-      const frameTop = frameEl.getBoundingClientRect().top;
-      const stripH = stripEl?.getBoundingClientRect().height || 0;
-      const available = navTop - frameTop - stripH - 20;
-      setMobileFrameH(Math.max(280, Math.round(available)));
-    };
-    recalc();
-    const id = requestAnimationFrame(recalc); // strip/nav may not have painted yet on first pass
-    window.addEventListener("resize", recalc);
-    window.addEventListener("orientationchange", recalc);
-    return () => {
-      cancelAnimationFrame(id);
-      window.removeEventListener("resize", recalc);
-      window.removeEventListener("orientationchange", recalc);
-    };
-  }, [isMobileView, interval, activeSymbol]);
-
-  useEffect(() => {
-    try { localStorage.setItem("overwatch:charts", JSON.stringify(selected)); } catch {}
-  }, [selected]);
-
-  useEffect(() => {
-    if (!selected.includes(activeSymbol)) setActiveSymbol(selected[0]);
-  }, [selected, activeSymbol]);
-
-  // Follow the thesis instrument: feature its chart (top of the grid / active pane), adding it if
-  // it isn't already shown. Runs when the focus changes or the Charts tab (re)mounts.
-  useEffect(() => {
-    if (!focusSymbol) return;
-    setSelected((prev) => (prev[0] === focusSymbol ? prev : [focusSymbol, ...prev.filter((s) => s !== focusSymbol)]));
-    setActiveSymbol(focusSymbol);
-  }, [focusSymbol]);
-
-  useEffect(() => {
-    if (!fsSymbol) return;
-    const onKey = (e) => { if (e.key === "Escape") setFsSymbol(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [fsSymbol]);
-
-  const toggle = (sym) => {
-    setSelected((prev) => {
-      if (prev.includes(sym)) return prev.length > 1 ? prev.filter((s) => s !== sym) : prev;
-      return [...prev, sym];
-    });
-  };
-
-  const symbolLabel = (sym) => CHART_PRESETS.find((p) => p.symbol === sym)?.label || sym.split(":").pop();
-
-  // Grid columns. Split panes are half-width so they cap at 2; the regular view goes up to 3.
-  // Each context keeps its own choice. "auto" fills up to the cap based on how many charts are shown.
-  const activeLayout = compact ? splitLayout : layout;
-  const setActiveLayout = compact ? setSplitLayout : setLayout;
-  const maxCols = compact ? 2 : 3;
-  const rawCols = activeLayout === "auto" ? (selected.length <= 2 ? 1 : maxCols) : Math.min(Number(activeLayout) || 1, maxCols);
-  const cols = Math.max(1, Math.min(rawCols, selected.length));
-  const chartH = compact ? (cols >= 2 ? 300 : 340) : cols >= 3 ? 320 : cols === 2 ? 420 : 520;
-  const layoutOptions = compact ? [["1", "1"], ["2", "2"]] : [["auto", "Auto"], ["1", "1"], ["2", "2"], ["3", "3"]];
-
-  const fsOverlay = fsSymbol ? (
-    <div className="chart-fs-overlay">
-      <div className="chart-fs-header">
-        <CandlestickChart size={15} style={{ opacity: 0.6 }} />
-        <span className="chart-fs-title">{symbolLabel(fsSymbol)}</span>
-        <div className="seg">
-          {TV_INTERVALS.map((iv) => (
-            <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
-          ))}
-        </div>
-        <button className="chart-fs-btn" onClick={() => setFsSymbol(null)} title="Exit fullscreen (Esc)">
-          <Minimize2 size={17} />
-        </button>
-      </div>
-      <div className="chart-fs-body">
-        <TradingViewChart key={`fs-${fsSymbol}-${interval}`} prefix="tv-fs" symbol={fsSymbol} lightMode={lightMode} interval={interval} />
-      </div>
-    </div>
-  ) : null;
-
-  if (isMobileView) {
-    return (
-      <>
-        {fsOverlay}
-        <div className="tab-charts">
-          <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
-              <div className="seg">
-                {TV_INTERVALS.map((iv) => (
-                  <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
-                ))}
-              </div>
-            </div>
-            <div key={`${activeSymbol}-${interval}`} ref={mobileFrameWrapRef} style={{ height: mobileFrameH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", marginBottom: 12, position: "relative" }}>
-              <TradingViewChart symbol={activeSymbol} lightMode={lightMode} interval={interval} />
-              <button className="chart-expand-btn" onClick={() => setFsSymbol(activeSymbol)} title="Fullscreen">
-                <Maximize2 size={14} />
-              </button>
-            </div>
-            <div className="chart-symbol-strip" ref={mobileStripRef}>
-              {CHART_PRESETS.map((p) => (
-                <button
-                  key={p.symbol}
-                  className={`chart-symbol-pill${activeSymbol === p.symbol ? " on" : ""}${selected.includes(p.symbol) ? " pinned" : ""}`}
-                  onClick={() => {
-                    setActiveSymbol(p.symbol);
-                    if (!selected.includes(p.symbol)) setSelected((prev) => [...prev, p.symbol]);
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </>
-    );
-  }
-
-  return (
-    <>
-      {fsOverlay}
-      <div className="tab-charts">
-        <Card icon={CandlestickChart} title="TradingView charts" sub="Interactive charts with drawing tools & indicators">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
-            <div className="seg">
-              {CHART_PRESETS.map((p) => (
-                <button key={p.symbol} className={selected.includes(p.symbol) ? "on" : ""} onClick={() => toggle(p.symbol)}>{p.label}</button>
-              ))}
-            </div>
-            <div className="seg" style={{ marginLeft: "auto" }}>
-              {TV_INTERVALS.map((iv) => (
-                <button key={iv.value} className={interval === iv.value ? "on" : ""} onClick={() => setInterval(iv.value)}>{iv.label}</button>
-              ))}
-            </div>
-            <div className="seg" title="Chart grid columns">
-              {layoutOptions.map(([m, lbl]) => (
-                <button key={m} className={activeLayout === m ? "on" : ""} onClick={() => setActiveLayout(m)}>{lbl}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 12 }}>
-            {selected.map((sym) => (
-              <div key={`${sym}-${interval}`} style={{ height: chartH, borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)", position: "relative" }}>
-                <TradingViewChart symbol={sym} lightMode={lightMode} interval={interval} />
-                <button className="chart-expand-btn" onClick={() => setFsSymbol(sym)} title="Fullscreen">
-                  <Maximize2 size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    </>
-  );
-};
-
-/* ================================================================
    STRATEGY LAB — algorithmic strategy backtester
    ================================================================ */
 
@@ -6472,13 +6167,13 @@ export default function Overwatch() {
   const splitOn = splitEligible && !!splitTab;
   // Remember the last split layout so toggling split off then on restores the same right-pane tab
   // instead of jumping to a default.
-  const [lastSplitTab, setLastSplitTab] = usePersistentState("overwatch:lastsplit", "charts");
+  const [lastSplitTab, setLastSplitTab] = usePersistentState("overwatch:lastsplit", "news");
   const toggleSplit = () => {
     if (splitTab) {
       setLastSplitTab(splitTab);
       setSplitTab(null);
     } else {
-      const restore = lastSplitTab && lastSplitTab !== tab ? lastSplitTab : (tab === "charts" ? "pulse" : "charts");
+      const restore = lastSplitTab && lastSplitTab !== tab ? lastSplitTab : (tab === "news" ? "pulse" : "news");
       setSplitTab(restore);
     }
   };
@@ -6695,16 +6390,14 @@ export default function Overwatch() {
     syncAll();
   }, [storageReady]);
 
-  // Pre-warm the heavy TradingView embeds during idle time after first render, so opening the Charts
-  // or Calendar tab later is near-instant instead of paying the full script download then. tv.js just
-  // defines window.TradingView (no side effects), so we execute it early; the economic-calendar embed
-  // script auto-runs and needs a container, so we only prefetch it into cache (rel=preload).
+  // Pre-warm the economic-calendar embed during idle time after first render, so opening the Calendar
+  // tab later is near-instant instead of paying the full script download then. The embed script
+  // auto-runs and needs a container, so we only prefetch it into cache (rel=preload).
   useEffect(() => {
     let warmed = false;
     const warm = () => {
       if (warmed) return;
       warmed = true;
-      loadTvScript().catch(() => {});
       if (!document.querySelector('link[data-tv-events]')) {
         const l = document.createElement("link");
         l.rel = "preload";
@@ -7014,13 +6707,12 @@ export default function Overwatch() {
     return hidden;
   }, [watchlist]);
   // Ordered to mirror the desk workflow: establish the regime on Market Pulse, read continuity in the
-  // Library, screen the News, confirm event risk on the Calendar, review the Charts, then build the
-  // call last in the Thesis Lab — the end of the workflow.
+  // Library, screen the News, confirm event risk on the Calendar, then build the call last in the
+  // Thesis Lab — the end of the workflow.
   const TABS = [
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !hiddenSymbols.has(t.symbol)).length || null },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
-    { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
     { id: "thesis", label: "Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
   ];
@@ -7056,8 +6748,6 @@ export default function Overwatch() {
             auth={auth}
           />
         );
-      case "charts":
-        return <ChartsTab lightMode={lightMode} compact={splitOn} focusSymbol={THESIS_CHART_SYMBOL[instrument] || null} />;
       case "archives":
         return (
           <ArchiveTab
