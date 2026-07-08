@@ -4865,9 +4865,6 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
     if (!closeMounted.current) { closeMounted.current = true; return; }
     setPreviewId(null);
   }, [closeToken]);
-  const [expanded, setExpanded] = useState(false);
-  const isDesktop = useIsDesktop();
-  const collapsedCount = 12;
   const canDelete = auth?.email && auth.email.toLowerCase() === JOURNAL_ADMIN_EMAIL;
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -4927,10 +4924,6 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
   const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
   const rowDate = (sentAt) => `${new Date(sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })} ${new Date(sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}`;
   const filtered = items;
-  const effectiveExpanded = expanded;
-  // Desktop scrolls the full archive inside a fixed-height pane; mobile keeps the show-more collapse.
-  const showAll = isDesktop || effectiveExpanded;
-  const shown = showAll ? filtered : filtered.slice(0, collapsedCount);
 
   // Reader navigation runs over the full archive (newest first).
   const current = previewId ? items.find((i) => i.id === previewId) : null;
@@ -4962,8 +4955,8 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
 
   return (
     <>
-      <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 648 : "none", overflowY: showAll ? "auto" : "visible" }}>
-        {shown.map((item) => (
+      <div className="hist-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 648, overflowY: "auto" }}>
+        {filtered.map((item) => (
           <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
             <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
               {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
@@ -5002,11 +4995,6 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
           </div>
         ))}
       </div>
-      {!isDesktop && filtered.length > collapsedCount && (
-        <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
-          {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filtered.length - collapsedCount} more</>}
-        </button>
-      )}
       {current && createPortal(
         <div className="nl-reader-overlay" onClick={() => setPreviewId(null)}>
           <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{reader}</div>
@@ -5308,14 +5296,7 @@ const ArchiveTab = ({
   inSplit = false,
   auth = null,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-  const isDesktop = useIsDesktop();
-  const collapsedCount = 12;
   const filteredHistory = archiveHistory;
-  const effectiveExpanded = expanded;
-  // Desktop scrolls the full library inside a fixed-height pane; mobile keeps the show-more collapse.
-  const showAll = isDesktop || effectiveExpanded;
-  const shownHistory = showAll ? filteredHistory : filteredHistory.slice(0, collapsedCount);
 
   // Scoreboard — roll the graded thesis calls into a hit/miss/flat record. Hit rate excludes flats
   // (a flat push is neither right nor wrong), so it reads as "of the calls with a real direction,
@@ -5395,8 +5376,8 @@ const ArchiveTab = ({
             </div>
           </div>
         )}
-        <div className={showAll ? "hist-scroll" : undefined} style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: showAll ? 648 : "none", overflowY: showAll ? "auto" : "visible" }}>
-          {shownHistory.map((entry) => {
+        <div className="hist-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 648, overflowY: "auto" }}>
+          {filteredHistory.map((entry) => {
             const t = entry._type === "newsletter" ? entry._thesis : entry;
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
             const isViewingThis = viewing?._id === entry._id;
@@ -5437,11 +5418,6 @@ const ArchiveTab = ({
             );
           })}
         </div>
-        {!isDesktop && filteredHistory.length > collapsedCount && (
-          <button className="btn btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12, gap: 6, marginTop: 8 }} onClick={() => setExpanded((e) => !e)}>
-            {expanded ? <><ChevronUp size={14} /> Show less</> : <><ChevronDown size={14} /> Show {filteredHistory.length - collapsedCount} more</>}
-          </button>
-        )}
         </Card>
       )}
 
