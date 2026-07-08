@@ -274,6 +274,10 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 .g-market-read{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch}
 .g-3{grid-template-columns:repeat(3,1fr)}
 .g-data{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* Level maps: always 3-up on desktop/tablet, regardless of window width or browser zoom — narrower
+   than .g-data's other consumers tolerate collapsing to 1 column, so it gets its own class that stays
+   3 columns all the way down to the 760px mobile swap (see .pulse-levels-desktop/-mobile below). */
+.g-levelmaps{grid-template-columns:repeat(3,minmax(0,1fr))}
 .pulse-levels-mobile{display:none}
 .g-thesis{grid-template-columns:340px 1fr}
 .g-thesis-top{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}
