@@ -113,6 +113,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "TSM", name: "Taiwan Semiconductor", off: true, cat: "AI Infra" },
   { symbol: "ALAB", name: "Astera Labs", off: true, cat: "AI Infra" },
   { symbol: "CRWV", name: "CoreWeave", off: true, cat: "AI Infra" },
+  { symbol: "WULF", name: "TeraWulf", off: true, cat: "AI Infra" },
   { symbol: "VRT", name: "Vertiv Holdings", off: true, cat: "AI Infra" },
   { symbol: "GEV", name: "GE Vernova", off: true, cat: "AI Infra" },
   { symbol: "SPCX", name: "SPCX", off: true, cat: "AI Infra" },
@@ -225,7 +226,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 135 entries; leaves headroom for custom additions
+const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 136 entries; leaves headroom for custom additions
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
