@@ -5162,7 +5162,6 @@ const ResearchLab = ({ market, points, notify, auth }) => {
   // across devices). Deep research is metered, so it's account-gated: signed-out visitors see a
   // sign-in prompt instead of the tool, never a stale local list from a previous session.
   const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
-  const [viewingId, setViewingId] = useState(null);
   // Voices — optionally write the brief in one of the Synthesis desk's five trader personas instead
   // of a neutral analyst tone. Off by default so the findings stay a plain sourced brief.
   const [voicesOn, setVoicesOn] = usePersistentState("overwatch:research:voiceson", false);
@@ -5181,18 +5180,18 @@ const ResearchLab = ({ market, points, notify, auth }) => {
     })();
   }, [signedIn]);
 
-  // Nothing generated this session and nothing explicitly recalled — default to the most recent
-  // saved brief (newest-first), same behavior as the Thesis Lab defaulting to the latest archived thesis.
-  const viewed = viewingId ? reports.find((r) => r._id === viewingId) : (run.data || reports[0] || null);
+  // Nothing generated this session — default to the most recent saved brief (newest-first), same
+  // unwrap as the Synthesis tab defaulting to the latest archived thesis. Browsing older saved briefs
+  // now happens in the Library's Research Archive tab, not here.
+  const viewed = run.data || reports[0] || null;
   const showBrief = run.status === "loading" || run.status === "error" || !!viewed;
 
-  const applyPreset = (p) => { setQuestion(p.q(cfg.symbol)); setViewingId(null); };
+  const applyPreset = (p) => { setQuestion(p.q(cfg.symbol)); };
 
   const doResearch = async () => {
     const q = question.trim();
     if (!q) { notify?.("Enter a research question first", "err"); return; }
     if (!signedIn) { notify?.("Sign in to run deep research", "err"); return; }
-    setViewingId(null);
     setRun({ status: "loading", data: null, error: null });
     try {
       const token = await auth.getToken();
@@ -5214,16 +5213,6 @@ const ResearchLab = ({ market, points, notify, auth }) => {
       setRun({ status: "error", data: null, error: e?.message || "Research failed" });
       notify?.("Research run failed", "err");
     }
-  };
-
-  const openReport = (r) => { setViewingId(r._id); setRun((s) => ({ ...s, status: s.data ? s.status : "idle" })); };
-  const deleteReport = (id) => {
-    setReports((prev) => {
-      const next = prev.filter((r) => r._id !== id);
-      if (signedIn) saveUserResearch(auth.getToken, next).catch(() => {});
-      return next;
-    });
-    if (viewingId === id) setViewingId(null);
   };
 
   if (!signedIn) {
@@ -5250,12 +5239,12 @@ const ResearchLab = ({ market, points, notify, auth }) => {
         <span>A grounded deep-research pass: it runs a live web search harness on your selected instrument and hands back a sourced brief. Sonnet + web search — separate from the thesis desk.</span>
       </div>
 
-      <div className="grid g-2" style={{ alignItems: "start", gap: 14 }}>
+      <div className="grid g-research" style={{ alignItems: "start", gap: 14 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
           <div className="lab-field" style={{ marginTop: 0 }}>
             <span className="lab-label">Instrument</span>
-            <InstrumentSelect value={instrument} onChange={(s) => { setInstrument(s); setViewingId(null); }} includeWatchlist />
+            <InstrumentSelect value={instrument} onChange={(s) => setInstrument(s)} includeWatchlist />
           </div>
           <div className="lab-field">
             <span className="lab-label">Research angles</span>
@@ -5308,45 +5297,107 @@ const ResearchLab = ({ market, points, notify, auth }) => {
             {run.status === "loading" ? <><RefreshCw size={15} className="spin" /> Researching {cfg.symbol}…</> : <><Search size={15} /> Run deep research</>}
           </button>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
-            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Briefs are saved below, synced to your account.
+            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Every brief is saved to your Research Archive in the Library, synced to your account.
           </div>
         </Card>
-
-        {reports.length > 0 && (
-          <Card icon={BookMarked} title="Saved briefs" sub={`${reports.length} research report${reports.length === 1 ? "" : "s"} — newest first, synced to your account`}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {reports.map((r) => {
-                const vColor = researchVerdictColor(r.verdict);
-                return (
-                  <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => openReport(r)}>
-                    <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
-                    <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
-                    <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
-                    {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
-                    <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
-                    <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        )}
         </div>
 
         <Card
           icon={Search}
           title={viewed ? `${viewed.instrument} brief` : "Research brief"}
           sub={viewed ? `${viewed.question}`.slice(0, 90) : "Your sourced findings land here"}
-          tools={viewed && viewingId ? <button className="btn btn-ghost btn-sm" onClick={() => setViewingId(null)} title="Back to the latest run">Latest</button> : null}
         >
           {run.status === "loading" && <LoadingBlock lines={4} msg={`Searching the web for ${cfg.symbol}…`} />}
-          {run.status === "error" && !viewingId && <ErrBlock msg={run.error} onRetry={doResearch} />}
+          {run.status === "error" && <ErrBlock msg={run.error} onRetry={doResearch} />}
           {showBrief && viewed && <ResearchBrief data={viewed} />}
           {!showBrief && (
             <EmptyState icon={Globe} title="No research yet" body="Pick an instrument and an angle, then run the harness. It searches the live web and returns a sourced brief — verdict, findings, catalysts and risks." />
           )}
         </Card>
       </div>
+    </div>
+  );
+};
+
+// Research Archive — the Research Lab's saved-briefs list, relocated to the Library so the workflow
+// stays browse-focused there (mirrors the Thesis Archive split: build in the Lab, review in the
+// Library). Self-contained: syncs its own copy of the same account-scoped report list Research Lab
+// writes to (loadUserResearch/saveUserResearch), same pattern CloudNewsletterList already uses.
+const ResearchArchiveTab = ({ auth }) => {
+  const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
+  const [viewingId, setViewingId] = useState(null);
+  const signedIn = Boolean(auth?.signedIn);
+  const hydrated = useRef(false);
+
+  useEffect(() => {
+    if (!signedIn) { hydrated.current = false; return; }
+    if (hydrated.current) return;
+    hydrated.current = true;
+    (async () => {
+      const server = await loadUserResearch(auth.getToken);
+      if (Array.isArray(server)) setReports(server);
+    })();
+  }, [signedIn]);
+
+  const viewing = viewingId ? reports.find((r) => r._id === viewingId) : null;
+
+  const deleteReport = (id) => {
+    setReports((prev) => {
+      const next = prev.filter((r) => r._id !== id);
+      if (signedIn) saveUserResearch(auth.getToken, next).catch(() => {});
+      return next;
+    });
+    if (viewingId === id) setViewingId(null);
+  };
+
+  if (!signedIn) {
+    return (
+      <Card icon={Lock} title="Sign in required" sub="Research briefs are tied to your account">
+        <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginTop: 0 }}>
+          Sign in to see the deep-research briefs you've run in the Research Lab, synced across devices.
+        </p>
+        <GatedSignIn label="Sign in to view your research archive" />
+      </Card>
+    );
+  }
+
+  return (
+    <div className="grid g-research" style={{ alignItems: "start", gap: 14 }}>
+      <Card
+        icon={BookMarked}
+        title="Research Archive"
+        sub={reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet"}
+      >
+        {!reports.length && (
+          <div style={{ color: C.muted, fontSize: 12.5 }}>Every deep-research brief you run in the Research Lab lands here automatically.</div>
+        )}
+        <div className="hist-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 648, overflowY: "auto" }}>
+          {reports.map((r) => {
+            const vColor = researchVerdictColor(r.verdict);
+            return (
+              <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => setViewingId(r._id)}>
+                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+                <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+                <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+                {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
+                <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card
+        icon={Search}
+        title={viewing ? `${viewing.instrument} brief` : "Research brief"}
+        sub={viewing ? `${viewing.question}`.slice(0, 90) : "Select a saved brief to read it"}
+        tools={viewing ? <button className="btn btn-ghost btn-sm" onClick={() => setViewingId(null)} title="Close"><X size={13} /></button> : null}
+      >
+        {viewing
+          ? <ResearchBrief data={viewing} />
+          : <EmptyState icon={BookMarked} title="No brief selected" body="Pick a saved brief from the list to read its full findings, catalysts and risks." />}
+      </Card>
     </div>
   );
 };
@@ -5378,15 +5429,17 @@ const ArchiveTab = ({
   // (mirrors the Thesis Lab / Algo Lab split). Journal leads since it was the section shown
   // open by default before this became tabbed.
   const [libTab, setLibTab] = usePersistentState("overwatch:library:toolview", "journal");
-  // Academy was retired, and Research moved into the Thesis Lab (now its first sub-tab) — migrate
-  // anyone whose stored view still points at either dead tab back to the Journal.
-  useEffect(() => { if (libTab === "academy" || libTab === "research") setLibTab("journal"); }, [libTab, setLibTab]);
+  // Academy was retired — migrate anyone whose stored view still points at the dead tab back to the
+  // Journal. (Research itself lives in the Thesis Lab; "researcharchive" here is just its saved-briefs
+  // list, a distinct tab from the old pre-move "research" id, so it's not part of this migration.)
+  useEffect(() => { if (libTab === "academy") setLibTab("journal"); }, [libTab, setLibTab]);
   // Re-clicking the Jack's Journal tab while it's already active closes any open letter — bump a token
   // the reader listens on, so tapping the tab is a second way to get back to the list.
   const [journalCloseToken, setJournalCloseToken] = useState(0);
   const LIB_TABS = [
     { id: "journal", label: "Jack's Journal", Icon: Mail },
     { id: "archive", label: "Thesis Archive", Icon: History },
+    { id: "researcharchive", label: "Research Archive", Icon: BookMarked },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
@@ -5485,6 +5538,7 @@ const ArchiveTab = ({
         </Card>
       )}
 
+      {libTab === "researcharchive" && <ResearchArchiveTab auth={auth} />}
     </div>
   );
 };
