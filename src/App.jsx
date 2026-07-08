@@ -2345,6 +2345,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
     return [...set].filter((k) => SNAP_HIDEABLE.includes(k));
   }), [setHiddenGroups]);
   const [levelsOpen, setLevelsOpen] = usePersistentState("overwatch:sec:levels", true);    // Level maps — open by default (core read)
+  const [sessionReadOpen, setSessionReadOpen] = usePersistentState("overwatch:sec:sessionread", true); // Session read — open by default
 
   // Hidden watchlist symbols (e.g. the Mag 7, off by default) plus any Thesis-Lab-only single stock
   // are fetched for pricing but kept off the Pulse grid until toggled on in Settings. Memoized so the
@@ -2479,8 +2480,11 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
         title="Session read"
         sub="Plain-English market brief"
         tools={<Freshness at={at} />}
+        collapsible
+        open={sessionReadOpen}
+        onToggle={() => setSessionReadOpen((o) => !o)}
       >
-        <div className="session-summary">{session.summary}</div>
+        {sessionReadOpen && <div className="session-summary">{session.summary}</div>}
       </Card>
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
