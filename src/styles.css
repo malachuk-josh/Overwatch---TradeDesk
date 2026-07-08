@@ -245,13 +245,14 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 @media(max-width:1200px){.split-toggle .split-label{display:none}}
 /* each pane is a size container, so its grids collapse to its own width (not the window's) */
 @container (max-width:1080px){
-  .split-pane .g-data,.split-pane .g-2,.split-pane .g-thesis-top,.split-pane .g-thesis,.split-pane .calendar-grid{grid-template-columns:1fr}
+  .split-pane .g-data,.split-pane .g-2,.split-pane .g-thesis-top,.split-pane .calendar-grid{grid-template-columns:1fr}
 }
-/* Level maps + the Wire sentiment/Volatility regime/Fear & Greed row stay put at every pane width
-   down to the same 760px mobile threshold the main (non-split) view uses — see .g-levelmaps and the
-   760px media rule below for the reasoning. */
+/* Level maps, the Wire sentiment/Volatility regime/Fear & Greed row, and the Thesis Lab's Thesis
+   inputs + Options Calculator column stay put at every pane width down to the same 760px mobile
+   threshold the main (non-split) view uses — see .g-levelmaps and the 760px media rule below for
+   the reasoning. */
 @container (max-width:760px){
-  .split-pane .g-market-read{grid-template-columns:1fr}
+  .split-pane .g-market-read,.split-pane .g-thesis{grid-template-columns:1fr}
   .split-pane .pulse-levels-desktop{display:none}
   .split-pane .pulse-levels-mobile{display:block}
 }
