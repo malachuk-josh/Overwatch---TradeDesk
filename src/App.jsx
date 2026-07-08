@@ -2481,7 +2481,6 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
       <Card
         icon={Activity}
         title="Session read"
-        sub="Plain-English market brief"
         tools={<Freshness at={at} />}
         collapsible
         open={sessionReadOpen}
