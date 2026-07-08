@@ -56,6 +56,8 @@ import LogIn from "lucide-react/dist/esm/icons/log-in.mjs";
 import Globe from "lucide-react/dist/esm/icons/globe.mjs";
 import BookMarked from "lucide-react/dist/esm/icons/book-marked.mjs";
 import Search from "lucide-react/dist/esm/icons/search.mjs";
+import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close.mjs";
+import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open.mjs";
 import { CLERK_ENABLED, AuthControl, GatedSignIn, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive, loadUserResearch, saveUserResearch } from "./auth.jsx";
 import "./styles.css";
 
@@ -4417,6 +4419,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const [secShown, setSecShown] = useState(() => !!secondary && secondary !== instrument);
   const [noteShown, setNoteShown] = useState(() => !!(notes && notes.trim()));
   const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "research");
+  const [inputsCollapsed, setInputsCollapsed] = usePersistentState("overwatch:thesis:synth:inputscollapsed", false);
   // The Options Calc used to be its own sub-tab; it now lives inline in Synthesis. Migrate any stored
   // "options" view back to Synthesis so a returning user doesn't land on a dead tab.
   useEffect(() => { if (toolView === "options") setToolView("synthesis"); }, [toolView, setToolView]);
@@ -4514,8 +4517,21 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {toolSeg}
-    <div className={showSplit ? "grid g-thesis" : ""} style={showSplit ? { alignItems: "start" } : undefined}>
+      {showSplit && (
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ alignSelf: "flex-start" }}
+          onClick={() => setInputsCollapsed((v) => !v)}
+          title={inputsCollapsed ? "Show thesis inputs & options calculator" : "Collapse thesis inputs & options calculator"}
+        >
+          {inputsCollapsed ? <><PanelLeftOpen size={13} /> Show inputs</> : <><PanelLeftClose size={13} /> Collapse inputs</>}
+        </button>
+      )}
+    <div className={showSplit ? "grid g-thesis" : ""} style={showSplit ? { alignItems: "start", gridTemplateColumns: inputsCollapsed ? "0px 1fr" : undefined, columnGap: inputsCollapsed ? 0 : undefined } : undefined}>
       {/* controls — thesis inputs + the options calculator stacked below it */}
+      {showSplit && inputsCollapsed ? (
+        <div style={{ width: 0, overflow: "hidden" }} />
+      ) : (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <Card
           icon={FlaskConical}
@@ -4606,6 +4622,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
           symbol={instrument} onPickTicker={setInstrument} pickExclude={secondary} thesis={t}
         />
       </div>
+      )}
 
       {/* output — only once a thesis exists / is loading / errored */}
       {showSplit && (
@@ -6875,7 +6892,7 @@ export default function Overwatch() {
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
-    { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
+    { id: "thesis", label: "Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
     { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
   ];
 
