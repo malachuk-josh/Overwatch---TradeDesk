@@ -374,8 +374,12 @@ html,body{max-width:100vw;overflow-x:hidden;overflow-x:clip;background:#0B0F14;c
 .card-head-toggle:hover .card-chevron{color:var(--text)}
 /* Collapsed card: no body content, so drop the card's bottom padding and the header's own bottom
    margin — otherwise a closed section still shows a dead gap below the title row. */
-.card-collapsed{padding-bottom:0}
-.card-collapsed .card-head-toggle{margin-bottom:-4px}
+/* Zero the card's own padding on both sides (not just bottom) and the header's own negative
+   margin on both sides, so the collapsed header's content is truly centered inside the visible
+   card box — the earlier bottom-only fix left ~16px above the icon/title but ~0px below it,
+   pushing everything toward the bottom of the collapsed row. */
+.card-collapsed{padding-top:0;padding-bottom:0}
+.card-collapsed .card-head-toggle{margin-top:0;margin-bottom:0}
 .freshness{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);letter-spacing:.05em}
 .freshness.aging{color:var(--brass)}
 .freshness.stale{color:var(--bear)}
