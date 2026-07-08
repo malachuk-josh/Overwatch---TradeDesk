@@ -6884,11 +6884,11 @@ export default function Overwatch() {
   // call last in the Thesis Lab — the end of the workflow.
   const TABS = [
     { id: "pulse", label: "Market Pulse", short: "Pulse", icon: Activity, badge: (market.data?.tickers || []).filter((t) => !hiddenSymbols.has(t.symbol)).length || null },
-    { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
     { id: "news", label: "News Intel", short: "News", icon: Newspaper, badge: news.data?.headlines?.length },
     { id: "calendar", label: "Calendar", short: "Cal", icon: CalendarDays, badge: calendarBadge },
     { id: "charts", label: "Charts", short: "Charts", icon: CandlestickChart },
     { id: "thesis", label: "Thesis Lab", short: "Lab", icon: FlaskConical, badge: thesisHistory.length || null },
+    { id: "archives", label: "Library", short: "Library", icon: History, badge: archiveBadge },
   ];
 
   // Render a tab's content by id. `nav` navigates the SAME pane this content lives in (setTab for the
