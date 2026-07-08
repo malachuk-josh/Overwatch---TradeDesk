@@ -4946,10 +4946,10 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
           <span className="nl-reader-date">{rowDate(current.sentAt)}{current.instrument ? ` · ${current.instrument}` : ""}</span>
         </div>
         <div className="nl-reader-nav">
-          <button className="btn btn-ghost btn-sm" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={15} /></button>
-          <button className="btn btn-ghost btn-sm" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={15} /></button>
+          <button className="btn btn-ghost nl-reader-icon-btn" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={20} /></button>
+          <button className="btn btn-ghost nl-reader-icon-btn" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={20} /></button>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={16} /></button>
+        <button className="btn btn-ghost nl-reader-icon-btn" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={20} /></button>
       </div>
       <iframe key={current.id} src={`/api/archive/${current.id}?rv=2`} title="Newsletter" className="nl-reader-frame" />
     </>
