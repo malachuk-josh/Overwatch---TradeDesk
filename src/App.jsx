@@ -2590,7 +2590,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
         </button>
         {levelsOpen && (
           <div style={{ padding: "0 12px 12px" }}>
-            <div className="grid g-data pulse-levels-desktop">
+            <div className="grid g-levelmaps pulse-levels-desktop">
               {LEVEL_MAP_DEFAULTS.map((sym, i) => (
                 <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} />
               ))}
