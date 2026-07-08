@@ -4386,7 +4386,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, notify, auth }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, researchViewing, setResearchViewing, notify, auth }) => {
   const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
   // Nothing generated this session and nothing explicitly recalled — default to the most recent
   // archived thesis (newest-first) rather than an empty prompt, same unwrap as the Library's row click.
@@ -4423,6 +4423,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // The Options Calc used to be its own sub-tab; it now lives inline in Synthesis. Migrate any stored
   // "options" view back to Synthesis so a returning user doesn't land on a dead tab.
   useEffect(() => { if (toolView === "options") setToolView("synthesis"); }, [toolView, setToolView]);
+  // Jumping here from the Library's Research Archive always means "go look at this brief" — force
+  // the Research sub-tab open so the brief is actually visible, whatever sub-tab was last active.
+  useEffect(() => { if (researchViewing) setToolView("research"); }, [researchViewing, setToolView]);
   // Thesis Lab sub-nav, in workflow order: Research leads (ground the call in sourced facts before
   // building it) and is the default landing view; Algo Lab sits in the middle (standalone — it doesn't
   // feed the thesis); Synthesis — the options calculator folded in — closes the loop as the final step.
@@ -4494,7 +4497,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {toolSeg}
-        <ResearchLab market={market} points={points} notify={notify} auth={auth} />
+        <ResearchLab
+          market={market} points={points} notify={notify} auth={auth}
+          viewing={researchViewing} setViewing={setResearchViewing}
+          onGoLibrary={onGoLibrary}
+        />
       </div>
     );
   }
@@ -5154,7 +5161,7 @@ const ResearchBrief = ({ data }) => {
   );
 };
 
-const ResearchLab = ({ market, points, notify, auth }) => {
+const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing = null, onGoLibrary = null }) => {
   const [instrument, setInstrument] = usePersistentState("overwatch:research:instrument", DEFAULT_THESIS_INSTRUMENT);
   const [question, setQuestion] = useState("");
   const [run, setRun] = useState({ status: "idle", data: null, error: null });
@@ -5166,6 +5173,9 @@ const ResearchLab = ({ market, points, notify, auth }) => {
   // of a neutral analyst tone. Off by default so the findings stay a plain sourced brief.
   const [voicesOn, setVoicesOn] = usePersistentState("overwatch:research:voiceson", false);
   const [persona, setPersona] = usePersistentState("overwatch:research:persona", DEFAULT_PERSONA);
+  // Single toggle to collapse the run-form column away to the left, same pattern as the Synthesis
+  // Lab's inputs collapse, freeing the full width for reading a brief.
+  const [inputsCollapsed, setInputsCollapsed] = usePersistentState("overwatch:research:inputscollapsed", false);
   const cfg = thesisInstrumentConfig(instrument);
   const signedIn = Boolean(auth?.signedIn);
   const hydrated = useRef(false);
@@ -5180,11 +5190,19 @@ const ResearchLab = ({ market, points, notify, auth }) => {
     })();
   }, [signedIn]);
 
-  // Nothing generated this session — default to the most recent saved brief (newest-first), same
-  // unwrap as the Synthesis tab defaulting to the latest archived thesis. Browsing older saved briefs
-  // now happens in the Library's Research Archive tab, not here.
-  const viewed = run.data || reports[0] || null;
+  // Explicitly viewing a saved brief (via nav arrows here, or jumped in from the Library's Research
+  // Archive) wins; otherwise the live run; otherwise the most recent saved brief, same unwrap as the
+  // Synthesis tab defaulting to the latest archived thesis.
+  const viewed = viewing || run.data || reports[0] || null;
   const showBrief = run.status === "loading" || run.status === "error" || !!viewed;
+  // Nav across the saved reports (newest first) when the currently-viewed brief is one of them.
+  const navIdx = viewed?._id ? reports.findIndex((r) => r._id === viewed._id) : -1;
+  const goReport = (delta) => {
+    if (navIdx < 0 || !setViewing) return;
+    const next = reports[navIdx + delta];
+    if (!next) return;
+    setViewing(run.data && next._id === run.data._id ? null : next);
+  };
 
   const applyPreset = (p) => { setQuestion(p.q(cfg.symbol)); };
 
@@ -5192,6 +5210,7 @@ const ResearchLab = ({ market, points, notify, auth }) => {
     const q = question.trim();
     if (!q) { notify?.("Enter a research question first", "err"); return; }
     if (!signedIn) { notify?.("Sign in to run deep research", "err"); return; }
+    setViewing?.(null);
     setRun({ status: "loading", data: null, error: null });
     try {
       const token = await auth.getToken();
@@ -5239,7 +5258,19 @@ const ResearchLab = ({ market, points, notify, auth }) => {
         <span>A grounded deep-research pass: it runs a live web search harness on your selected instrument and hands back a sourced brief. Sonnet + web search — separate from the thesis desk.</span>
       </div>
 
-      <div className="grid g-research" style={{ alignItems: "start", gap: 14 }}>
+      <button
+        className="btn btn-ghost btn-sm"
+        style={{ alignSelf: "flex-start" }}
+        onClick={() => setInputsCollapsed((v) => !v)}
+        title={inputsCollapsed ? "Show the research inputs" : "Collapse the research inputs"}
+      >
+        {inputsCollapsed ? <><PanelLeftOpen size={13} /> Show inputs</> : <><PanelLeftClose size={13} /> Collapse inputs</>}
+      </button>
+
+      <div className="grid g-research" style={{ alignItems: "start", gap: 14, gridTemplateColumns: inputsCollapsed ? "0px 1fr" : undefined, columnGap: inputsCollapsed ? 0 : undefined }}>
+        {inputsCollapsed ? (
+          <div style={{ width: 0, overflow: "hidden" }} />
+        ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
         <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
           <div className="lab-field" style={{ marginTop: 0 }}>
@@ -5301,19 +5332,39 @@ const ResearchLab = ({ market, points, notify, auth }) => {
           </div>
         </Card>
         </div>
+        )}
 
-        <Card
-          icon={Search}
-          title={viewed ? `${viewed.instrument} brief` : "Research brief"}
-          sub={viewed ? `${viewed.question}`.slice(0, 90) : "Your sourced findings land here"}
-        >
-          {run.status === "loading" && <LoadingBlock lines={4} msg={`Searching the web for ${cfg.symbol}…`} />}
-          {run.status === "error" && <ErrBlock msg={run.error} onRetry={doResearch} />}
-          {showBrief && viewed && <ResearchBrief data={viewed} />}
-          {!showBrief && (
-            <EmptyState icon={Globe} title="No research yet" body="Pick an instrument and an angle, then run the harness. It searches the live web and returns a sourced brief — verdict, findings, catalysts and risks." />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {viewing && (
+            <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
+              <BookMarked size={14} color={C.brass} />
+              <span style={{ fontSize: 12.5, color: C.muted }}>Viewing archived brief — {viewing._date} · {viewing._time}</span>
+              <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                {onGoLibrary && <button className="btn btn-sm" onClick={onGoLibrary}><History size={13} /> Back to library</button>}
+                <button className="btn btn-sm" onClick={() => setViewing?.(null)}>Back to latest</button>
+              </span>
+            </div>
           )}
-        </Card>
+          <Card
+            icon={Search}
+            title={viewed ? `${viewed.instrument} brief` : "Research brief"}
+            sub={viewed ? `${viewed.question}`.slice(0, 90) : "Your sourced findings land here"}
+            tools={reports.length > 1 && navIdx >= 0 && (
+              <span className="th-nav" style={{ marginBottom: 0 }}>
+                <span className="th-nav-pos">{navIdx + 1} / {reports.length}</span>
+                <button className="btn btn-ghost btn-sm" disabled={navIdx <= 0} onClick={() => goReport(-1)} title="Newer brief"><ChevronUp size={15} /></button>
+                <button className="btn btn-ghost btn-sm" disabled={navIdx >= reports.length - 1} onClick={() => goReport(1)} title="Older brief"><ChevronDown size={15} /></button>
+              </span>
+            )}
+          >
+            {run.status === "loading" && <LoadingBlock lines={4} msg={`Searching the web for ${cfg.symbol}…`} />}
+            {run.status === "error" && <ErrBlock msg={run.error} onRetry={doResearch} />}
+            {showBrief && viewed && <ResearchBrief data={viewed} />}
+            {!showBrief && (
+              <EmptyState icon={Globe} title="No research yet" body="Pick an instrument and an angle, then run the harness. It searches the live web and returns a sourced brief — verdict, findings, catalysts and risks." />
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   );
@@ -5323,9 +5374,8 @@ const ResearchLab = ({ market, points, notify, auth }) => {
 // stays browse-focused there (mirrors the Thesis Archive split: build in the Lab, review in the
 // Library). Self-contained: syncs its own copy of the same account-scoped report list Research Lab
 // writes to (loadUserResearch/saveUserResearch), same pattern CloudNewsletterList already uses.
-const ResearchArchiveTab = ({ auth }) => {
+const ResearchArchiveTab = ({ auth, onOpenReport }) => {
   const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
-  const [viewingId, setViewingId] = useState(null);
   const signedIn = Boolean(auth?.signedIn);
   const hydrated = useRef(false);
 
@@ -5339,15 +5389,12 @@ const ResearchArchiveTab = ({ auth }) => {
     })();
   }, [signedIn]);
 
-  const viewing = viewingId ? reports.find((r) => r._id === viewingId) : null;
-
   const deleteReport = (id) => {
     setReports((prev) => {
       const next = prev.filter((r) => r._id !== id);
       if (signedIn) saveUserResearch(auth.getToken, next).catch(() => {});
       return next;
     });
-    if (viewingId === id) setViewingId(null);
   };
 
   if (!signedIn) {
@@ -5362,43 +5409,30 @@ const ResearchArchiveTab = ({ auth }) => {
   }
 
   return (
-    <div className="grid g-research" style={{ alignItems: "start", gap: 14 }}>
-      <Card
-        icon={BookMarked}
-        title="Research Archive"
-        sub={reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet"}
-      >
-        {!reports.length && (
-          <div style={{ color: C.muted, fontSize: 12.5 }}>Every deep-research brief you run in the Research Lab lands here automatically.</div>
-        )}
-        <div className="hist-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 648, overflowY: "auto" }}>
-          {reports.map((r) => {
-            const vColor = researchVerdictColor(r.verdict);
-            return (
-              <div key={r._id} className={`hist-row ${viewingId === r._id ? "viewing" : ""}`} onClick={() => setViewingId(r._id)}>
-                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
-                <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
-                <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
-                {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
-                <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-
-      <Card
-        icon={Search}
-        title={viewing ? `${viewing.instrument} brief` : "Research brief"}
-        sub={viewing ? `${viewing.question}`.slice(0, 90) : "Select a saved brief to read it"}
-        tools={viewing ? <button className="btn btn-ghost btn-sm" onClick={() => setViewingId(null)} title="Close"><X size={13} /></button> : null}
-      >
-        {viewing
-          ? <ResearchBrief data={viewing} />
-          : <EmptyState icon={BookMarked} title="No brief selected" body="Pick a saved brief from the list to read its full findings, catalysts and risks." />}
-      </Card>
-    </div>
+    <Card
+      icon={BookMarked}
+      title="Research Archive"
+      sub={reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet"}
+    >
+      {!reports.length && (
+        <div style={{ color: C.muted, fontSize: 12.5 }}>Every deep-research brief you run in the Research Lab lands here automatically.</div>
+      )}
+      <div className="hist-scroll" style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 648, overflowY: "auto" }}>
+        {reports.map((r) => {
+          const vColor = researchVerdictColor(r.verdict);
+          return (
+            <div key={r._id} className="hist-row" onClick={() => onOpenReport?.(r)}>
+              <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+              <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+              <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+              {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
+              <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 };
 
@@ -5408,6 +5442,8 @@ const ArchiveTab = ({
   setViewing,
   onDeleteEntry,
   onGoThesis,
+  onGoResearch,
+  setResearchViewing,
   inSplit = false,
   auth = null,
 }) => {
@@ -5538,7 +5574,9 @@ const ArchiveTab = ({
         </Card>
       )}
 
-      {libTab === "researcharchive" && <ResearchArchiveTab auth={auth} />}
+      {libTab === "researcharchive" && (
+        <ResearchArchiveTab auth={auth} onOpenReport={(r) => { setResearchViewing?.(r); onGoResearch?.(); }} />
+      )}
     </div>
   );
 };
@@ -6396,6 +6434,9 @@ export default function Overwatch() {
   const [thesis, setThesis] = useState(IDLE);
   const [archiveHistory, setArchiveHistory] = useState([]);
   const [viewing, setViewing] = useState(null);
+  // Which saved research brief is being reviewed — set either by paging through the Research Lab's
+  // own nav arrows, or by clicking a row in the Library's Research Archive (which also jumps here).
+  const [researchViewing, setResearchViewing] = useState(null);
   const [toasts, setToasts] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -7010,6 +7051,7 @@ export default function Overwatch() {
             deskTools={deskTools} setDeskTools={setDeskTools}
             market={market.data} news={news.data} points={points.data}
             onGoLibrary={() => nav("archives")}
+            researchViewing={researchViewing} setResearchViewing={setResearchViewing}
             notify={notify}
             auth={auth}
           />
@@ -7024,6 +7066,8 @@ export default function Overwatch() {
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => nav("thesis")}
+            onGoResearch={() => nav("thesis")}
+            setResearchViewing={setResearchViewing}
             inSplit={splitOn}
             auth={auth}
           />
