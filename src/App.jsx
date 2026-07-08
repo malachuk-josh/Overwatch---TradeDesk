@@ -119,6 +119,8 @@ const DEFAULT_WATCHLIST = [
   // Healthcare infrastructure basket — hospitals, distributors, diagnostics, devices, health REITs
   // and health-tech. Live-quoted, shipped hidden by default under the "Healthcare" subcategory.
   { symbol: "UNH", name: "UnitedHealth Group", off: true, cat: "Healthcare" },
+  { symbol: "MRK", name: "Merck & Co.", off: true, cat: "Healthcare" },
+  { symbol: "GSK", name: "GSK plc", off: true, cat: "Healthcare" },
   { symbol: "HCA", name: "HCA Healthcare", off: true, cat: "Healthcare" },
   { symbol: "UHS", name: "Universal Health Services", off: true, cat: "Healthcare" },
   { symbol: "MCK", name: "McKesson", off: true, cat: "Healthcare" },
@@ -223,7 +225,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLRE", name: "Real Estate Sector SPDR", off: true },
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
-const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 133 entries; leaves headroom for custom additions
+const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 135 entries; leaves headroom for custom additions
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
