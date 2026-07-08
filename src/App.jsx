@@ -4384,7 +4384,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, notify }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, notify, auth }) => {
   const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
   // Nothing generated this session and nothing explicitly recalled — default to the most recent
   // archived thesis (newest-first) rather than an empty prompt, same unwrap as the Library's row click.
@@ -4416,16 +4416,17 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // tucked behind a "+ add" affordance until wanted, but auto-open if a value is already present.
   const [secShown, setSecShown] = useState(() => !!secondary && secondary !== instrument);
   const [noteShown, setNoteShown] = useState(() => !!(notes && notes.trim()));
-  const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "synthesis");
+  const [toolView, setToolView] = usePersistentState("overwatch:thesis:toolview", "research");
   // The Options Calc used to be its own sub-tab; it now lives inline in Synthesis. Migrate any stored
   // "options" view back to Synthesis so a returning user doesn't land on a dead tab.
   useEffect(() => { if (toolView === "options") setToolView("synthesis"); }, [toolView, setToolView]);
-  // Thesis Lab sub-nav. Synthesis leads: it's the tab's core job and the default landing view, so the
-  // first tab, the default, and the primary CTA all line up — the options calculator is folded into it.
-  // Algo Lab sits last — standalone research that doesn't feed the thesis.
+  // Thesis Lab sub-nav, in workflow order: Research leads (ground the call in sourced facts before
+  // building it) and is the default landing view; Algo Lab sits in the middle (standalone — it doesn't
+  // feed the thesis); Synthesis — the options calculator folded in — closes the loop as the final step.
   const TOOL_TABS = [
-    { id: "synthesis", label: "Synthesis", Icon: Sparkles },
+    { id: "research", label: "Research", Icon: Globe },
     { id: "algo", label: "Algo Lab", Icon: Bot },
+    { id: "synthesis", label: "Synthesis", Icon: Sparkles },
   ];
   const toolSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
@@ -4485,6 +4486,15 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // Once a thesis is on the tape (or one is loading / errored), split into controls-left + output-right.
   // Before that, the controls ride consolidated across the top instead of leaving a big empty pane.
   const showSplit = !!t || thesis.status === "loading" || thesis.status === "error";
+
+  if (toolView === "research") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {toolSeg}
+        <ResearchLab market={market} points={points} notify={notify} auth={auth} />
+      </div>
+    );
+  }
 
   if (toolView === "algo") {
     return (
@@ -5296,9 +5306,6 @@ const ArchiveTab = ({
   setViewing,
   onDeleteEntry,
   onGoThesis,
-  market,
-  points,
-  notify,
   inSplit = false,
   auth = null,
 }) => {
@@ -5320,15 +5327,15 @@ const ArchiveTab = ({
   // (mirrors the Thesis Lab / Algo Lab split). Journal leads since it was the section shown
   // open by default before this became tabbed.
   const [libTab, setLibTab] = usePersistentState("overwatch:library:toolview", "journal");
-  // Academy was retired; migrate anyone whose stored view still points at it back to the Journal.
-  useEffect(() => { if (libTab === "academy") setLibTab("journal"); }, [libTab, setLibTab]);
+  // Academy was retired, and Research moved into the Thesis Lab (now its first sub-tab) — migrate
+  // anyone whose stored view still points at either dead tab back to the Journal.
+  useEffect(() => { if (libTab === "academy" || libTab === "research") setLibTab("journal"); }, [libTab, setLibTab]);
   // Re-clicking the Jack's Journal tab while it's already active closes any open letter — bump a token
   // the reader listens on, so tapping the tab is a second way to get back to the list.
   const [journalCloseToken, setJournalCloseToken] = useState(0);
   const LIB_TABS = [
     { id: "journal", label: "Jack's Journal", Icon: Mail },
     { id: "archive", label: "Thesis Archive", Icon: History },
-    { id: "research", label: "Research", Icon: Globe },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }}>
@@ -5427,7 +5434,6 @@ const ArchiveTab = ({
         </Card>
       )}
 
-      {libTab === "research" && <ResearchLab market={market} points={points} notify={notify} auth={auth} />}
     </div>
   );
 };
@@ -6900,6 +6906,7 @@ export default function Overwatch() {
             market={market.data} news={news.data} points={points.data}
             onGoLibrary={() => nav("archives")}
             notify={notify}
+            auth={auth}
           />
         );
       case "charts":
@@ -6912,9 +6919,6 @@ export default function Overwatch() {
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
             onGoThesis={() => nav("thesis")}
-            market={market.data}
-            points={points.data}
-            notify={notify}
             inSplit={splitOn}
             auth={auth}
           />
