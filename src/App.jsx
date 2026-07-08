@@ -1150,8 +1150,11 @@ When session is PRE-MARKET, AFTER-HOURS, or CLOSED, explicitly account for the p
 
 const Card = ({ icon: Ic, title, sub, tools, children, className = "", style, onClick, collapsible = false, open = true, onToggle }) => {
   const headToggles = collapsible && typeof onToggle === "function";
+  // Collapsed: the header keeps its own bottom margin and the card its own bottom padding even with
+  // no body content, leaving a dead gap below the title. Drop both so a closed card is header-height.
+  const collapsed = collapsible && !open;
   return (
-    <div className={`card ${className}`} style={style} onClick={onClick}>
+    <div className={`card ${className}${collapsed ? " card-collapsed" : ""}`} style={style} onClick={onClick}>
       {(title || tools || collapsible) && (
         <div
           className={`card-head${headToggles ? " card-head-toggle" : ""}`}
