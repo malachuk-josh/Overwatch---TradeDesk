@@ -227,6 +227,9 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
 const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 136 entries; leaves headroom for custom additions
+// The named watchlist baskets (AI Infra, Healthcare, Semiconductors, ...), in first-seen order —
+// used to group the full watchlist into the Research Lab's instrument picker.
+const WATCHLIST_CATEGORIES = [...new Set(DEFAULT_WATCHLIST.map((w) => w.cat).filter(Boolean))];
 // Symbols the user has toggled off — fetched for pricing but not rendered as Pulse ticker cards.
 const watchlistHiddenSet = (items) =>
   new Set((Array.isArray(items) ? items : []).filter((it) => it && it.off).map((it) => it.symbol));
@@ -374,8 +377,16 @@ const INSTRUMENT_GROUPS = [
   { group: "futures", label: "Index Futures" },
   { group: "stock", label: "Mega-cap Stocks" },
 ];
-const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) =>
-  THESIS_INSTRUMENTS.find((item) => item.symbol === symbol) || THESIS_INSTRUMENTS[0];
+const THESIS_INSTRUMENT_SYMBOLS = new Set(THESIS_INSTRUMENTS.map((it) => it.symbol));
+const thesisInstrumentConfig = (symbol = DEFAULT_THESIS_INSTRUMENT) => {
+  const known = THESIS_INSTRUMENTS.find((item) => item.symbol === symbol);
+  if (known) return known;
+  // Any other live-quoted watchlist symbol (e.g. Research Lab picks from a basket outside the core
+  // Thesis Lab set) — synthesize a minimal config rather than silently falling back to SPY.
+  const wl = DEFAULT_WATCHLIST.find((item) => item.symbol === symbol);
+  if (wl) return { symbol: wl.symbol, label: wl.symbol, name: wl.name, futures: null, pointsKey: null, focusLabel: wl.symbol, group: "stock" };
+  return THESIS_INSTRUMENTS[0];
+};
 
 // Single-stock focuses (Mag 7) aren't on the Market Pulse watchlist, but their live prices are
 // still fetched so the Thesis Lab tools can auto-price them like the ETFs/futures.
@@ -383,8 +394,10 @@ const THESIS_STOCK_TICKERS = THESIS_INSTRUMENTS.filter((i) => i.group === "stock
 const THESIS_STOCK_SET = new Set(THESIS_STOCK_TICKERS.map((i) => i.symbol));
 
 // Grouped native <select> for picking a thesis instrument — the standard picker used across the app.
-// `exclude` omits one symbol (e.g. the other options-calculator leg) from the list.
-const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel, exclude }) => (
+// `exclude` omits one symbol (e.g. the other options-calculator leg) from the list. `includeWatchlist`
+// appends the named watchlist baskets (AI Infra, Healthcare, ...) as further optgroups, for tools
+// (Research Lab) that can run on any live-quoted symbol, not just the Thesis Lab's tradable set.
+const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel, exclude, includeWatchlist = false }) => (
   <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
     {noneLabel && <option value="">{noneLabel}</option>}
     {INSTRUMENT_GROUPS.map((g) => {
@@ -392,6 +405,19 @@ const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLab
       if (!items.length) return null;
       return (
         <optgroup key={g.group} label={g.label}>
+          {items.map((it) => (
+            <option key={it.symbol} value={it.symbol}>{it.symbol} — {it.name}</option>
+          ))}
+        </optgroup>
+      );
+    })}
+    {includeWatchlist && WATCHLIST_CATEGORIES.map((cat) => {
+      // Skip symbols already listed above under the Thesis Lab groups (e.g. NVDA/MSFT double as
+      // both a Mag-7 stock and an AI Infra basket member) so nothing appears twice in one dropdown.
+      const items = DEFAULT_WATCHLIST.filter((it) => it.cat === cat && it.symbol !== exclude && !THESIS_INSTRUMENT_SYMBOLS.has(it.symbol));
+      if (!items.length) return null;
+      return (
+        <optgroup key={cat} label={cat}>
           {items.map((it) => (
             <option key={it.symbol} value={it.symbol}>{it.symbol} — {it.name}</option>
           ))}
@@ -5199,7 +5225,7 @@ const ResearchLab = ({ market, points, notify, auth }) => {
         <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
           <div className="lab-field" style={{ marginTop: 0 }}>
             <span className="lab-label">Instrument</span>
-            <InstrumentSelect value={instrument} onChange={(s) => { setInstrument(s); setViewingId(null); }} />
+            <InstrumentSelect value={instrument} onChange={(s) => { setInstrument(s); setViewingId(null); }} includeWatchlist />
           </div>
           <div className="lab-field">
             <span className="lab-label">Research angles</span>
