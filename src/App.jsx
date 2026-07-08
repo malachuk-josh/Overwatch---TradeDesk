@@ -5086,6 +5086,7 @@ const ResearchBrief = ({ data }) => {
     <div className="rl-brief">
       <div className="rl-brief-head">
         <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", textTransform: "uppercase" }}>{data.verdict || "read"}</span>
+        {data._personaName && <span className="chip" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>{data._personaName}</span>}
         <h3 className="rl-headline">{data.headline || `${data.instrument} research`}</h3>
       </div>
       {data.summary && <p className="rl-summary">{data.summary}</p>}
@@ -5162,6 +5163,10 @@ const ResearchLab = ({ market, points, notify, auth }) => {
   // sign-in prompt instead of the tool, never a stale local list from a previous session.
   const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
   const [viewingId, setViewingId] = useState(null);
+  // Voices — optionally write the brief in one of the Synthesis desk's five trader personas instead
+  // of a neutral analyst tone. Off by default so the findings stay a plain sourced brief.
+  const [voicesOn, setVoicesOn] = usePersistentState("overwatch:research:voiceson", false);
+  const [persona, setPersona] = usePersistentState("overwatch:research:persona", DEFAULT_PERSONA);
   const cfg = thesisInstrumentConfig(instrument);
   const signedIn = Boolean(auth?.signedIn);
   const hydrated = useRef(false);
@@ -5192,8 +5197,12 @@ const ResearchLab = ({ market, points, notify, auth }) => {
     try {
       const token = await auth.getToken();
       const context = buildResearchContext(market, points, instrument);
-      const data = await callDesk("research", "", { instrument: cfg.symbol, name: cfg.name, question: q, context }, token);
-      const entry = { ...data, _id: uid(), _ts: Date.now(), _date: dateShort(), _time: stampNow() };
+      const trader = voicesOn ? (PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]) : null;
+      const data = await callDesk("research", "", {
+        instrument: cfg.symbol, name: cfg.name, question: q, context,
+        personaName: trader?.name || "", personaWho: trader?.who || "",
+      }, token);
+      const entry = { ...data, _id: uid(), _ts: Date.now(), _date: dateShort(), _time: stampNow(), _personaName: trader?.name || "" };
       setRun({ status: "ready", data: entry, error: null });
       setReports((prev) => {
         const next = [entry, ...prev].slice(0, 40);
@@ -5257,6 +5266,30 @@ const ResearchLab = ({ market, points, notify, auth }) => {
             </div>
           </div>
           <div className="lab-field">
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <button
+                onClick={() => setVoicesOn((v) => !v)}
+                style={{ width: 38, height: 22, borderRadius: 22, border: "none", background: voicesOn ? C.brass : "var(--line2)", position: "relative", flex: "none", cursor: "pointer", transition: ".2s" }}
+                title="Write the brief in one of the desk's five trader voices"
+                aria-pressed={voicesOn}
+              >
+                <span style={{ position: "absolute", top: 2.5, left: voicesOn ? 18 : 2.5, width: 17, height: 17, borderRadius: "50%", background: "#0c0f14", transition: ".2s" }} />
+              </button>
+              <span style={{ fontSize: 12, color: C.muted, lineHeight: 1.45 }}>
+                <b style={{ color: "var(--text)" }}>Voices</b> — {voicesOn
+                  ? <>the brief is written in <span style={{ color: C.brass }}>{(PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).name}</span>'s voice and lens.</>
+                  : "a neutral desk analyst writes the brief."}
+              </span>
+            </div>
+            {voicesOn && (
+              <select className="bd-in" style={{ marginTop: 9 }} value={persona} onChange={(e) => setPersona(e.target.value)}>
+                {Object.entries(PERSONAS).map(([id, p]) => (
+                  <option key={id} value={id}>{p.name} — {p.style}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="lab-field">
             <span className="lab-label">Prompt — edit freely or write your own</span>
             <textarea
               className="bd-ta"
@@ -5289,6 +5322,7 @@ const ResearchLab = ({ market, points, notify, auth }) => {
                     <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
                     <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
                     <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+                    {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
                     <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
                     <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
                   </div>
