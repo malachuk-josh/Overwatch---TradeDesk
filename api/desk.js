@@ -2724,10 +2724,13 @@ const RESEARCH_SCHEMA = `Respond with ONLY a raw JSON object — no markdown, no
 {"headline":"<punchy 6-12 word takeaway>","verdict":"bullish|bearish|neutral|mixed","summary":"<3-4 sentence synthesis of what you found and what it means for the instrument>","keyFindings":[{"point":"<a specific, sourced finding>","source":"<publisher name or URL you got it from>"}],"catalysts":[{"when":"<date or timeframe>","event":"<upcoming event>","impact":"<why it matters for price>"}],"risks":["<bear-case / downside bullet>"],"positioning":"<one line on flow, sentiment, short interest or analyst positioning if found, else empty string>","confidence":"high|medium|low — <one clause on why, e.g. thin/conflicting sources>","asOf":"<the recency window your sources actually cover, e.g. 'as of Jul 4 2026, sources from the past 2 weeks'>"}
 Rules: keyFindings 3-7 items, risks 2-4 items, catalysts 0-4 items. Keep every string tight. Do not fabricate — omit a field's content rather than guess.`;
 
-const buildResearchPrompt = ({ instrument, name, context, question }) => {
+const buildResearchPrompt = ({ instrument, name, context, question, personaName, personaWho }) => {
   const focus = `${instrument}${name ? ` (${name})` : ""}`;
   const grounding = context ? `\n\n=== DESK'S LIVE TAPE FOR ${instrument} (grounding — verify/extend against the web, don't just repeat it) ===\n${context}` : "";
-  return `Research target: ${focus}.${grounding}\n\n=== RESEARCH QUESTION ===\n${question}\n\nWork the live web to answer it for ${focus}, then write the brief.\n\n${RESEARCH_SCHEMA}`;
+  const voiceBlock = personaName && personaWho
+    ? `\n\n=== WHO YOU ARE ===\nYou are ${personaName}. ${personaWho}\nWrite "summary", "positioning" and the "confidence" clause in ${personaName}'s voice and decision framework — let your lens shape which findings you privilege and how you frame the read. This does NOT relax the research discipline: still cite every claim, still hunt disconfirming evidence, still separate fact from inference. "keyFindings", "catalysts" and "risks" stay factual and sourced, not editorialized.`
+    : "";
+  return `Research target: ${focus}.${grounding}${voiceBlock}\n\n=== RESEARCH QUESTION ===\n${question}\n\nWork the live web to answer it for ${focus}, then write the brief.\n\n${RESEARCH_SCHEMA}`;
 };
 
 const callResearch = async ({ prompt, timeoutMs }) => {
@@ -2784,11 +2787,15 @@ const runResearch = async (payload = {}) => {
   const question = String(payload.question || "").trim().slice(0, 2000);
   if (!instrument) throw new Error("Pick an instrument to research.");
   if (!question) throw new Error("Enter a research question.");
+  const personaName = String(payload.personaName || "").slice(0, 40);
+  const personaWho = String(payload.personaWho || "").slice(0, 2000);
   const prompt = buildResearchPrompt({
     instrument,
     name: String(payload.name || "").slice(0, 80),
     context: String(payload.context || "").slice(0, 1200),
     question,
+    personaName,
+    personaWho,
   });
   // Single pass, wide window — web search + fetch rounds can run long, and a retry would blow the
   // 60s budget. Leave ~5s headroom under maxDuration so the runtime never kills it mid-stream.
