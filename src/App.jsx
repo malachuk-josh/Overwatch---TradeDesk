@@ -1752,7 +1752,18 @@ const buildSessionRead = ({ market, points, news }) => {
   const ndx = bySymbol("NDX");
   const dji = bySymbol("DJI");
   const vix = bySymbol("VIX");
-  const indexMoves = [spx, ndx, dji].filter(Boolean);
+  // Direction reads off the live-quoted ETF proxies (SPY/QQQ/DIA carry the real-time Finnhub feed),
+  // not the cash indexes — SPX/NDX/DJI are on the delayed scanner path and freeze at the 4:00pm close,
+  // so the tone and index line would otherwise reflect a stale print. Fall back to the cash index only
+  // if its ETF proxy didn't come back (or is stale) in this sync. VIX has no ETF proxy, so it stays.
+  const proxyFor = (etf, cash) => {
+    const e = bySymbol(etf);
+    return e && !e._stale && Number.isFinite(Number(e.changePct)) ? e : cash;
+  };
+  const dirSpx = proxyFor("SPY", spx);
+  const dirNdx = proxyFor("QQQ", ndx);
+  const dirDji = proxyFor("DIA", dji);
+  const indexMoves = [dirSpx, dirNdx, dirDji].filter(Boolean);
   const avgMove = indexMoves.length
     ? indexMoves.reduce((sum, item) => sum + (Number(item.changePct) || 0), 0) / indexMoves.length
     : 0;
@@ -1801,7 +1812,7 @@ const buildSessionRead = ({ market, points, news }) => {
     : "No major U.S. event queued";
   const newsLine = news?.brief || news?.mood || "";
   const positioning = points?.positioning?.summary || "";
-  const indexLine = [spx, ndx, dji].filter(Boolean).map((t) => `${t.symbol} ${fmtSigned(t.changePct, 2, "%")}`).join(", ");
+  const indexLine = [dirSpx, dirNdx, dirDji].filter(Boolean).map((t) => `${t.symbol} ${fmtSigned(t.changePct, 2, "%")}`).join(", ");
   const summary = `${tone} read: ${indexLine || "major indexes are still loading"}. ${volRead} ${breadthRead}`;
   const cards = [
     {
