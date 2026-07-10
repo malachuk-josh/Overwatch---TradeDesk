@@ -59,6 +59,8 @@ import Search from "lucide-react/dist/esm/icons/search.mjs";
 import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close.mjs";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open.mjs";
 import { CLERK_ENABLED, AuthControl, GatedSignIn, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive, loadUserResearch, saveUserResearch } from "./auth.jsx";
+import ErrorBoundary from "./ErrorBoundary.jsx";
+import { sanitizeArchive } from "./dataShape.js";
 import "./styles.css";
 
 /* ================================================================
@@ -6597,10 +6599,10 @@ export default function Overwatch() {
         if (s) { applyLoadedSettings(s); applyLayout(s.layout); }
         const ah = await loadStored(ARCHIVE_KEY, null);
         if (Array.isArray(ah) && ah.length) {
-          setArchiveHistory(ah);
+          setArchiveHistory(sanitizeArchive(ah));
         } else {
           const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
-          const entries = legacyThesis.map((t) => ({ ...t, _type: "thesis" })).slice(0, 60);
+          const entries = sanitizeArchive(legacyThesis.map((t) => ({ ...t, _type: "thesis" }))).slice(0, 60);
           if (entries.length) setArchiveHistory(entries);
         }
       }
@@ -6647,8 +6649,8 @@ export default function Overwatch() {
       ]);
       if (cancelled) return;
       if (cachedSettings) applyLoadedSettings(cachedSettings);
-      setArchiveHistory(Array.isArray(cachedArchive) ? cachedArchive : []);
-      setResearchReports(Array.isArray(cachedResearch) ? cachedResearch : []);
+      setArchiveHistory(sanitizeArchive(cachedArchive));
+      setResearchReports(sanitizeArchive(cachedResearch));
 
       const [settingsResult, archiveResult, researchResult] = await Promise.all([
         loadUserSettings(auth.getToken),
@@ -6671,17 +6673,17 @@ export default function Overwatch() {
         cloudRevisions.current.settings = saved.revision;
       }
 
-      if (archiveResult.status === "ok") setArchiveHistory(archiveResult.data);
+      if (archiveResult.status === "ok") setArchiveHistory(sanitizeArchive(archiveResult.data));
       else if (archiveResult.status === "not-found") {
-        const seed = Array.isArray(cachedArchive) ? cachedArchive : [];
+        const seed = sanitizeArchive(cachedArchive);
         setArchiveHistory(seed);
         const saved = await saveUserArchive(auth.getToken, seed, archiveResult.revision ?? null);
         cloudRevisions.current.archive = saved.revision;
       }
 
-      if (researchResult.status === "ok") setResearchReports(researchResult.data);
+      if (researchResult.status === "ok") setResearchReports(sanitizeArchive(researchResult.data));
       else if (researchResult.status === "not-found") {
-        const seed = Array.isArray(cachedResearch) ? cachedResearch : [];
+        const seed = sanitizeArchive(cachedResearch);
         setResearchReports(seed);
         const saved = await saveUserResearch(auth.getToken, seed, researchResult.revision ?? null);
         cloudRevisions.current.research = saved.revision;
@@ -7250,6 +7252,12 @@ export default function Overwatch() {
   // Render a tab's content by id. `nav` navigates the SAME pane this content lives in (setTab for the
   // main/left pane, setSplitTab for the right pane) so cross-tab jumps stay in the window you're in.
   const renderTab = (id, nav = setTab) => {
+    // Per-tab boundary: a render throw in one tab (e.g. stale-shaped archive/thesis data) is contained
+    // to that tab and shows a recoverable fallback, so the nav and every other tab stay usable instead
+    // of the whole app white-screening. Keyed by id so switching tabs remounts a fresh boundary.
+    return <ErrorBoundary key={id} scope={id} compact>{renderTabInner(id, nav)}</ErrorBoundary>;
+  };
+  const renderTabInner = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
         return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
