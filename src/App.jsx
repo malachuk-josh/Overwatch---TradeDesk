@@ -3419,20 +3419,52 @@ const RegimeScoreRail = ({ score, leftLabel = "Defensive", rightLabel = "Constru
   );
 };
 
-// Diverging per-sector bar chart from the live SPDR quotes: one row per sector, sorted strongest →
-// weakest, bars growing right (green) / left (red) from a center zero line. Replaces the abstract
-// distribution bar + count pills and the SPDR tiles with a single quantitative view.
-const SectorBreadthBars = ({ tickers = [] }) => {
+// Map a sector display name → its SPDR ETF, tolerant of the server's naming ("Communication
+// Services" vs the frontend's "Communication Svcs") so live quotes still overlay onto server rows.
+const SECTOR_NAME_TO_ETF = new Map([
+  ...SECTOR_ETFS.map((s) => [s.sector, s]),
+  ["Communication Services", SECTOR_ETFS.find((s) => s.symbol === "XLC")],
+]);
+
+// Diverging per-sector bar chart: one row per sector, sorted strongest → weakest, bars growing right
+// (green) / left (red) from a center zero line. Primary source is the server's breadth detail (the
+// same scanner data that drives the headline count), so the bars always render when a breadth read
+// exists — even if the user's watchlist doesn't carry the sector ETFs. When a sector ETF IS in the
+// watchlist we overlay its live Finnhub quote (real-time change + price) on that row.
+const SectorBreadthBars = ({ sectors = [], tickers = [] }) => {
   const bySym = new Map(tickers.map((t) => [t.symbol, t]));
-  const rows = SECTOR_ETFS
-    .map(({ symbol, sector }) => {
-      const t = bySym.get(symbol);
-      return t && !t._stale && t.changePct != null
-        ? { symbol, sector, changePct: t.changePct, price: t.price, delayed: t.delayed }
-        : null;
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.changePct - a.changePct);
+
+  // Live watchlist ETF quotes, keyed by sector name — used to overlay real-time data onto server rows.
+  const liveBySector = new Map();
+  for (const { symbol, sector } of SECTOR_ETFS) {
+    const t = bySym.get(symbol);
+    if (t && !t._stale && t.changePct != null) liveBySector.set(sector, { symbol, ...t });
+  }
+
+  let rows = (Array.isArray(sectors) ? sectors : [])
+    .filter((s) => s && Number.isFinite(Number(s.changePct)))
+    .map((s) => {
+      const meta = SECTOR_NAME_TO_ETF.get(s.name);
+      const display = meta ? meta.sector : s.name;
+      const live = liveBySector.get(display);
+      return live
+        ? { symbol: live.symbol, sector: display, changePct: live.changePct, price: live.price, delayed: live.delayed }
+        : { symbol: meta ? meta.symbol : null, sector: display, changePct: Number(s.changePct), price: null, delayed: true };
+    });
+
+  // Fallback: no server breadth rows this sync, but the watchlist carries sector ETFs — build from those.
+  if (!rows.length) {
+    rows = SECTOR_ETFS
+      .map(({ symbol, sector }) => {
+        const t = bySym.get(symbol);
+        return t && !t._stale && t.changePct != null
+          ? { symbol, sector, changePct: t.changePct, price: t.price, delayed: t.delayed }
+          : null;
+      })
+      .filter(Boolean);
+  }
+
+  rows = rows.sort((a, b) => b.changePct - a.changePct);
   if (!rows.length) return <div style={{ color: C.muted, fontSize: 12 }}>No sector ETF quotes in the last sync — hit Sync to pull them in.</div>;
   const maxAbs = Math.max(0.4, ...rows.map((r) => Math.abs(r.changePct)));
   return (
@@ -3442,7 +3474,7 @@ const SectorBreadthBars = ({ tickers = [] }) => {
         const col = chgColor(r.changePct);
         const w = clamp((Math.abs(r.changePct) / maxAbs) * 50, 0, 50);
         return (
-          <div className="sbar-row" key={r.symbol} title={`${r.sector} (${r.symbol}) · ${fmtNum(r.price, 2)} · ${fmtSigned(r.changePct, 2, "%")}${r.delayed ? " · delayed" : ""}`}>
+          <div className="sbar-row" key={r.symbol || r.sector} title={`${r.sector}${r.symbol ? ` (${r.symbol})` : ""}${r.price != null ? ` · ${fmtNum(r.price, 2)}` : ""} · ${fmtSigned(r.changePct, 2, "%")}${r.delayed ? " · delayed" : ""}`}>
             <span className="sbar-name">{r.sector}</span>
             <div className="sbar-track">
               <span className="sbar-zero" />
@@ -3487,7 +3519,7 @@ const MarketBreadth = ({ data, tickers = [] }) => {
         <span>{pctPositive}% sectors positive</span>
         <span>Broad participation</span>
       </div>
-      <SectorBreadthBars tickers={tickers} />
+      <SectorBreadthBars sectors={sectors} tickers={tickers} />
     </div>
   );
 };
