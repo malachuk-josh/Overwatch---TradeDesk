@@ -229,6 +229,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "XLC", name: "Communication Services Sector SPDR", off: true },
 ];
 const WATCHLIST_CAP = 170; // DEFAULT_WATCHLIST is 136 entries; leaves headroom for custom additions
+const MARKET_BOARD_CAP = 62; // reserves two API slots for the active primary + paired Lab instruments
 // The named watchlist baskets (AI Infra, Healthcare, Semiconductors, ...), in first-seen order —
 // used to group the full watchlist into the Research Lab's instrument picker.
 const WATCHLIST_CATEGORIES = [...new Set(DEFAULT_WATCHLIST.map((w) => w.cat).filter(Boolean))];
@@ -399,8 +400,16 @@ const THESIS_STOCK_SET = new Set(THESIS_STOCK_TICKERS.map((i) => i.symbol));
 // `exclude` omits one symbol (e.g. the other options-calculator leg) from the list. `includeWatchlist`
 // appends the named watchlist baskets (AI Infra, Healthcare, ...) as further optgroups, for tools
 // (Research Lab) that can run on any live-quoted symbol, not just the Thesis Lab's tradable set.
-const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel, exclude, includeWatchlist = false }) => (
-  <select className={className} style={style} value={value} onChange={(e) => onChange(e.target.value)}>
+const InstrumentSelect = ({ value, onChange, className = "bd-in", style, noneLabel, exclude, includeWatchlist = false, id, ariaLabel = "Instrument", describedBy }) => (
+  <select
+    id={id}
+    className={className}
+    style={style}
+    value={value}
+    onChange={(e) => onChange(e.target.value)}
+    aria-label={ariaLabel}
+    aria-describedby={describedBy}
+  >
     {noneLabel && <option value="">{noneLabel}</option>}
     {INSTRUMENT_GROUPS.map((g) => {
       const items = THESIS_INSTRUMENTS.filter((it) => it.group === g.group && it.symbol !== exclude);
@@ -440,6 +449,9 @@ const C = {
 const SETTINGS_KEY = "overwatch:settings";
 const HISTORY_KEY = "overwatch:history";
 const ARCHIVE_KEY = "overwatch:archive";
+const accountSettingsKey = (userId) => `${SETTINGS_KEY}:${userId || "signed-out"}`;
+const accountArchiveKey = (userId) => `${ARCHIVE_KEY}:${userId || "signed-out"}`;
+const accountResearchKey = (userId) => `overwatch:research:reports:${userId || "signed-out"}`;
 const TAB_KEY = "overwatch:tab";
 // Valid tab ids — layout restore is validated against these so a stale/bad id can't blank the view.
 const LAYOUT_TAB_IDS = ["archives", "pulse", "news", "calendar", "thesis"];
@@ -858,15 +870,24 @@ const usePersistentState = (key, initial) => {
 
 /* ---------------- secure desk API layer ---------------- */
 
-const callDesk = async (operation, prompt, payload = {}, token = null) => {
+const callDesk = async (operation, _prompt, payload = {}, token = null) => {
   const res = await fetch("/api/desk", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ operation, prompt, payload }),
+    // Prompts and trust decisions live on the server. The browser only sends bounded source data
+    // and user controls, which avoids duplicating a large prompt in every request and keeps policy
+    // text out of an easily modified client payload.
+    body: JSON.stringify({ operation, payload }),
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `Desk API error ${res.status}`);
-  return data.data;
+  let data = null;
+  try { data = await res.json(); } catch { /* preserve the HTTP status below */ }
+  if (!res.ok) {
+    const error = new Error(data?.error || `Desk API error ${res.status}`);
+    error.code = data?.code || `http_${res.status}`;
+    error.status = res.status;
+    throw error;
+  }
+  return data?.data;
 };
 
 /* ---------------- prompt builders ---------------- */
@@ -1292,22 +1313,54 @@ const Card = ({ icon: Ic, title, sub, tools, children, className = "", style, on
 const Freshness = ({ at }) => {
   if (!at) return null;
   const ageMin = Math.floor((Date.now() - at.ts) / 60000);
-  const tier = ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+  const quality = at.quality || "live";
+  const tier = quality === "sample" || quality === "partial" || quality === "stale"
+    ? quality
+    : ageMin >= 30 ? "stale" : ageMin >= 10 ? "aging" : "";
+  const qualityLabel = quality === "live" ? "" : `${quality.toUpperCase()} · `;
+  const detail = (at.errors || []).filter(Boolean).join(" · ");
   return (
-    <span className={`freshness ${tier}`} title={`Last synced ${ageMin}m ago`}>
-      {tier === "stale" ? "STALE · " : ""}{at.label}{ageMin >= 2 ? ` · ${ageMin}m ago` : ""}
+    <span className={`freshness ${tier}`} title={`${qualityLabel || "Live · "}last synced ${ageMin}m ago${detail ? ` · ${detail}` : ""}`}>
+      {qualityLabel}{at.label}{ageMin >= 2 ? ` · ${ageMin}m ago` : ""}
     </span>
+  );
+};
+
+// Keep the one-second clock isolated from the 7k-line application tree. The root no longer rerenders
+// every active tab, chart and news row just to advance the header clock.
+const DeskClock = () => {
+  const [clock, setClock] = useState(nyClock());
+  const [session, setSession] = useState(marketSession());
+  useEffect(() => {
+    const id = setInterval(() => {
+      setClock(nyClock());
+      const next = marketSession();
+      setSession((current) => (current.label === next.label && current.tone === next.tone ? current : next));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <>
+      <span className="bd-clock">{clock}<span>ET</span></span>
+      <span className={`bd-session bd-session-${session.tone}`}>
+        <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
+        {session.label}
+      </span>
+    </>
   );
 };
 
 // Small hover/focus info popup for a Card's `tools` slot — explains a card's meaning without
 // permanently taking up space. Keyboard-accessible via focus (tabIndex + :focus-within in CSS).
-const InfoTip = ({ text }) => (
-  <span className="info-tip" tabIndex={0}>
-    <Info size={13} />
-    <span className="info-tip-pop">{text}</span>
-  </span>
-);
+const InfoTip = ({ text }) => {
+  const tooltipId = React.useId();
+  return (
+    <span className="info-tip" tabIndex={0} role="button" aria-label="More information" aria-describedby={tooltipId}>
+      <Info size={13} aria-hidden="true" />
+      <span id={tooltipId} role="tooltip" className="info-tip-pop">{text}</span>
+    </span>
+  );
+};
 
 // Per-symbol freshness chip: LIVE (real-time feed + trading now), a delay tag (delayed feed), or
 // nothing when the instrument's market is closed — then every price is just the last close.
@@ -2015,6 +2068,17 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
     setDrag(i);
   };
   const endDrag = () => { baseRef.current = null; setDrag(null); };
+  const setKeyboardValue = (i, nextValue) => {
+    if (!interactive) return;
+    onChange(redistributeWeights(weights, data[i].key, clamp(nextValue, 0, MAX_PILLAR)));
+  };
+  const onHandleKey = (i) => (e) => {
+    const step = e.shiftKey ? 5 : 1;
+    if (["ArrowUp", "ArrowRight"].includes(e.key)) { e.preventDefault(); setKeyboardValue(i, data[i].v + step); }
+    else if (["ArrowDown", "ArrowLeft"].includes(e.key)) { e.preventDefault(); setKeyboardValue(i, data[i].v - step); }
+    else if (e.key === "Home") { e.preventDefault(); setKeyboardValue(i, 0); }
+    else if (e.key === "End") { e.preventDefault(); setKeyboardValue(i, MAX_PILLAR); }
+  };
 
   return (
     <div style={{ width: "100%", height: 248, userSelect: "none", touchAction: "none" }}>
@@ -2057,7 +2121,22 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
           return (
             <g key={d.key}>
               {interactive && (
-                <circle cx={x} cy={y} r="18" fill="transparent" style={{ cursor: drag === i ? "grabbing" : "grab" }} onPointerDown={startDrag(i)} />
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="18"
+                  fill="transparent"
+                  style={{ cursor: drag === i ? "grabbing" : "grab" }}
+                  onPointerDown={startDrag(i)}
+                  onKeyDown={onHandleKey(i)}
+                  tabIndex={0}
+                  role="slider"
+                  aria-label={`${data[i].k} pillar weight`}
+                  aria-valuemin={0}
+                  aria-valuemax={MAX_PILLAR}
+                  aria-valuenow={data[i].v}
+                  aria-valuetext={`${fmtPct(data[i].v)} percent`}
+                />
               )}
               <circle cx={x} cy={y} r={drag === i ? 7 : 5} fill="#3B82F6" stroke="#020617" strokeWidth="1.5" style={{ pointerEvents: "none" }} />
               {drag === i && (
@@ -2071,7 +2150,14 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
         })}
         {/* center hub — click to reset every pillar back to an even split */}
         {interactive && (
-          <g style={{ cursor: "pointer" }} onPointerDown={(e) => { e.preventDefault(); onChange({ ...DEFAULT_WEIGHTS }); }}>
+          <g
+            style={{ cursor: "pointer" }}
+            onPointerDown={(e) => { e.preventDefault(); onChange({ ...DEFAULT_WEIGHTS }); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onChange({ ...DEFAULT_WEIGHTS }); } }}
+            role="button"
+            tabIndex={0}
+            aria-label="Reset pillar weights to an even split"
+          >
             <title>Reset to an even split</title>
             <circle cx={cx} cy={cy} r="14" fill="transparent" />
             <circle cx={cx} cy={cy} r="3.5" fill="#475569" stroke="#020617" strokeWidth="1" />
@@ -2099,17 +2185,23 @@ const _lmLevelsCache = new Map();
 const fetchLevelsCached = async (symbol, period = "d") => {
   const key = `${symbol}:${period}`;
   const hit = _lmLevelsCache.get(key);
+  if (hit?.promise) return hit.promise;
   if (hit && Date.now() - hit.ts < 2 * 60 * 1000) return hit.data;
-  const data = await callDesk("stocklevels", "", { symbol, period }).catch(() => null);
+  const promise = callDesk("stocklevels", "", { symbol, period }).catch(() => null);
+  _lmLevelsCache.set(key, { ts: Date.now(), promise });
+  const data = await promise;
   _lmLevelsCache.set(key, { ts: Date.now(), data });
   return data;
 };
 const _lmHistCache = new Map();
-const fetchHistoryCached = async (symbol, period = "d") => {
-  const key = `${symbol}:${period}`;
+const fetchHistoryCached = async (symbol, period = "d", { from = null } = {}) => {
+  const key = `${symbol}:${period}:${from || "recent"}`;
   const hit = _lmHistCache.get(key);
+  if (hit?.promise) return hit.promise;
   if (hit && Date.now() - hit.ts < 10 * 60 * 1000) return hit.data;
-  const data = await callDesk("history", "", { symbol, period }).catch(() => null);
+  const promise = callDesk("history", "", { symbol, period, ...(from ? { from } : {}) }).catch(() => null);
+  _lmHistCache.set(key, { ts: Date.now(), promise });
+  const data = await promise;
   _lmHistCache.set(key, { ts: Date.now(), data });
   return data;
 };
@@ -2599,20 +2691,18 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div
           className={`collapsible-header${tickersOpen ? " snap-open" : ""}`}
-          role="button"
-          tabIndex={0}
-          onClick={() => setTickersOpen((o) => !o)}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTickersOpen((o) => !o); } }}
-          aria-expanded={tickersOpen}
         >
-          <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
-          <span>Market snapshot</span>
-          <small className="snap-count" style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
-            {tickersOpen && (marketFilter !== "all" || hiddenGroups.length) ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
-          </small>
-          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <button className="collapsible-header-main" onClick={() => setTickersOpen((o) => !o)} aria-expanded={tickersOpen}>
+            <Activity size={14} className={`ic${anyMarketOpen ? " ic-live" : ""}`} />
+            <span>Market snapshot</span>
+            <small className="snap-count" style={{ marginLeft: 6, fontWeight: 400, opacity: 0.6 }}>
+              {tickersOpen && (marketFilter !== "all" || hiddenGroups.length) ? `${displayTickers.length} of ${orderedTickers.length}` : `${orderedTickers.length} instruments`}
+            </small>
+            {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </button>
+          {tickersOpen && <span className="collapsible-header-actions" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
             {tickersOpen && (
-              <span className="snap-asof" onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center" }}>
+              <span className="snap-asof" style={{ display: "flex", alignItems: "center" }}>
                 <SnapFreshness tickers={displayTickers} />
               </span>
             )}
@@ -2636,8 +2726,7 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
             {tickersOpen && (
               <SnapMarketFilter value={marketFilter} onChange={setMarketFilter} anyMarketOpen={anyMarketOpen} hidden={hiddenGroups} onToggleHide={toggleHiddenGroup} />
             )}
-            {tickersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-          </span>
+          </span>}
         </div>
         {tickersOpen && (() => {
           return (
@@ -4371,7 +4460,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
           {onPickTicker && (
             <div className="opt-block">
               <span className="lab-label">Ticker</span>
-              <InstrumentSelect value={symbol} onChange={onPickTicker} exclude={pickExclude} />
+              <InstrumentSelect value={symbol} onChange={onPickTicker} exclude={pickExclude} ariaLabel="Options calculator ticker" />
             </div>
           )}
           <div className="opt-block">
@@ -4492,7 +4581,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, deskTools, setDeskTools, market, news, points, onGoLibrary, researchViewing, setResearchViewing, notify, auth }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, generateBlockedReason, deskTools, setDeskTools, market, news, points, onGoLibrary, researchReports, setResearchReports, researchViewing, setResearchViewing, notify, auth }) => {
   const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
   // Nothing generated this session and nothing explicitly recalled — default to the most recent
   // archived thesis (newest-first) rather than an empty prompt, same unwrap as the Library's row click.
@@ -4541,9 +4630,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
     { id: "synthesis", label: "Synthesis Lab", Icon: Sparkles },
   ];
   const toolSeg = (
-    <div className="seg" style={{ maxWidth: 720 }}>
+    <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Thesis Lab tools">
       {TOOL_TABS.map((t) => (
-        <button key={t.id} className={toolView === t.id ? "on" : ""} onClick={() => setToolView(t.id)}>
+        <button key={t.id} role="tab" aria-selected={toolView === t.id} className={toolView === t.id ? "on" : ""} onClick={() => setToolView(t.id)}>
           <t.Icon size={13} /> {t.label}
         </button>
       ))}
@@ -4564,9 +4653,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   };
   const [shareState, setShareState] = useState("idle"); // idle | saving | done | error
   const shareThesis = async (thesisObj) => {
+    if (!auth?.signedIn) { notify?.("Sign in to create a shareable thesis link", "err"); return; }
     setShareState("saving");
     try {
-      const { url } = await callDesk("saveshared", undefined, { html: buildThesisPrintHTML(thesisObj) });
+      const token = await auth.getToken();
+      const { url } = await callDesk("saveshared", undefined, { thesis: thesisObj }, token);
       const full = `${window.location.origin}${url}`;
       try { await navigator.clipboard?.writeText(full); } catch {}
       setShareState("done");
@@ -4605,6 +4696,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         {toolSeg}
         <ResearchLab
           market={market} points={points} notify={notify} auth={auth}
+          reports={researchReports} setReports={setResearchReports}
           viewing={researchViewing} setViewing={setResearchViewing}
           onGoLibrary={onGoLibrary}
         />
@@ -4622,7 +4714,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             Standalone research — the Algo Lab backtests and monitors your scalper independently; it is not fed into the thesis synthesis.
           </span>
         </div>
-        <StrategyLabTab notify={notify} />
+        <StrategyLabTab notify={notify} auth={auth} />
       </div>
     );
   }
@@ -4672,7 +4764,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             {/* instrument focus + desk stance */}
             <div className="ti-col">
               <div className="ti-sec">Instrument focus<span className="ti-ln" /><InfoTip text={`Primary build target: ${activeInstrument.name}${activeInstrument.futures !== activeInstrument.symbol ? ` — ${activeInstrument.futures} is the ${activeInstrument.group === "stock" ? "index-hedge" : "live-execution"} proxy` : ""}. The focus instrument sets the levels and execution proxy, not the pillar scores.`} /></div>
-              <InstrumentSelect value={instrument} onChange={setInstrument} />
+              <InstrumentSelect value={instrument} onChange={setInstrument} ariaLabel="Primary thesis instrument" />
               <div className="ti-chips">
                 <span className="ti-chip"><span className="k">target</span> {activeInstrument.symbol}</span>
                 {activeInstrument.futures !== activeInstrument.symbol && (
@@ -4685,7 +4777,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
               {secShown ? (
                 <div className="lab-field">
                   <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Relative-value leg<button className="ti-x" title="Remove the RV leg" onClick={() => { setSecondary(""); setSecShown(false); }}>✕</button></span>
-                  <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" exclude={instrument} />
+                  <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" exclude={instrument} ariaLabel="Optional paired instrument" />
                 </div>
               ) : (
                 <button className="ti-add" onClick={() => setSecShown(true)}>+ Pair a relative-value leg</button>
@@ -4718,14 +4810,15 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
             </div>
           </div>
 
-          <button className={`btn btn-brass${inputsDirty ? " btn-dirty" : ""}`} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData} title={!anyData ? "Sync data first" : inputsDirty ? "Inputs changed since the last run" : ""}>
+          {auth?.signedIn ? <button className={`btn btn-brass${inputsDirty ? " btn-dirty" : ""}`} style={{ width: "100%", justifyContent: "center", marginTop: 14, padding: "12px" }} onClick={onGenerate} disabled={thesis.status === "loading" || !anyData || Boolean(generateBlockedReason)} title={generateBlockedReason || (!anyData ? "Sync data first" : inputsDirty ? "Inputs changed since the last run" : "")}>
             {thesis.status === "loading"
               ? <><RefreshCw size={15} className="spin" /> Synthesizing…</>
               : inputsDirty
                 ? <><RefreshCw size={15} /> Regenerate — inputs changed</>
                 : t ? <><Sparkles size={15} /> Regenerate thesis</> : <><Sparkles size={15} /> Generate today's thesis</>}
-          </button>
-          {!anyData && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, textAlign: "center" }}>Sync at least one data module first — the desk won't call a bias blind.</div>}
+          </button> : <div style={{ marginTop: 14 }}><GatedSignIn label="Sign in to generate a thesis" /></div>}
+          {!anyData && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, textAlign: "center" }}>Sync all three desk feeds first — the desk won't call a bias with missing inputs.</div>}
+          {anyData && generateBlockedReason && <div className="err" role="status" style={{ marginTop: 10 }}><AlertTriangle size={15} color={C.bear} /><span>{generateBlockedReason}</span></div>}
         </Card>
 
         {/* options calculator — consolidated single card, sits right below the thesis inputs */}
@@ -4845,7 +4938,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
               <button className="btn" onClick={() => copyThesis(t)} title="Copy thesis as text">
                 {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
               </button>
-              <button className="btn" onClick={() => shareThesis(t)} disabled={shareState === "saving"} title="Create a shareable link">
+              <button className="btn" onClick={() => shareThesis(t)} disabled={shareState === "saving" || !auth?.signedIn} title={auth?.signedIn ? "Create a shareable link" : "Sign in to create a shareable link"}>
                 {shareState === "saving" ? <><RefreshCw size={14} className="spin" /> Saving…</>
                   : shareState === "done" ? <><Check size={14} /> Link copied</>
                     : shareState === "error" ? <><AlertTriangle size={14} /> Failed</>
@@ -4895,10 +4988,25 @@ const buildThesisText = (t) => {
   return lines.filter((l) => l !== "").join("\n");
 };
 
-const buildThesisPrintHTML = (t) => {
+export const escapePrintHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+})[char]);
+
+export const buildThesisPrintHTML = (t) => {
   if (!t) return "";
-  const biasColor = t.bias === "bullish" ? "#22c55e" : t.bias === "bearish" ? "#ef4444" : "#c9a84c";
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Overwatch Thesis — ${t._date || t.instrument || ""}</title><style>
+  // Archive/cloud values are data, never markup. Escape every field before placing it in the print
+  // document so an imported or tampered thesis cannot execute in this same-origin window.
+  const e = escapePrintHTML;
+  const bias = ["bullish", "bearish", "neutral"].includes(t.bias) ? t.bias : "neutral";
+  const biasColor = bias === "bullish" ? "#22c55e" : bias === "bearish" ? "#ef4444" : "#c9a84c";
+  const score = Number.isFinite(Number(t.score)) ? Math.round(clamp(Number(t.score), -100, 100)) : 0;
+  const conviction = Number.isFinite(Number(t.conviction)) ? Math.round(clamp(Number(t.conviction), 1, 10)) : "—";
+  const list = (value) => (Array.isArray(value) ? value : []).map(e);
+  const structures = list(t._deskStructures);
+  const drivers = list(t.drivers);
+  const bullCase = list(t.bullCase);
+  const bearCase = list(t.bearCase);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Overwatch Thesis — ${e(t._date || t.instrument || "")}</title><style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Georgia,'Times New Roman',serif;font-size:13px;color:#111;background:#fff;padding:32px 48px;max-width:800px;margin:0 auto}
     h1{font-size:22px;letter-spacing:.04em;font-family:'Helvetica Neue',Arial,sans-serif;font-weight:700;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:6px}
@@ -4920,35 +5028,35 @@ const buildThesisPrintHTML = (t) => {
     @media print{body{padding:20px 30px}.bias{font-size:26px}}
   </style></head><body>
     <h1>OVERWATCH DAILY THESIS</h1>
-    <div class="meta">${t._date || ""} &nbsp;·&nbsp; Instrument: <b>${t.instrument || "SPX"}</b> &nbsp;·&nbsp; Score: <b style="color:${biasColor}">${t.score >= 0 ? "+" : ""}${t.score ?? 0}</b> &nbsp;·&nbsp; Conviction ${t.conviction ?? "—"}/10 &nbsp;·&nbsp; ${t.timestamp || t._generatedAt || ""}</div>
-    <div class="bias">${(t.bias || "—").toUpperCase()}</div>
-    <div class="headline">"${t.headline}"</div>
-    <p>${t.summary || ""}</p>
+    <div class="meta">${e(t._date)} &nbsp;·&nbsp; Instrument: <b>${e(t.instrument || "SPX")}</b> &nbsp;·&nbsp; Score: <b style="color:${biasColor}">${score >= 0 ? "+" : ""}${score}</b> &nbsp;·&nbsp; Conviction ${conviction}/10 &nbsp;·&nbsp; ${e(t.timestamp || t._generatedAt)}</div>
+    <div class="bias">${e(bias.toUpperCase())}</div>
+    <div class="headline">"${e(t.headline)}"</div>
+    <p>${e(t.summary)}</p>
 
-    ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${t._personaName || "Jack"}'s read:</b> ${t.deskRead || t.jackRead}</div>` : ""}
+    ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${e(t._personaName || "Jack")}&#39;s read:</b> ${e(t.deskRead || t.jackRead)}</div>` : ""}
 
-    ${(t._deskStructures || []).length ? `<div class="callout"><b>Structures fed into this call:</b> ${t._deskStructures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
+    ${structures.length ? `<div class="callout"><b>Structures fed into this call:</b> ${structures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
 
-    ${(t.drivers || []).length ? `<div class="callout"><b>Key drivers:</b> ${t.drivers.join(" · ")}</div>` : ""}
+    ${drivers.length ? `<div class="callout"><b>Key drivers:</b> ${drivers.join(" · ")}</div>` : ""}
 
-    ${(t.bullCase || []).length ? `
+    ${bullCase.length ? `
     <h2>Bull case</h2>
-    <ul class="bull">${t.bullCase.map((b) => `<li>${b}</li>`).join("")}</ul>` : ""}
+    <ul class="bull">${bullCase.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
 
-    ${(t.bearCase || []).length ? `
+    ${bearCase.length ? `
     <h2>Bear case</h2>
-    <ul class="bear">${t.bearCase.map((b) => `<li>${b}</li>`).join("")}</ul>` : ""}
+    <ul class="bear">${bearCase.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
 
     <h2>Levels that matter</h2>
     <table><tbody>
-      ${t.levels?.action ? `<tr><td class="lbl">Action level</td><td>${t.levels.action}</td></tr>` : ""}
-      ${t.levels?.upside ? `<tr><td class="lbl">Upside target</td><td>${t.levels.upside}</td></tr>` : ""}
-      ${t.levels?.downside ? `<tr><td class="lbl">Downside target</td><td>${t.levels.downside}</td></tr>` : ""}
-      ${t.gamePlan ? `<tr><td class="lbl">Game plan</td><td>${t.gamePlan}</td></tr>` : ""}
+      ${t.levels?.action ? `<tr><td class="lbl">Action level</td><td>${e(t.levels.action)}</td></tr>` : ""}
+      ${t.levels?.upside ? `<tr><td class="lbl">Upside target</td><td>${e(t.levels.upside)}</td></tr>` : ""}
+      ${t.levels?.downside ? `<tr><td class="lbl">Downside target</td><td>${e(t.levels.downside)}</td></tr>` : ""}
+      ${t.gamePlan ? `<tr><td class="lbl">Game plan</td><td>${e(t.gamePlan)}</td></tr>` : ""}
     </tbody></table>
 
-    <div class="guard red"><b>Thesis invalidation:</b> ${t.invalidation || "—"}</div>
-    <div class="guard amber"><b>Stand-aside conditions:</b> ${t.standAside || "—"}</div>
+    <div class="guard red"><b>Thesis invalidation:</b> ${e(t.invalidation || "—")}</div>
+    <div class="guard amber"><b>Stand-aside conditions:</b> ${e(t.standAside || "—")}</div>
 
     <div class="footer">Overwatch Daily Bias Desk &nbsp;·&nbsp; Live public market data + optional AI synthesis &nbsp;·&nbsp; Verify before trading &nbsp;·&nbsp; Not financial advice</div>
   </body></html>`;
@@ -4957,6 +5065,8 @@ const buildThesisPrintHTML = (t) => {
 const downloadPDF = (html, filename) => {
   const win = window.open("", "_blank");
   if (!win) return;
+  // The blank document needs a handle so we can invoke print; sever its opener before adding content.
+  try { win.opener = null; } catch { /* older browsers may expose a read-only opener */ }
   win.document.write(html);
   win.document.close();
   win.focus();
@@ -5002,15 +5112,27 @@ const JOURNAL_ADMIN_EMAIL = "malachuk@gmail.com";
 const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const readerRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const returnFocusRef = useRef(null);
   // Persist the open newsletter so a refresh reopens the reader instead of dumping you back to the list.
   const [previewId, setPreviewId] = usePersistentState("overwatch:journal:open", null);
+  const closePreview = useCallback(() => {
+    setPreviewId(null);
+    window.requestAnimationFrame(() => returnFocusRef.current?.focus?.());
+  }, [setPreviewId]);
+  const openPreview = (id, trigger) => {
+    returnFocusRef.current = trigger || document.activeElement;
+    setPreviewId(id);
+  };
   // Re-clicking the Jack's Journal tab bumps closeToken — close the open letter, a second way out of the
   // reader alongside Esc and the X. Skip the initial mount so a persisted-open letter stays open.
   const closeMounted = useRef(false);
   useEffect(() => {
     if (!closeMounted.current) { closeMounted.current = true; return; }
-    setPreviewId(null);
-  }, [closeToken]);
+    closePreview();
+  }, [closeToken, closePreview]);
   const canDelete = auth?.email && auth.email.toLowerCase() === JOURNAL_ADMIN_EMAIL;
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -5032,39 +5154,62 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
       });
       if (res.ok) {
         setItems((prev) => prev.filter((x) => x.id !== id));
-        setPreviewId((cur) => (cur === id ? null : cur));
+        if (previewId === id) closePreview();
+      } else {
+        const body = await res.json().catch(() => null);
+        setLoadError(body?.error || `Delete failed (${res.status})`);
       }
+    } catch (error) {
+      setLoadError(error?.message || "Delete failed");
     } finally {
       setDeletingId(null);
     }
   };
 
-  useEffect(() => {
-    fetch("/api/archive?limit=50")
-      .then((r) => r.json())
-      .then((r) => setItems(r.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadArchive = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await fetch("/api/archive?limit=50");
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || `Journal unavailable (${response.status})`);
+      setItems(Array.isArray(body?.data) ? body.data : []);
+    } catch (error) {
+      setLoadError(error?.message || "Journal unavailable");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+  useEffect(() => { loadArchive(); }, [loadArchive]);
 
   // Reader overlay: Esc closes, ← / → move between letters; lock background scroll while open.
   useEffect(() => {
     if (!previewId) return;
     const onKey = (e) => {
-      if (e.key === "Escape") { setPreviewId(null); return; }
+      if (e.key === "Escape") { closePreview(); return; }
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         const i = items.findIndex((x) => x.id === previewId);
         const n = items[i + (e.key === "ArrowRight" ? 1 : -1)];
         if (n) setPreviewId(n.id);
       }
+      if (!inSplit && e.key === "Tab") {
+        const focusable = [...(readerRef.current?.querySelectorAll('button:not([disabled]),a[href],iframe,[tabindex]:not([tabindex="-1"])') || [])];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     };
     window.addEventListener("keydown", onKey);
     // only lock background scroll for the full-screen overlay; the in-pane reader leaves the page scrollable
     if (!inSplit) document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [previewId, items, inSplit]);
+  }, [previewId, items, inSplit, closePreview]);
 
   if (loading) return <div style={{ color: C.muted, fontSize: 12.5, padding: "8px 0" }}>Loading cloud newsletters…</div>;
+  if (loadError && !items.length) return <ErrBlock msg={loadError} onRetry={loadArchive} />;
   if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
 
   const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
@@ -5088,42 +5233,51 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
           <button className="btn btn-ghost nl-reader-icon-btn" disabled={idx <= 0} onClick={() => go(-1)} title="Newer (←)"><ChevronUp size={20} /></button>
           <button className="btn btn-ghost nl-reader-icon-btn" disabled={idx < 0 || idx >= items.length - 1} onClick={() => go(1)} title="Older (→)"><ChevronDown size={20} /></button>
         </div>
-        <button className="btn btn-ghost nl-reader-icon-btn" onClick={() => setPreviewId(null)} title="Close (Esc)"><X size={20} /></button>
+        <button ref={closeButtonRef} className="btn btn-ghost nl-reader-icon-btn" onClick={closePreview} title="Close (Esc)" aria-label="Close newsletter reader"><X size={20} /></button>
       </div>
-      <iframe key={current.id} src={`/api/archive/${current.id}?rv=2`} title="Newsletter" className="nl-reader-frame" />
+      <iframe
+        key={current.id}
+        src={`/api/archive/${current.id}?rv=2`}
+        title={current.title || "Newsletter"}
+        className="nl-reader-frame"
+        sandbox="allow-popups allow-popups-to-escape-sandbox"
+        referrerPolicy="no-referrer"
+      />
     </>
   ) : null;
 
   // In split view, take over just this pane (inline) so the other pane stays visible.
   if (inSplit && current) {
-    return <div className="nl-reader nl-reader-inpane">{reader}</div>;
+    return <div ref={readerRef} className="nl-reader nl-reader-inpane" aria-label={current.title || "Newsletter reader"}>{reader}</div>;
   }
 
   return (
     <>
       <div className="hist-list" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {filtered.map((item) => (
-          <div key={item.id} className="hist-row" onClick={() => setPreviewId(previewId === item.id ? null : item.id)}>
-            <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
-              {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
-              {" "}
-              {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
-            </span>
-            {(() => {
-              const m = journalTypeMeta(item.type);
-              const Ic = m.Icon;
-              return (
-                <span className="chip" style={{ flex: "none", fontSize: 10, color: m.color, borderColor: m.color + "66", background: m.color + "14", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <Ic size={11} /> {item.type || "wrap"}
-                </span>
-              );
-            })()}
-            {item.bias && <span className="chip" style={{ color: biasColor(item.bias), borderColor: biasColor(item.bias) + "66", flex: "none", fontSize: 10 }}>{item.bias}</span>}
-            <span className="chip" style={{ flex: "none", fontSize: 10 }}>{item.instrument || "SPX"}</span>
-            <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
-              {item.title || "Untitled"}
-            </span>
-            {item.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{item.score}</span>}
+          <div key={item.id} className="hist-row">
+            <button className="hist-row-open" onClick={(event) => openPreview(item.id, event.currentTarget)} aria-label={`Read ${item.title || "newsletter"}`}>
+              <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
+                {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
+                {" "}
+                {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
+              </span>
+              {(() => {
+                const m = journalTypeMeta(item.type);
+                const Ic = m.Icon;
+                return (
+                  <span className="chip" style={{ flex: "none", fontSize: 10, color: m.color, borderColor: m.color + "66", background: m.color + "14", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    <Ic size={11} /> {item.type || "wrap"}
+                  </span>
+                );
+              })()}
+              {item.bias && <span className="chip" style={{ color: biasColor(item.bias), borderColor: biasColor(item.bias) + "66", flex: "none", fontSize: 10 }}>{item.bias}</span>}
+              <span className="chip" style={{ flex: "none", fontSize: 10 }}>{item.instrument || "SPX"}</span>
+              <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+                {item.title || "Untitled"}
+              </span>
+              {item.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{item.score}</span>}
+            </button>
             <a href={item.url || `/api/archive/${item.id}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Open full page" onClick={(e) => e.stopPropagation()}>
               <ExternalLink size={12} />
             </a>
@@ -5141,9 +5295,10 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
           </div>
         ))}
       </div>
+      {loadError && <div className="err" role="status" style={{ marginTop: 10 }}><AlertTriangle size={15} color={C.bear} /><span>{loadError}</span><button className="btn btn-sm" onClick={loadArchive}>Retry</button></div>}
       {current && createPortal(
-        <div className="nl-reader-overlay" onClick={() => setPreviewId(null)}>
-          <div className="nl-reader" onClick={(e) => e.stopPropagation()}>{reader}</div>
+        <div className="nl-reader-overlay" onClick={closePreview}>
+          <div ref={readerRef} className="nl-reader" role="dialog" aria-modal="true" aria-label={current.title || "Newsletter reader"} onClick={(e) => e.stopPropagation()}>{reader}</div>
         </div>,
         document.body
       )}
@@ -5267,14 +5422,10 @@ const ResearchBrief = ({ data }) => {
   );
 };
 
-const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing = null, onGoLibrary = null }) => {
+const ResearchLab = ({ market, points, notify, auth, reports, setReports, viewing = null, setViewing = null, onGoLibrary = null }) => {
   const [instrument, setInstrument] = usePersistentState("overwatch:research:instrument", DEFAULT_THESIS_INSTRUMENT);
   const [question, setQuestion] = useState("");
   const [run, setRun] = useState({ status: "idle", data: null, error: null });
-  // Local cache only — the source of truth for a signed-in account is the server (per-user, synced
-  // across devices). Deep research is metered, so it's account-gated: signed-out visitors see a
-  // sign-in prompt instead of the tool, never a stale local list from a previous session.
-  const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
   // Voices — optionally write the brief in one of the Synthesis desk's five trader personas instead
   // of a neutral analyst tone. Off by default so the findings stay a plain sourced brief.
   const [voicesOn, setVoicesOn] = usePersistentState("overwatch:research:voiceson", false);
@@ -5284,17 +5435,6 @@ const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing 
   const [inputsCollapsed, setInputsCollapsed] = usePersistentState("overwatch:research:inputscollapsed", false);
   const cfg = thesisInstrumentConfig(instrument);
   const signedIn = Boolean(auth?.signedIn);
-  const hydrated = useRef(false);
-
-  useEffect(() => {
-    if (!signedIn) { hydrated.current = false; return; }
-    if (hydrated.current) return;
-    hydrated.current = true;
-    (async () => {
-      const server = await loadUserResearch(auth.getToken);
-      if (Array.isArray(server)) setReports(server);
-    })();
-  }, [signedIn]);
 
   // Explicitly viewing a saved brief (via nav arrows here, or jumped in from the Library's Research
   // Archive) wins; otherwise the live run; otherwise the most recent saved brief, same unwrap as the
@@ -5328,11 +5468,7 @@ const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing 
       }, token);
       const entry = { ...data, _id: uid(), _ts: Date.now(), _date: dateShort(), _time: stampNow(), _personaName: trader?.name || "" };
       setRun({ status: "ready", data: entry, error: null });
-      setReports((prev) => {
-        const next = [entry, ...prev].slice(0, 40);
-        saveUserResearch(auth.getToken, next).catch(() => {});
-        return next;
-      });
+      setReports((prev) => [entry, ...prev].slice(0, 40));
       notify?.(`Research brief ready for ${cfg.symbol}`, "ok");
     } catch (e) {
       setRun({ status: "error", data: null, error: e?.message || "Research failed" });
@@ -5381,7 +5517,7 @@ const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing 
         <Card icon={Globe} title="Run deep research" sub="Pick an instrument, choose an angle or write your own">
           <div className="lab-field" style={{ marginTop: 0 }}>
             <span className="lab-label">Instrument</span>
-            <InstrumentSelect value={instrument} onChange={(s) => setInstrument(s)} includeWatchlist />
+            <InstrumentSelect value={instrument} onChange={(s) => setInstrument(s)} includeWatchlist ariaLabel="Research instrument" />
           </div>
           <div className="lab-field">
             <span className="lab-label">Research angles</span>
@@ -5480,27 +5616,11 @@ const ResearchLab = ({ market, points, notify, auth, viewing = null, setViewing 
 // stays browse-focused there (mirrors the Thesis Archive split: build in the Lab, review in the
 // Library). Self-contained: syncs its own copy of the same account-scoped report list Research Lab
 // writes to (loadUserResearch/saveUserResearch), same pattern CloudNewsletterList already uses.
-const ResearchArchiveTab = ({ auth, onOpenReport }) => {
-  const [reports, setReports] = usePersistentState("overwatch:research:reports", []);
+const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
   const signedIn = Boolean(auth?.signedIn);
-  const hydrated = useRef(false);
-
-  useEffect(() => {
-    if (!signedIn) { hydrated.current = false; return; }
-    if (hydrated.current) return;
-    hydrated.current = true;
-    (async () => {
-      const server = await loadUserResearch(auth.getToken);
-      if (Array.isArray(server)) setReports(server);
-    })();
-  }, [signedIn]);
 
   const deleteReport = (id) => {
-    setReports((prev) => {
-      const next = prev.filter((r) => r._id !== id);
-      if (signedIn) saveUserResearch(auth.getToken, next).catch(() => {});
-      return next;
-    });
+    setReports((prev) => prev.filter((r) => r._id !== id));
   };
 
   if (!signedIn) {
@@ -5527,12 +5647,14 @@ const ResearchArchiveTab = ({ auth, onOpenReport }) => {
         {reports.map((r) => {
           const vColor = researchVerdictColor(r.verdict);
           return (
-            <div key={r._id} className="hist-row" onClick={() => onOpenReport?.(r)}>
-              <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
-              <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
-              <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
-              {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
-              <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+            <div key={r._id} className="hist-row">
+              <button className="hist-row-open" onClick={() => onOpenReport?.(r)} aria-label={`Open research brief: ${r.headline || r.question}`}>
+                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+                <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+                <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
+                {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
+                <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
+              </button>
               <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
             </div>
           );
@@ -5544,6 +5666,8 @@ const ResearchArchiveTab = ({ auth, onOpenReport }) => {
 
 const ArchiveTab = ({
   archiveHistory,
+  researchReports,
+  setResearchReports,
   viewing,
   setViewing,
   onDeleteEntry,
@@ -5584,10 +5708,12 @@ const ArchiveTab = ({
     { id: "researcharchive", label: "Research Archive", Icon: BookMarked },
   ];
   const libSeg = (
-    <div className="seg" style={{ maxWidth: 720 }}>
+    <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Library sections">
       {LIB_TABS.map((t) => (
         <button
           key={t.id}
+          role="tab"
+          aria-selected={libTab === t.id}
           className={libTab === t.id ? "on" : ""}
           onClick={() => (t.id === "journal" && libTab === "journal" ? setJournalCloseToken((n) => n + 1) : setLibTab(t.id))}
         >
@@ -5641,29 +5767,27 @@ const ArchiveTab = ({
             const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
             const isViewingThis = viewing?._id === entry._id;
             return (
-              <div
-                key={entry._id}
-                className={`hist-row ${isViewingThis ? "viewing" : ""}`}
-                onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }}
-              >
-                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
-                <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
-                <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
-                {entry._outcome && OUTCOME_META[entry._outcome.result] && (
-                  <span className="chip" title={`Graded ${fmtSigned(entry._outcome.changePct, 2, "%")} vs the call`} style={{ color: OUTCOME_META[entry._outcome.result].color, borderColor: OUTCOME_META[entry._outcome.result].color + "66", flex: "none", fontSize: 10 }}>
-                    {OUTCOME_META[entry._outcome.result].label}
+              <div key={entry._id} className={`hist-row ${isViewingThis ? "viewing" : ""}`}>
+                <button className="hist-row-open" onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }} aria-label={`Open thesis: ${entry.headline || t?.headline || "archived thesis"}`}>
+                  <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
+                  <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
+                  <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
+                  {entry._outcome && OUTCOME_META[entry._outcome.result] && (
+                    <span className="chip" title={`Graded ${fmtSigned(entry._outcome.changePct, 2, "%")} vs the call`} style={{ color: OUTCOME_META[entry._outcome.result].color, borderColor: OUTCOME_META[entry._outcome.result].color + "66", flex: "none", fontSize: 10 }}>
+                      {OUTCOME_META[entry._outcome.result].label}
+                    </span>
+                  )}
+                  {entry._trade && Number.isFinite(entry._trade.pnl) && (
+                    <span className="mono chip" style={{ flex: "none", fontSize: 10, color: entry._trade.pnl >= 0 ? C.bull : C.bear, borderColor: (entry._trade.pnl >= 0 ? C.bull : C.bear) + "66" }}>
+                      {entry._trade.pnl >= 0 ? "+" : "−"}${fmtNum(Math.abs(entry._trade.pnl), 0)}
+                    </span>
+                  )}
+                  <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
+                  <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
+                    {entry.headline || t?.headline || "—"}
                   </span>
-                )}
-                {entry._trade && Number.isFinite(entry._trade.pnl) && (
-                  <span className="mono chip" style={{ flex: "none", fontSize: 10, color: entry._trade.pnl >= 0 ? C.bull : C.bear, borderColor: (entry._trade.pnl >= 0 ? C.bull : C.bear) + "66" }}>
-                    {entry._trade.pnl >= 0 ? "+" : "−"}${fmtNum(Math.abs(entry._trade.pnl), 0)}
-                  </span>
-                )}
-                <span className="chip" style={{ flex: "none", fontSize: 10 }}>{entry.instrument || t?.instrument || "SPX"}</span>
-                <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>
-                  {entry.headline || t?.headline || "—"}
-                </span>
-                {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
+                  {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
+                </button>
                 <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => {
                   e.stopPropagation();
                   downloadPDF(buildThesisPrintHTML(t || entry), `overwatch-thesis-${entry._date || entry.instrument || "archived"}.pdf`);
@@ -5681,7 +5805,7 @@ const ArchiveTab = ({
       )}
 
       {libTab === "researcharchive" && (
-        <ResearchArchiveTab auth={auth} onOpenReport={(r) => { setResearchViewing?.(r); onGoResearch?.(); }} />
+        <ResearchArchiveTab auth={auth} reports={researchReports} setReports={setResearchReports} onOpenReport={(r) => { setResearchViewing?.(r); onGoResearch?.(); }} />
       )}
     </div>
   );
@@ -5691,21 +5815,55 @@ const ArchiveTab = ({
    SETTINGS DRAWER + TOASTS
    ================================================================ */
 
-const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, onResetAll, storageOk, notify, auth }) => {
+const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, onResetAll, storageOk, notify, auth, cloudSync }) => {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
+  const drawerRef = useRef(null);
+  const drawerCloseRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   // Which watchlist subcategories are expanded. Default collapsed — these supplemental baskets
   // (AI Infra, Healthcare) otherwise bury the reorderable main list under 30+ rows.
   const [expandedCats, setExpandedCats] = usePersistentState("overwatch:settings:wlcats", {});
   const toggleCat = (cat) => setExpandedCats((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  useEffect(() => {
+    if (!open) return undefined;
+    const previous = document.activeElement;
+    const onKey = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); onCloseRef.current?.(); return; }
+      if (event.key !== "Tab") return;
+      const focusable = [...(drawerRef.current?.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    const priorOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.requestAnimationFrame(() => drawerCloseRef.current?.focus());
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = priorOverflow;
+      previous?.focus?.();
+    };
+  }, [open]);
   if (!open) return null;
 
   // Flip a symbol's visibility on the Pulse grid without dropping it from the board.
   const toggleTicker = (symbol) => setWatchlist(watchlist.map((x) => {
     if (x.symbol !== symbol) return x;
-    if (x.off) { const { off, ...rest } = x; return rest; }
+    if (x.off) {
+      const shown = watchlist.filter((item) => !item.off).length;
+      if (shown >= MARKET_BOARD_CAP) {
+        notify(`The live board supports ${MARKET_BOARD_CAP} shown instruments; hide one before adding ${symbol}.`, "err");
+        return x;
+      }
+      const { off, ...rest } = x; return rest;
+    }
     return { ...x, off: true };
   }));
 
@@ -5715,6 +5873,17 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
     if (hidden) return { ...x, off: true };
     const { off, ...rest } = x; return rest;
   }));
+  const showCategory = (cat, allShown) => {
+    if (!allShown) {
+      const shownOutside = watchlist.filter((item) => !item.off && item.cat !== cat).length;
+      const categorySize = watchlist.filter((item) => item.cat === cat).length;
+      if (shownOutside + categorySize > MARKET_BOARD_CAP) {
+        notify(`Showing all of ${cat} would exceed the ${MARKET_BOARD_CAP}-instrument live-board limit. Hide another group first.`, "err");
+        return;
+      }
+    }
+    setCategoryHidden(cat, allShown);
+  };
 
   // Drag-to-reorder the watchlist (and therefore the Market Pulse card order).
   const moveRow = (from, to) => {
@@ -5729,24 +5898,26 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
 
   return (
     <>
-      <div className="overlay" onClick={onClose} />
-      <div className="drawer">
+      <div className="overlay" onClick={onClose} aria-hidden="true" />
+      <div ref={drawerRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby="desk-settings-title">
         <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
           <Settings size={16} color={C.brass} />
-          <span className="disp" style={{ fontWeight: 600, fontSize: 15, marginLeft: 9, letterSpacing: ".04em" }}>DESK SETTINGS</span>
-          <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose}><X size={15} /></button>
+          <span id="desk-settings-title" className="disp" style={{ fontWeight: 600, fontSize: 15, marginLeft: 9, letterSpacing: ".04em" }}>DESK SETTINGS</span>
+          <button ref={drawerCloseRef} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose} aria-label="Close desk settings"><X size={15} /></button>
         </div>
 
         {CLERK_ENABLED && (
-          <div className={`sync-status${auth?.signedIn ? " on" : ""}`}>
-            {auth?.signedIn
-              ? <><Check size={13} /> <span>Synced to your account{auth.email ? ` · ${auth.email}` : ""}. Your watchlist, weights and library follow you across devices.</span></>
-              : <><LogIn size={13} /> <span>Sign in (top bar) to sync your watchlist, weights and thesis library across devices. Not signed in, everything stays in this browser.</span></>}
+          <div className={`sync-status${auth?.signedIn && cloudSync?.status !== "error" ? " on" : ""}${cloudSync?.status === "error" ? " error" : ""}`} role="status" aria-live="polite">
+            {!auth?.signedIn ? <><LogIn size={13} /> <span>Sign in (top bar) to sync your watchlist, weights and libraries across devices. Signed-out settings stay in this browser.</span></>
+              : cloudSync?.status === "error" ? <><AlertTriangle size={13} /> <span>{cloudSync.error || "Account sync failed. Your browser copy is still available."}</span></>
+                : cloudSync?.status === "loading" ? <><RefreshCw size={13} className="spin" /> <span>Loading your account data…</span></>
+                  : cloudSync?.status === "saving" ? <><RefreshCw size={13} className="spin" /> <span>Saving changes to your account…</span></>
+                    : <><Check size={13} /> <span>Saved to your account{auth.email ? ` · ${auth.email}` : ""}. Your watchlist, weights and libraries follow you across devices.</span></>}
           </div>
         )}
 
-        <span className="lab-label">Watchlist · {watchlist.length}</span>
-        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Drag the handle to reorder cards on Market Pulse. Use Show / Hide to control what appears — hidden names still price for the Thesis Lab.</div>
+        <span className="lab-label">Watchlist · {watchlist.length} · {watchlist.filter((item) => !item.off).length}/{MARKET_BOARD_CAP} shown</span>
+        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Drag the handle to reorder cards on Market Pulse. Use Show / Hide to control what appears; two API slots stay reserved for the active Lab pair.</div>
         {(() => {
           const rows = watchlist.map((w, i) => ({ w, i }));
           const mainRows = rows.filter(({ w }) => !w.cat);
@@ -5787,25 +5958,16 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
                 const expanded = !!expandedCats[cat];
                 return (
                   <div key={cat} className={`wl-group${expanded ? " open" : ""}`}>
-                    <button
-                      className="wl-group-head"
-                      onClick={() => toggleCat(cat)}
-                      aria-expanded={expanded}
-                      title={expanded ? "Collapse" : "Expand"}
-                    >
-                      <span className="wl-group-chev">{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
-                      <span className="wl-group-label">{cat}</span>
-                      <span className="wl-group-count">{shownCount ? `${shownCount}/${items.length} shown` : `${items.length}`}</span>
-                      <span
-                        className="wl-group-toggle"
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => { e.stopPropagation(); setCategoryHidden(cat, allShown); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); setCategoryHidden(cat, allShown); } }}
-                      >
+                    <div className="wl-group-head">
+                      <button className="wl-group-expand" onClick={() => toggleCat(cat)} aria-expanded={expanded} title={expanded ? "Collapse" : "Expand"}>
+                        <span className="wl-group-chev">{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</span>
+                        <span className="wl-group-label">{cat}</span>
+                        <span className="wl-group-count">{shownCount ? `${shownCount}/${items.length} shown` : `${items.length}`}</span>
+                      </button>
+                      <button className="wl-group-toggle" onClick={() => showCategory(cat, allShown)}>
                         {allShown ? <><EyeOff size={12} /> Hide all</> : <><Eye size={12} /> Show all</>}
-                      </span>
-                    </button>
+                      </button>
+                    </div>
                     {expanded && (
                       <div className="wl-list" style={{ marginTop: 8 }}>
                         {items.map(({ w }) => (
@@ -5864,9 +6026,9 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
 };
 
 const Toasts = ({ items }) => (
-  <div className="toasts">
+  <div className="toasts" role="region" aria-label="Desk notifications" aria-live="polite" aria-atomic="false">
     {items.map((t) => (
-      <div key={t.id} className={`toast ${t.kind === "err" ? "t-err" : "t-ok"}`}>
+      <div key={t.id} role={t.kind === "err" ? "alert" : "status"} className={`toast ${t.kind === "err" ? "t-err" : "t-ok"}`}>
         {t.kind === "err" ? <AlertTriangle size={15} color={C.bear} /> : <Check size={15} color={C.bull} />}
         <span>{t.msg}</span>
       </div>
@@ -5930,7 +6092,7 @@ const EquityCurve = ({ curve, capital }) => {
   );
 };
 
-const StrategyLabTab = ({ notify = null }) => {
+const StrategyLabTab = ({ notify = null, auth = null }) => {
   const [saved, setSaved] = usePersistentState(ALGO_PARAMS_KEY, ALGO_DEFAULTS);
   const p = { ...ALGO_DEFAULTS, ...saved };
   const set = (k, v) => setSaved((prev) => ({ ...ALGO_DEFAULTS, ...prev, [k]: v }));
@@ -5962,9 +6124,11 @@ const StrategyLabTab = ({ notify = null }) => {
   });
 
   const runNow = async () => {
+    if (!auth?.signedIn) { setBt({ status: "error", data: null, error: "Sign in to run a backtest" }); return; }
     setBt((prev) => ({ ...prev, status: "loading", error: null }));
     try {
-      const data = await callDesk("backtest", "", { params: buildParams() });
+      const token = await auth.getToken();
+      const data = await callDesk("backtest", "", { params: buildParams() }, token);
       setBt({ status: "done", data, error: null });
     } catch (e) {
       setBt({ status: "error", data: null, error: e.message });
@@ -5976,11 +6140,12 @@ const StrategyLabTab = ({ notify = null }) => {
   // tab is opened), guarded so it fires only once.
   const didAutoRun = useRef(false);
   useEffect(() => {
+    if (!auth?.signedIn) return;
     if (didAutoRun.current) return;
     didAutoRun.current = true;
     runNow();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth?.signedIn, auth?.userId]);
 
   // --- live signal monitor ---
   // Params re-poll after a short debounce (so typing doesn't spam the API), then every 60s while
@@ -5996,11 +6161,16 @@ const StrategyLabTab = ({ notify = null }) => {
     return () => clearTimeout(t);
   }, [liveParamStr]);
   useEffect(() => {
+    if (!auth?.signedIn) {
+      setLive({ status: "idle", data: null, error: null });
+      return undefined;
+    }
     let alive = true;
     const tick = async () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
-        const data = await callDesk("algolive", "", { params: JSON.parse(liveKey) });
+        const token = await auth.getToken();
+        const data = await callDesk("algolive", "", { params: JSON.parse(liveKey) }, token);
         if (!alive) return;
         setLive({ status: "done", data, error: null });
         const sig = data?.state?.signal;
@@ -6018,7 +6188,7 @@ const StrategyLabTab = ({ notify = null }) => {
     tick();
     const iv = setInterval(tick, 60000);
     return () => { alive = false; clearInterval(iv); };
-  }, [liveKey, pollSeq, notify]);
+  }, [liveKey, pollSeq, notify, auth?.signedIn, auth?.userId]);
 
   const s = bt.data?.stats, m = bt.data?.meta;
 
@@ -6037,6 +6207,17 @@ const StrategyLabTab = ({ notify = null }) => {
       <span className="algo-check-read">{reading}</span>
     </div>
   );
+
+  if (!auth?.signedIn) {
+    return (
+      <Card icon={Lock} title="Sign in required" sub="Backtests and live signal monitoring use protected market-data resources">
+        <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginTop: 0 }}>
+          Sign in to run the strategy replay and keep its live signal journal isolated to your account.
+        </p>
+        <GatedSignIn label="Sign in to use Algo Lab" />
+      </Card>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -6216,8 +6397,6 @@ export default function Overwatch() {
   // Split view: the right-pane tab id (null = single-tab mode). Restored from storage.
   const [splitTab, setSplitTab] = useState(() => { try { return localStorage.getItem("overwatch:split") || null; } catch { return null; } });
   const [winW, setWinW] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
-  const [clock, setClock] = useState(nyClock());
-  const [session, setSession] = useState(marketSession());
 
   const [watchlist, setWatchlist] = useState(DEFAULT_WATCHLIST);
   const [instrument, setInstrument] = useState(DEFAULT_THESIS_INSTRUMENT);
@@ -6234,6 +6413,7 @@ export default function Overwatch() {
   const [points, setPoints] = useState(IDLE);
   const [thesis, setThesis] = useState(IDLE);
   const [archiveHistory, setArchiveHistory] = useState([]);
+  const [researchReports, setResearchReports] = useState([]);
   const [viewing, setViewing] = useState(null);
   // Which saved research brief is being reviewed — set either by paging through the Research Lab's
   // own nav arrows, or by clicking a row in the Library's Research Archive (which also jumps here).
@@ -6295,13 +6475,24 @@ export default function Overwatch() {
   }, []);
   const autoSyncStarted = useRef(false);
   const archiveSaveTimer = useRef(null);
+  const researchSaveTimer = useRef(null);
   const storageOk = storageAvailable();
 
   // Auth + per-user cloud sync (Phase 2). Signed-out (or Clerk-disabled) → local storage only.
   const auth = useAuthSync();
-  const cloudHydrated = useRef(false); // true once this session has loaded the account's settings
+  const cloudHydrated = useRef(null); // authenticated user id once that account has hydrated
+  const cloudRevisions = useRef({ settings: null, archive: null, research: null });
+  const cloudWriteQueues = useRef({
+    settings: { running: false, pending: null },
+    archive: { running: false, pending: null },
+    research: { running: false, pending: null },
+  });
   const cloudSaveTimer = useRef(null);
-  const prevSignedIn = useRef(false); // to detect a sign-out transition (Phase 4 cache clear)
+  const prevUserId = useRef(null); // detect sign-out and in-place account switches
+  const localSettingsHydrated = useRef(!CLERK_ENABLED);
+  const [cloudSync, setCloudSync] = useState({ status: "local", at: null, error: null });
+  const authStateRef = useRef({ signedIn: auth.signedIn, userId: auth.userId });
+  authStateRef.current = { signedIn: auth.signedIn, userId: auth.userId };
 
   // Apply a persisted layout block (active tab, split pane, theme). Used only for the LOCAL settings
   // blob on first load — tab/splitTab/lightMode already restore instantly from their own local-storage
@@ -6333,44 +6524,74 @@ export default function Overwatch() {
     if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
   }, []);
 
-  /* clock */
-  useEffect(() => {
-    const id = setInterval(() => { setClock(nyClock()); setSession(marketSession()); }, 1000);
-    return () => clearInterval(id);
+  // One serialized, latest-value queue per cloud resource. A slow request can no longer overlap the
+  // next debounced save with the same revision and then resolve a self-created 409 by clobbering the
+  // newer edit. True cross-device conflicts still reload the remote winner when no newer local edit
+  // is waiting; if one is waiting, it retries once against the newly observed revision.
+  const enqueueCloudWrite = useCallback((resource, job) => {
+    const queue = cloudWriteQueues.current[resource];
+    if (!queue) return;
+    queue.pending = job;
+    if (queue.running) return;
+    queue.running = true;
+    void (async () => {
+      while (queue.pending) {
+        const current = queue.pending;
+        queue.pending = null;
+        const identity = authStateRef.current;
+        if (!identity.signedIn || identity.userId !== current.userId || cloudHydrated.current !== current.userId) continue;
+        setCloudSync((state) => ({ ...state, status: "saving", error: null }));
+        try {
+          const result = await current.save(cloudRevisions.current[resource]);
+          if (authStateRef.current.userId !== current.userId) continue;
+          cloudRevisions.current[resource] = result.revision;
+          if (!queue.pending) setCloudSync({ status: "saved", at: Date.now(), error: null });
+        } catch (error) {
+          if (authStateRef.current.userId !== current.userId) continue;
+          if (error?.code === "revision_conflict") {
+            try {
+              const latest = await current.load();
+              if (authStateRef.current.userId !== current.userId) continue;
+              cloudRevisions.current[resource] = latest.revision;
+              if (queue.pending) continue;
+              if (latest.status === "ok") current.applyLatest(latest.data);
+              setCloudSync({ status: "error", at: null, error: current.conflictMessage });
+              break;
+            } catch { /* report the original conflict below */ }
+          }
+          setCloudSync((state) => ({ ...state, status: "error", error: error?.message || current.errorMessage }));
+          break;
+        }
+      }
+      queue.running = false;
+    })();
+  }, []);
+
+  const waitForCloudIdle = useCallback(async (resource, timeoutMs = 12_000) => {
+    const queue = cloudWriteQueues.current[resource];
+    const deadline = Date.now() + timeoutMs;
+    while (queue && (queue.running || queue.pending) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return !queue || (!queue.running && !queue.pending);
   }, []);
 
   /* load persisted state */
   useEffect(() => {
     (async () => {
-      const s = await loadStored(SETTINGS_KEY, null);
-      if (s) {
-        if (Array.isArray(s.watchlist) && s.watchlist.length) setWatchlist(reconcileWatchlist(s.watchlist));
-        if (s.instrument) setInstrument(thesisInstrumentConfig(s.instrument).symbol);
-        if (s.weights) setWeights(normalizeWeightsToBudget(s.weights));
-        if (s.lean) setLean(s.lean);
-        if (s.risk) setRisk(s.risk);
-        if (s.deskTools) setDeskTools((d) => mergeSavedDeskTools(d, s.deskTools));
-        applyLayout(s.layout);
-      }
-      // Load archive. When auth is enabled the library is per-user (hydrated by the sign-in effect
-      // below) or local-only when signed out — so we never touch the shared global archive here.
-      // When auth is disabled, keep the legacy shared archive (Upstash first, local fallback).
-      let ah = null;
+      // Auth-enabled installs wait for Clerk before reading any account-owned cache. Local-only
+      // installs retain the legacy browser keys.
       if (!CLERK_ENABLED) {
-        try {
-          const kv = await callDesk("getarchive");
-          if (Array.isArray(kv)) ah = kv;
-        } catch {}
-      }
-      if (!Array.isArray(ah)) {
-        ah = await loadStored(ARCHIVE_KEY, null);
-      }
-      if (Array.isArray(ah) && ah.length) {
-        setArchiveHistory(ah);
-      } else {
-        const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
-        const entries = legacyThesis.map((t) => ({ ...t, _type: "thesis" })).slice(0, 60);
-        if (entries.length) setArchiveHistory(entries);
+        const s = await loadStored(SETTINGS_KEY, null);
+        if (s) { applyLoadedSettings(s); applyLayout(s.layout); }
+        const ah = await loadStored(ARCHIVE_KEY, null);
+        if (Array.isArray(ah) && ah.length) {
+          setArchiveHistory(ah);
+        } else {
+          const legacyThesis = (await loadStored(HISTORY_KEY, [])) || [];
+          const entries = legacyThesis.map((t) => ({ ...t, _type: "thesis" })).slice(0, 60);
+          if (entries.length) setArchiveHistory(entries);
+        }
       }
       setStorageReady(true);
     })();
@@ -6378,64 +6599,162 @@ export default function Overwatch() {
 
   /* persist on change — always keep the local cache; the cloud is layered on top when signed in */
   useEffect(() => {
-    if (storageReady) saveStored(SETTINGS_KEY, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } });
-  }, [storageReady, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
+    if (!storageReady || (CLERK_ENABLED && !auth.ready)) return;
+    if (CLERK_ENABLED && !auth.signedIn && prevUserId.current) return;
+    if (CLERK_ENABLED && !auth.signedIn && !localSettingsHydrated.current) return;
+    if (CLERK_ENABLED && auth.signedIn && auth.userId && cloudHydrated.current !== auth.userId) return;
+    const key = CLERK_ENABLED && auth.signedIn && auth.userId ? accountSettingsKey(auth.userId) : SETTINGS_KEY;
+    saveStored(key, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } });
+  }, [storageReady, auth.ready, auth.signedIn, auth.userId, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
 
-  /* on sign-in, hydrate settings from the account (source of truth); seed the account from this
-     browser's settings the first time so nothing is lost migrating from local-only. */
+  /* Hydrate the authenticated account. A confirmed not-found may seed from that user's scoped browser
+     cache; transport/auth/storage failures never do, so a temporary 5xx cannot overwrite cloud data. */
   useEffect(() => {
-    if (!storageReady || !auth.signedIn) { cloudHydrated.current = false; return; }
+    if (!storageReady || !auth.ready) return;
+    if (!auth.signedIn || !auth.userId) {
+      cloudHydrated.current = null;
+      localSettingsHydrated.current = false;
+      setCloudSync({ status: "local", at: null, error: null });
+      let cancelled = false;
+      (async () => {
+        const localSettings = await loadStored(SETTINGS_KEY, null);
+        if (cancelled) return;
+        if (localSettings) { applyLoadedSettings(localSettings); applyLayout(localSettings.layout); }
+        localSettingsHydrated.current = true;
+      })();
+      return () => { cancelled = true; };
+    }
+    const userId = auth.userId;
     let cancelled = false;
+    cloudHydrated.current = null;
+    setCloudSync({ status: "loading", at: null, error: null });
     (async () => {
-      const [cloudSettings, cloudArchive] = await Promise.all([
-        loadUserSettings(auth.getToken).catch(() => null),
-        loadUserArchive(auth.getToken).catch(() => null),
+      const [cachedSettings, cachedArchive, cachedResearch] = await Promise.all([
+        loadStored(accountSettingsKey(userId), null),
+        loadStored(accountArchiveKey(userId), []),
+        loadStored(accountResearchKey(userId), []),
       ]);
       if (cancelled) return;
-      // Settings: account is source of truth; seed it from this browser the first time.
-      if (cloudSettings) applyLoadedSettings(cloudSettings);
-      else await saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } }).catch(() => {});
-      // Thesis library: same — adopt the account's library, or seed it with the current one.
-      if (Array.isArray(cloudArchive)) setArchiveHistory(cloudArchive);
-      else await saveUserArchive(auth.getToken, archiveHistory).catch(() => {});
-      cloudHydrated.current = true;
-    })();
+      if (cachedSettings) applyLoadedSettings(cachedSettings);
+      setArchiveHistory(Array.isArray(cachedArchive) ? cachedArchive : []);
+      setResearchReports(Array.isArray(cachedResearch) ? cachedResearch : []);
+
+      const [settingsResult, archiveResult, researchResult] = await Promise.all([
+        loadUserSettings(auth.getToken),
+        loadUserArchive(auth.getToken),
+        loadUserResearch(auth.getToken),
+      ]);
+      if (cancelled) return;
+      cloudRevisions.current = {
+        settings: settingsResult.revision ?? null,
+        archive: archiveResult.revision ?? null,
+        research: researchResult.revision ?? null,
+      };
+
+      if (settingsResult.status === "ok") applyLoadedSettings(settingsResult.data);
+      else if (settingsResult.status === "not-found") {
+        const seed = cachedSettings && typeof cachedSettings === "object"
+          ? cachedSettings
+          : { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } };
+        const saved = await saveUserSettings(auth.getToken, seed, settingsResult.revision ?? null);
+        cloudRevisions.current.settings = saved.revision;
+      }
+
+      if (archiveResult.status === "ok") setArchiveHistory(archiveResult.data);
+      else if (archiveResult.status === "not-found") {
+        const seed = Array.isArray(cachedArchive) ? cachedArchive : [];
+        setArchiveHistory(seed);
+        const saved = await saveUserArchive(auth.getToken, seed, archiveResult.revision ?? null);
+        cloudRevisions.current.archive = saved.revision;
+      }
+
+      if (researchResult.status === "ok") setResearchReports(researchResult.data);
+      else if (researchResult.status === "not-found") {
+        const seed = Array.isArray(cachedResearch) ? cachedResearch : [];
+        setResearchReports(seed);
+        const saved = await saveUserResearch(auth.getToken, seed, researchResult.revision ?? null);
+        cloudRevisions.current.research = saved.revision;
+      }
+
+      if (cancelled) return;
+      cloudHydrated.current = userId;
+      setCloudSync({ status: "saved", at: Date.now(), error: null });
+    })().catch((error) => {
+      if (!cancelled) {
+        cloudHydrated.current = null;
+        setCloudSync({ status: "error", at: null, error: error?.message || "Cloud sync failed" });
+      }
+    });
     return () => { cancelled = true; };
-    // Intentionally keyed on identity/readiness only — settings changes are handled by the saver below.
+    // Settings/content changes are saved by the debounced effects below after hydration.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageReady, auth.signedIn]);
+  }, [storageReady, auth.ready, auth.signedIn, auth.userId]);
 
   /* while signed in, debounce-save settings changes to the account (after the initial hydrate). */
   useEffect(() => {
-    if (!storageReady || !auth.signedIn || !cloudHydrated.current) return;
+    if (!storageReady || !auth.signedIn || !auth.userId || cloudHydrated.current !== auth.userId) return;
     if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
     cloudSaveTimer.current = setTimeout(() => {
-      saveUserSettings(auth.getToken, { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } }).catch(() => {});
+      const snapshot = { watchlist, instrument, weights, lean, risk, deskTools, layout: { tab, splitTab, lightMode } };
+      enqueueCloudWrite("settings", {
+        userId: auth.userId,
+        save: (revision) => saveUserSettings(auth.getToken, snapshot, revision),
+        load: () => loadUserSettings(auth.getToken),
+        applyLatest: applyLoadedSettings,
+        conflictMessage: "Settings changed on another device; the latest account copy was loaded.",
+        errorMessage: "Settings save failed",
+      });
     }, 1200);
     return () => { if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current); };
-  }, [storageReady, auth.signedIn, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
+  }, [storageReady, auth.signedIn, auth.userId, watchlist, instrument, weights, lean, risk, deskTools, tab, splitTab, lightMode]);
+
   useEffect(() => {
     if (!storageReady) return;
-    saveStored(ARCHIVE_KEY, archiveHistory); // local cache always
+    if (!CLERK_ENABLED) saveStored(ARCHIVE_KEY, archiveHistory);
+    else if (auth.signedIn && auth.userId) saveStored(accountArchiveKey(auth.userId), archiveHistory);
     if (archiveSaveTimer.current) clearTimeout(archiveSaveTimer.current);
     archiveSaveTimer.current = setTimeout(() => {
-      if (auth.signedIn) {
-        // Per-user library — but not until the sign-in hydrate has run, so we never overwrite the
-        // account with pre-hydration defaults.
-        if (cloudHydrated.current) saveUserArchive(auth.getToken, archiveHistory).catch(() => {});
-      } else if (!CLERK_ENABLED) {
-        // Legacy shared archive, only when auth is disabled. (Signed-out with auth on = local only.)
-        callDesk("savearchive", undefined, { archive: archiveHistory }).catch(() => {});
+      if (auth.signedIn && auth.userId && cloudHydrated.current === auth.userId) {
+        const snapshot = archiveHistory;
+        enqueueCloudWrite("archive", {
+          userId: auth.userId,
+          save: (revision) => saveUserArchive(auth.getToken, snapshot, revision),
+          load: () => loadUserArchive(auth.getToken),
+          applyLatest: setArchiveHistory,
+          conflictMessage: "Library changed on another device; the latest account copy was loaded.",
+          errorMessage: "Archive save failed",
+          });
       }
     }, 1500);
-  }, [storageReady, archiveHistory, auth.signedIn]);
+    return () => { if (archiveSaveTimer.current) clearTimeout(archiveSaveTimer.current); };
+  }, [storageReady, archiveHistory, auth.signedIn, auth.userId]);
 
-  /* on sign-out, wipe synced data from memory so a shared browser doesn't expose the last account
-     (Phase 4). The reset writes defaults to the local cache too; signing back in re-hydrates. */
+  useEffect(() => {
+    if (!storageReady || !auth.signedIn || !auth.userId) return;
+    saveStored(accountResearchKey(auth.userId), researchReports);
+    if (researchSaveTimer.current) clearTimeout(researchSaveTimer.current);
+    researchSaveTimer.current = setTimeout(() => {
+      if (cloudHydrated.current !== auth.userId) return;
+      const snapshot = researchReports;
+      enqueueCloudWrite("research", {
+        userId: auth.userId,
+        save: (revision) => saveUserResearch(auth.getToken, snapshot, revision),
+        load: () => loadUserResearch(auth.getToken),
+        applyLatest: setResearchReports,
+        conflictMessage: "Research changed on another device; the latest account copy was loaded.",
+        errorMessage: "Research save failed",
+        });
+    }, 1500);
+    return () => { if (researchSaveTimer.current) clearTimeout(researchSaveTimer.current); };
+  }, [storageReady, researchReports, auth.signedIn, auth.userId]);
+
+  /* On sign-out or in-place account switch, wipe synced data from memory before the next identity
+     hydrates. Account-scoped browser caches remain isolated and are never shown to another user. */
   useEffect(() => {
     if (!CLERK_ENABLED || !auth.ready) return;
-    if (prevSignedIn.current && !auth.signedIn) {
-      cloudHydrated.current = false;
+    const changedIdentity = prevUserId.current && prevUserId.current !== auth.userId;
+    if (changedIdentity || (prevUserId.current && !auth.signedIn)) {
+      cloudHydrated.current = null;
       setWatchlist(DEFAULT_WATCHLIST);
       setInstrument(DEFAULT_THESIS_INSTRUMENT);
       setWeights(DEFAULT_WEIGHTS);
@@ -6443,11 +6762,13 @@ export default function Overwatch() {
       setRisk("balanced");
       setDeskTools(DEFAULT_DESK_TOOLS);
       setArchiveHistory([]);
+      setResearchReports([]);
+      setResearchViewing(null);
       setTab("pulse");
       setSplitTab(null);
     }
-    prevSignedIn.current = auth.signedIn;
-  }, [auth.ready, auth.signedIn]);
+    prevUserId.current = auth.userId;
+  }, [auth.ready, auth.signedIn, auth.userId]);
 
   const notify = useCallback((msg, kind = "ok") => {
     const id = uid();
@@ -6460,7 +6781,20 @@ export default function Overwatch() {
     setter((s) => ({ ...s, status: "loading", error: null }));
     try {
       const data = await callDesk(operation, prompt, payload);
-      setter({ status: "ready", data, error: null, at: { ts: Date.now(), label: stampNow() } });
+      const meta = data?._meta || {};
+      const fetchedAt = Date.parse(meta.fetchedAt || "");
+      setter({
+        status: "ready",
+        data,
+        error: null,
+        at: {
+          ts: Number.isFinite(fetchedAt) ? fetchedAt : Date.now(),
+          label: meta.asOf || stampNow(),
+          quality: meta.quality || "live",
+          sources: meta.sources || [],
+          errors: meta.errors || [],
+        },
+      });
       return data;
     } catch (e) {
       setter((s) => ({ ...s, status: "error", error: e.message }));
@@ -6468,26 +6802,55 @@ export default function Overwatch() {
     }
   };
   const refreshMarket = () => {
-    // Append the Thesis Lab single-stock tickers so their live prices are available to the lab tools.
-    const priceList = [...watchlist, ...THESIS_STOCK_TICKERS.filter((s) => !watchlist.some((w) => w.symbol === s.symbol))];
-    return runFetch(setMarket, "market", pricesPrompt(priceList), { watchlist: priceList });
+    // Price the visible board plus the instruments currently selected in the Lab. Hidden supplemental
+    // baskets load on demand when selected instead of consuming hundreds of quote/history calls.
+    const bySymbol = new Map(watchlist.filter((item) => !item.off).map((item) => [item.symbol, { ...item }]));
+    [instrument, secondary].filter(Boolean).forEach((symbol) => {
+      if (!bySymbol.has(symbol)) {
+        const cfg = thesisInstrumentConfig(symbol);
+        bySymbol.set(symbol, { symbol: cfg.symbol, name: cfg.name });
+      }
+    });
+    const priceList = [...bySymbol.values()];
+    if (priceList.length > 64) {
+      notify(`Market sync paused: ${priceList.length} instruments are selected, but the live endpoint supports 64. Hide ${priceList.length - 64} from Settings.`, "err");
+      return Promise.resolve(false);
+    }
+    return runFetch(setMarket, "market", undefined, { watchlist: priceList });
   };
-  const refreshNews = () => runFetch(setNews, "news", newsPrompt());
-  const refreshPoints = () => runFetch(setPoints, "points", pointsPrompt());
+  const refreshNews = () => runFetch(setNews, "news");
+  const refreshPoints = () => runFetch(setPoints, "points");
 
   const anyLoading = [market, news, points].some((m) => m.status === "loading");
-  const anyData = !!(market.data || news.data || points.data);
+  // A thesis combines all three modules. Rendering cards may degrade independently, but synthesis
+  // stays locked until the full input set exists and never turns bundled sample data into a call.
+  const anyData = Boolean(market.data && news.data && points.data);
+  const unsafeFeeds = [
+    ["market", market.data],
+    ["news", news.data],
+    ["desk points", points.data],
+  ].flatMap(([label, data]) => {
+    const meta = data?._meta;
+    if (["sample", "stale"].includes(meta?.quality)) return [`${label} is ${meta.quality}`];
+    const sampleSource = Array.isArray(meta?.sources) && meta.sources.find((source) => source?.quality === "sample");
+    return sampleSource ? [`${label} contains sample ${sampleSource.component || sampleSource.name || "data"}`] : [];
+  });
+  const generateBlockedReason = unsafeFeeds.length
+    ? `Thesis generation is paused because ${unsafeFeeds.join("; ")}. Sync again when the affected provider is current.`
+    : null;
 
   const syncAll = async ({ silent = false } = {}) => {
-    if (!silent) notify("Syncing the desk — four live feeds in flight", "ok");
+    if (!silent) notify("Syncing the desk — three feeds in flight", "ok");
     const [marketData, newsData, pointsData] = await Promise.all([refreshMarket(), refreshNews(), refreshPoints()]);
     const r = [marketData, newsData, pointsData];
+    const qualities = r.filter(Boolean).map((data) => data?._meta?.quality || "live");
+    const degraded = qualities.filter((quality) => quality !== "live");
     if (!silent) {
-      if (r.every(Boolean)) notify("Desk synced — all feeds live", "ok");
-      else if (r.some(Boolean)) notify("Partial sync — retry the failed module from its tab", "err");
+      if (r.every(Boolean) && !degraded.length) notify("Desk synced — all feeds live", "ok");
+      else if (r.some(Boolean)) notify(`Desk synced with degraded data${degraded.length ? ` · ${[...new Set(degraded)].join(", ")}` : ""}`, "err");
       else notify("Sync failed — hit sync again", "err");
     }
-    return r.every(Boolean);
+    return r.every(Boolean) && !degraded.length;
   };
 
   useEffect(() => {
@@ -6561,11 +6924,23 @@ export default function Overwatch() {
 
     let cancelled = false;
     (async () => {
-      // Pull daily closes once per distinct instrument among the ungraded theses.
-      const instruments = [...new Set(pending.map((e) => e._instrument || e.instrument || "SPX"))];
+      const targetFor = (entry) => {
+        const genKey = etDateKey(new Date(entry._ts));
+        return etMinutesOfDay(new Date(entry._ts)) < ET_CLOSE_MIN ? genKey : nextEtDateKey(genKey);
+      };
+      // Pull enough daily history to cover the oldest pending target for each instrument. The compact
+      // seven-candle chart response is not sufficient for grading older theses.
+      const oldestByInst = new Map();
+      pending.forEach((entry) => {
+        const inst = entry._instrument || entry.instrument || "SPX";
+        const target = targetFor(entry);
+        if (!oldestByInst.has(inst) || target < oldestByInst.get(inst)) oldestByInst.set(inst, target);
+      });
       const histByInst = {};
       await Promise.all(
-        instruments.map(async (inst) => { histByInst[inst] = await fetchHistoryCached(inst, "d").catch(() => null); })
+        [...oldestByInst.entries()].map(async ([inst, from]) => {
+          histByInst[inst] = await fetchHistoryCached(inst, "d", { from }).catch(() => null);
+        })
       );
       if (cancelled) return;
 
@@ -6575,21 +6950,23 @@ export default function Overwatch() {
       // 4:00pm bell has rung.
       const sessionClosed = (key) => key < nowKey || (key === nowKey && closedNow);
 
-      let changed = false;
-      const graded = archiveHistory.map((e) => {
-        if ((e._type && e._type !== "thesis") || e._outcome || !(e._spotAtGen > 0) || !e._ts) return e;
+      const outcomes = new Map();
+      pending.forEach((e) => {
         const inst = e._instrument || e.instrument || "SPX";
-        const candles = histByInst[inst]?.candles;
-        if (!candles?.length) return e;
+        const history = histByInst[inst];
+        const candles = [...(history?.candles || [])].sort((a, b) => a.t - b.t);
+        if (!candles.length) return;
         // Target close date: same-day close if generated before 4:00pm ET, otherwise the next session.
-        const genKey = etDateKey(new Date(e._ts));
-        const target = etMinutesOfDay(new Date(e._ts)) < ET_CLOSE_MIN ? genKey : nextEtDateKey(genKey);
+        const target = targetFor(e);
+        // The free provider caps daily history. Never substitute the oldest available candle for an
+        // older target session; leave the entry ungraded when its actual close is outside the range.
+        if (history?.range?.capped && history.range.from && target < history.range.from) return;
         // First completed daily bar on/after the target date (skips weekends/holidays naturally).
         const bar = candles.find((c) => {
           const k = etDateKey(new Date(c.t * 1000));
           return k >= target && sessionClosed(k);
         });
-        if (!bar || !(bar.c > 0)) return e;
+        if (!bar || !(bar.c > 0)) return;
         const changePct = ((bar.c - e._spotAtGen) / e._spotAtGen) * 100;
         // Directional grade: did price close the called way? ±0.2% is a flat push; a neutral call
         // is a hit when the close stayed inside ±0.35%.
@@ -6597,10 +6974,15 @@ export default function Overwatch() {
           ? (Math.abs(changePct) <= 0.35 ? "hit" : "miss")
           : Math.abs(changePct) <= 0.2 ? "flat"
             : (changePct > 0) === (e.bias === "bullish") ? "hit" : "miss";
-        changed = true;
-        return { ...e, _outcome: { gradedAt: Date.now(), refSpot: e._spotAtGen, evalSpot: bar.c, evalKey: etDateKey(new Date(bar.t * 1000)), atClose: true, changePct, result } };
+        outcomes.set(e._id, { gradedAt: Date.now(), refSpot: e._spotAtGen, evalSpot: bar.c, evalKey: etDateKey(new Date(bar.t * 1000)), atClose: true, changePct, result });
       });
-      if (!cancelled && changed) setArchiveHistory(graded);
+      if (!cancelled && outcomes.size) {
+        // Merge into the latest state by id so an archive add/delete made during the network request is
+        // preserved instead of being overwritten by the captured array from effect start.
+        setArchiveHistory((current) => current.map((entry) => (
+          !entry._outcome && outcomes.has(entry._id) ? { ...entry, _outcome: outcomes.get(entry._id) } : entry
+        )));
+      }
     })();
     return () => { cancelled = true; };
     // archiveHistory intentionally not a dep — this reacts to syncs; grading writes back once per entry.
@@ -6662,6 +7044,9 @@ export default function Overwatch() {
   };
 
   const generateThesis = async () => {
+    if (!auth.signedIn) { notify("Sign in to generate a thesis", "err"); return; }
+    if (!anyData) { notify("Sync all three desk feeds before generating a thesis", "err"); return; }
+    if (generateBlockedReason) { notify(generateBlockedReason, "err"); return; }
     setViewing(null);
     setThesis((s) => ({ ...s, status: "loading", error: null }));
     try {
@@ -6702,7 +7087,9 @@ export default function Overwatch() {
       // no problem, the thesis still generates.
       let jackJournal = [];
       try {
-        const r = await fetch("/api/archive?limit=8").then((x) => x.json());
+        const response = await fetch("/api/archive?limit=8");
+        if (!response.ok) throw new Error(`Journal unavailable (${response.status})`);
+        const r = await response.json();
         jackJournal = (r.data || []).map((it) => ({
           when: new Date(it.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric" }),
           type: it.type || "wrap",
@@ -6711,8 +7098,8 @@ export default function Overwatch() {
           title: it.title || "",
         }));
       } catch { jackJournal = []; }
-      const prompt = thesisPrompt({ market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusSpot, focusLevels, pair, jackJournal, persona });
-      const data = await callDesk("thesis", prompt, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels, secondary: pair ? pair.symbol : "", persona, personaName: (PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).name });
+      const token = await auth.getToken();
+      const data = await callDesk("thesis", undefined, { market: market.data, news: news.data, points: points.data, timing, weights, lean, risk, notes, instrument, deskContext, focusLevels, secondary: pair ? pair.symbol : "", pair, persona, personaName: (PERSONAS[persona] || PERSONAS[DEFAULT_PERSONA]).name, jackJournal }, token);
       const entry = {
         ...data,
         instrument,
@@ -6747,13 +7134,30 @@ export default function Overwatch() {
       };
       setThesis({ status: "ready", data: entry, error: null, at: { ts: Date.now(), label: stampNow() } });
       const newEntry = { ...entry, _type: "thesis" };
-      const entrySig = (e) => JSON.stringify({ i: e._instrument, s: e.secondary || "", w: e._weights, l: e._lean, r: e._risk, n: (e._notes || "").trim() });
-      // Rapid regenerations with identical inputs replace the previous thesis instead of flooding
-      // the archive with near-duplicates; a genuine input change still creates a fresh entry.
-      const top = archiveHistory[0];
-      const willReplace = !!(top && top._type === "thesis" && entrySig(top) === entrySig(newEntry));
-      setArchiveHistory((h) => (willReplace ? [newEntry, ...h.slice(1)] : [newEntry, ...h]).slice(0, 60));
-      notify(willReplace ? "Thesis refreshed in the archive" : "Thesis locked + saved to the archive", "ok");
+      const entrySig = (e) => JSON.stringify({
+        i: e._instrument,
+        s: e.secondary || "",
+        w: e._weights,
+        l: e._lean,
+        r: e._risk,
+        n: (e._notes || "").trim(),
+        p: e._persona || DEFAULT_PERSONA,
+        d: e._dateKey,
+        q: e._quoteAsOf || "",
+      });
+      // Replace only a true rapid retry of the same account/date/persona/data snapshot. A later-day
+      // thesis or a different persona is historical evidence and must never be silently destroyed.
+      setArchiveHistory((current) => {
+        const top = current[0];
+        const rapidRetry = !!(
+          top
+          && top._type === "thesis"
+          && Date.now() - Number(top._ts || 0) < 5 * 60 * 1000
+          && entrySig(top) === entrySig(newEntry)
+        );
+        return (rapidRetry ? [newEntry, ...current.slice(1)] : [newEntry, ...current]).slice(0, 60);
+      });
+      notify("Thesis locked + saved to the archive", "ok");
     } catch (e) {
       setThesis((s) => ({ ...s, status: "error", error: e.message }));
       notify("Synthesis failed — retry", "err");
@@ -6779,9 +7183,11 @@ export default function Overwatch() {
   // persisted UI keys (but keeps the thesis archive), pushes defaults to the account when signed in so
   // a re-hydrate can't restore old settings, then reloads so every persisted-state hook re-inits clean.
   const resetAll = useCallback(async () => {
-    try {
-      if (auth.signedIn) {
-        await saveUserSettings(auth.getToken, {
+    if (auth.signedIn) {
+      try {
+        if (cloudSaveTimer.current) clearTimeout(cloudSaveTimer.current);
+        if (!(await waitForCloudIdle("settings"))) throw new Error("An account save is still in progress");
+        const saved = await saveUserSettings(auth.getToken, {
           watchlist: DEFAULT_WATCHLIST,
           instrument: DEFAULT_THESIS_INSTRUMENT,
           weights: DEFAULT_WEIGHTS,
@@ -6789,17 +7195,24 @@ export default function Overwatch() {
           risk: "balanced",
           deskTools: DEFAULT_DESK_TOOLS,
           layout: { tab: "pulse", splitTab: null, lightMode: false },
-        }).catch(() => {});
+        }, cloudRevisions.current.settings);
+        cloudRevisions.current.settings = saved.revision;
+      } catch (error) {
+        notify(`Reset not applied — ${error?.message || "cloud save failed"}`, "err");
+        return;
       }
+    }
+    try {
       const drop = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith("overwatch:") && k !== HISTORY_KEY) drop.push(k);
+        const preserveArchive = k === HISTORY_KEY || k === ARCHIVE_KEY || k?.startsWith(`${ARCHIVE_KEY}:`);
+        if (k && k.startsWith("overwatch:") && !preserveArchive) drop.push(k);
       }
       drop.forEach((k) => localStorage.removeItem(k));
     } catch { /* storage unavailable — the state resets below still apply before reload */ }
     window.location.reload();
-  }, [auth.signedIn, auth.getToken]);
+  }, [auth.signedIn, auth.getToken, notify, waitForCloudIdle]);
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
   const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
@@ -6845,11 +7258,12 @@ export default function Overwatch() {
             persona={persona} setPersona={setPersona}
             thesis={thesis} onGenerate={generateThesis} onLogTrade={logTrade}
             history={thesisHistory} viewing={viewing} setViewing={setViewing}
-            onDeleteHist={deleteArchiveEntry} anyData={anyData}
+            onDeleteHist={deleteArchiveEntry} anyData={anyData} generateBlockedReason={generateBlockedReason}
             deskTools={deskTools} setDeskTools={setDeskTools}
             market={market.data} news={news.data} points={points.data}
             onGoLibrary={() => nav("archives")}
             researchViewing={researchViewing} setResearchViewing={setResearchViewing}
+            researchReports={researchReports} setResearchReports={setResearchReports}
             notify={notify}
             auth={auth}
           />
@@ -6858,6 +7272,8 @@ export default function Overwatch() {
         return (
           <ArchiveTab
             archiveHistory={archiveHistory}
+            researchReports={researchReports}
+            setResearchReports={setResearchReports}
             viewing={viewing}
             setViewing={setViewing}
             onDeleteEntry={deleteArchiveEntry}
@@ -6877,9 +7293,9 @@ export default function Overwatch() {
   // only navigation (the full-width top nav is hidden), so an optional right-aligned `extra` slot
   // carries the Exit-split control on the second pane.
   const paneTabs = (activeId, onPick, extra = null) => (
-    <div className="split-pane-bar">
+    <div className="split-pane-bar" role="tablist" aria-label="Pane navigation">
       {TABS.map((t) => (
-        <button key={t.id} className={`split-pane-tab${activeId === t.id ? " on" : ""}`} onClick={() => onPick(t.id)} title={t.label}>
+        <button key={t.id} role="tab" aria-selected={activeId === t.id} className={`split-pane-tab${activeId === t.id ? " on" : ""}`} onClick={() => onPick(t.id)} title={t.label}>
           <t.icon size={14} />
           <span>{t.short}</span>
         </button>
@@ -6924,11 +7340,7 @@ export default function Overwatch() {
           {winW <= 760 && CLERK_ENABLED && <span className="bd-logo-avatar"><AuthControl /></span>}
         </div>
         <div className="bd-hright">
-          <span className="bd-clock">{clock}<span>ET</span></span>
-          <span className={`bd-session bd-session-${session.tone}`}>
-            <span className={`bd-dot ${session.tone === "live" ? "dot-live" : session.tone === "warn" ? "dot-warn" : "dot-off"}`} />
-            {session.label}
-          </span>
+          <DeskClock />
           <button className="btn btn-sync-icon" onClick={syncAll} disabled={anyLoading} title={anyLoading ? "Syncing…" : "Sync live data"} aria-label={anyLoading ? "Syncing…" : "Sync live data"}>
             {anyLoading ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
           </button>
@@ -6943,9 +7355,9 @@ export default function Overwatch() {
       {/* In split view the two per-pane bars below are the only navigation, so the full-width top
           nav is hidden to remove the duplicate row (it otherwise just mirrors the left pane). */}
       {!splitOn && (
-        <nav className="bd-tabs">
+        <nav className="bd-tabs" aria-label="Primary desk navigation">
           {TABS.map((t) => (
-            <button key={t.id} className={`bd-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
+            <button key={t.id} aria-current={tab === t.id ? "page" : undefined} className={`bd-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
               <t.icon size={15} />
               {t.label}
               {t.badge ? <span className="tab-badge">{t.badge}</span> : null}
@@ -6960,10 +7372,10 @@ export default function Overwatch() {
       )}
       </div>
 
-      <div className="bd-bottom-nav">
+      <div className="bd-bottom-nav" aria-label="Mobile desk navigation">
         <div className="bd-bottom-nav-inner">
           {TABS.map((t) => (
-            <button key={t.id} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
+            <button key={t.id} aria-current={tab === t.id ? "page" : undefined} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
               {t.badge ? <span className="bd-bnav-dot" /> : null}
               <t.icon size={25} />
               {t.short}
@@ -7004,7 +7416,7 @@ export default function Overwatch() {
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
         watchlist={watchlist} setWatchlist={setWatchlist}
         onClearHistory={clearHistory} onResetAll={resetAll} storageOk={storageOk} notify={notify}
-        auth={auth}
+        auth={auth} cloudSync={cloudSync}
       />
       <Toasts items={toasts} />
     </div>
