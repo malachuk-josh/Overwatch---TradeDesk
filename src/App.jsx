@@ -3868,55 +3868,63 @@ const InternalsRegime = ({ data }) => {
         </div>
       </div>
 
-      <div className="internals-two">
-        <div className="internals-section">
-          <div className="internals-section-head">
-            <b>Trend state</b>
-            <span>{trend.read || "Trend state is based on index direction, breadth and VIX pressure."}</span>
+      {/* Two balanced columns: the tall Vol structure panel sits on the right, while the shorter
+          Trend state, Leadership/Pressure and Put/call·Desk-translation blocks stack on the left so
+          the column heights are close and there's no large empty gap beside the vol panel. */}
+      <div className="internals-regime-cols">
+        <div className="internals-col">
+          <div className="internals-section">
+            <div className="internals-section-head">
+              <b>Trend state</b>
+              <span>{trend.read || "Trend state is based on index direction, breadth and VIX pressure."}</span>
+            </div>
+            <RegimeScoreRail score={trend.score} />
+            <div className="internals-components">
+              {(trend.components || []).map((item) => <span key={item}>{item}</span>)}
+            </div>
           </div>
-          <RegimeScoreRail score={trend.score} />
-          <div className="internals-components">
-            {(trend.components || []).map((item) => <span key={item}>{item}</span>)}
-          </div>
-        </div>
-        <div className="internals-section">
-          <div className="internals-section-head">
-            <b>Vol structure</b>
-            <span>Use this to decide whether levels deserve patience or faster risk control.</span>
-          </div>
-          <VolStructureMap detail={vol} />
-        </div>
-      </div>
 
-      <div className="internals-two">
-        <div className="internals-section compact">
-          <div className="internals-section-head">
-            <b>Leadership</b>
-            <span>{strongest.length ? "Where buyers are showing up." : "Leadership pending."}</span>
+          <div className="internals-two">
+            <div className="internals-section compact">
+              <div className="internals-section-head">
+                <b>Leadership</b>
+                <span>{strongest.length ? "Where buyers are showing up." : "Leadership pending."}</span>
+              </div>
+              <div className="leader-list">
+                {strongest.map((item) => <span key={item.name}>{item.name}<b style={{ color: chgColor(item.changePct) }}>{fmtSigned(item.changePct, 2, "%")}</b></span>)}
+              </div>
+            </div>
+            <div className="internals-section compact">
+              <div className="internals-section-head">
+                <b>Pressure</b>
+                <span>{weakest.length ? "Where weakness can spread from." : "Pressure pending."}</span>
+              </div>
+              <div className="leader-list">
+                {weakest.map((item) => <span key={item.name}>{item.name}<b style={{ color: chgColor(item.changePct) }}>{fmtSigned(item.changePct, 2, "%")}</b></span>)}
+              </div>
+            </div>
           </div>
-          <div className="leader-list">
-            {strongest.map((item) => <span key={item.name}>{item.name}<b style={{ color: chgColor(item.changePct) }}>{fmtSigned(item.changePct, 2, "%")}</b></span>)}
-          </div>
-        </div>
-        <div className="internals-section compact">
-          <div className="internals-section-head">
-            <b>Pressure</b>
-            <span>{weakest.length ? "Where weakness can spread from." : "Pressure pending."}</span>
-          </div>
-          <div className="leader-list">
-            {weakest.map((item) => <span key={item.name}>{item.name}<b style={{ color: chgColor(item.changePct) }}>{fmtSigned(item.changePct, 2, "%")}</b></span>)}
-          </div>
-        </div>
-      </div>
 
-      <div className="internals-footer">
-        <div>
-          <b>Put/call</b>
-          <span>{fmtNum(internals.putCall)} · {internals.putCallRead || "Options pressure is not available in this sync."}</span>
+          <div className="internals-footer">
+            <div>
+              <b>Put/call</b>
+              <span>{fmtNum(internals.putCall)} · {internals.putCallRead || "Options pressure is not available in this sync."}</span>
+            </div>
+            <div>
+              <b>Desk translation</b>
+              <span>{trendState === "uptrend" && pctPositive >= 55 ? "Price and participation are aligned. Pullbacks deserve more respect if VIX stays contained." : trendState === "downtrend" || pctPositive <= 35 ? "Price or participation is defensive. Treat bounces as suspect until breadth repairs." : "Signals are mixed. Let levels confirm before sizing a directional thesis."}</span>
+            </div>
+          </div>
         </div>
-        <div>
-          <b>Desk translation</b>
-          <span>{trendState === "uptrend" && pctPositive >= 55 ? "Price and participation are aligned. Pullbacks deserve more respect if VIX stays contained." : trendState === "downtrend" || pctPositive <= 35 ? "Price or participation is defensive. Treat bounces as suspect until breadth repairs." : "Signals are mixed. Let levels confirm before sizing a directional thesis."}</span>
+
+        <div className="internals-col">
+          <div className="internals-section">
+            <div className="internals-section-head">
+              <b>Vol structure</b>
+              <span>Use this to decide whether levels deserve patience or faster risk control.</span>
+            </div>
+            <VolStructureMap detail={vol} />
+          </div>
         </div>
       </div>
     </div>
