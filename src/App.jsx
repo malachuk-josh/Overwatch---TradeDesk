@@ -1297,6 +1297,33 @@ const PERSONA_TILT = {
 };
 const PILLAR_LABEL = { technicals: "Technicals", macro: "Macro/News", sentiment: "Sentiment", positioning: "Positioning/Flows", eventRisk: "Event Risk" };
 
+// User-facing "Meet the Team" bios for the Desk Settings drawer — a plain-language read on who each
+// desk lead is and how picking them changes the desk logic. Kept separate from PERSONAS[].who (those
+// are the full voice guides fed to the model, with prompt-only instructions a reader shouldn't see).
+// The pillar chips render straight from PERSONA_TILT so this panel can never drift from the logic.
+const TEAM_BIOS = {
+  jack: {
+    role: "Head trader · desk default",
+    bio: "The desk lead, cut from the Stanley Druckenmiller cloth: top-down and liquidity-first, hunting the handful of moments when macro, flows and price all agree — then betting them with concentration. He writes Jack's Journal, the desk's market wraps, and his calls anchor the desk's continuity from day to day. Terse by nature: the lean, the sizing, and the one condition that flips it.",
+  },
+  jesse: {
+    role: "The old-timer — literally",
+    bio: "The spirit of Jesse Livermore, still reading the tape more than a century after the bucket shops. A pure tape reader: price, volume and trend over any narrative, patience until the market confirms, losses cut without discussion. His edge is sample size — he's watched every cycle repeat with new tickers, from radio stocks to crypto, and he'll tell you the crowd never changes.",
+  },
+  mike: {
+    role: "The skeptic",
+    bio: "The desk's contrarian in the Michael Burry mold: deep, data-obsessed research, footnotes over headlines, and a standing distrust of consensus. He isn't contrarian by temperament — he's contrarian when the underlying numbers say the crowd is provably wrong, and he'd rather be early and alone than comfortable with everyone else. Says the thing at the table nobody wants to hear.",
+  },
+  ptj: {
+    role: "The risk manager",
+    bio: "Runs the Paul Tudor Jones playbook: defense before offense, always. Every idea starts with what it costs to be wrong — the stop, the size, the invalidation — before what it pays to be right. Blends macro and technicals but grades every setup on its risk/reward first, and he'd rather praise a disciplined stand-aside than a lucky win.",
+  },
+  connors: {
+    role: "The quant",
+    bio: "The desk's statistician in the Larry Connors mold: quantified, rules-based, short-term mean reversion. He fades extremes when the historical base rates back it and talks strictly in probabilities — a setup 'tends to' bounce, it isn't 'going to'. Comfortable concluding the data doesn't support a strong view, which is its own kind of edge.",
+  },
+};
+
 // Blend the trader's manual pillar weights with the persona's signature emphasis. Multiplicative,
 // so the persona TILTS the read but the manual sliders anchor it — a pillar the trader sets high
 // stays dominant for every persona. Renormalized to the 100-point budget. Returns { weights, top },
@@ -2671,7 +2698,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen, hidden = [], onToggl
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, setWatchlist, onRefresh, onGoThesis, morningDiff = null, onDismissDiff }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, setWatchlist, onRefresh, onRefreshMarket = null, onGoThesis, morningDiff = null, onDismissDiff }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -2857,7 +2884,24 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
             {tickersOpen && showStrip && (
               <div className="lm-period" role="group" aria-label="Card candle strip timeframe" onClick={(e) => e.stopPropagation()}>
                 {["h", "d", "w"].map((p) => (
-                  <button key={p} className={stripPeriod === p ? "on" : ""} onClick={() => setStripPeriod(p)} title={p === "h" ? "Hourly candles in the strip" : p === "d" ? "Daily candles in the strip" : "Weekly candles in the strip"}>{p.toUpperCase()}</button>
+                  <button
+                    key={p}
+                    className={stripPeriod === p ? "on" : ""}
+                    onClick={() => {
+                      setStripPeriod(p);
+                      // Weekly/hourly bars are warmed server-side only when a sync asks for that
+                      // timeframe — if none of the loaded tickers carry it yet, pull a market sync.
+                      // usePersistentState persists via effect (after render), so write the pref
+                      // synchronously first: refreshMarket reads it from localStorage right away.
+                      if (p !== "d") {
+                        try { window.localStorage.setItem("overwatch:snap:stripperiod", JSON.stringify(p)); } catch { /* ignore */ }
+                        const field = p === "w" ? "histWeekly" : "histHourly";
+                        const rows = data?.tickers || [];
+                        if (rows.length && rows.every((row) => !row[field])) onRefreshMarket?.();
+                      }
+                    }}
+                    title={p === "h" ? "Hourly candles in the strip" : p === "d" ? "Daily candles in the strip" : "Weekly candles in the strip"}
+                  >{p.toUpperCase()}</button>
                 ))}
               </div>
             )}
@@ -6096,6 +6140,8 @@ const ArchiveTab = ({
 const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory, onResetAll, storageOk, notify, auth, cloudSync }) => {
   const [confirmClear, setConfirmClear] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  // Drawer sections: the desk controls (watchlist, danger zone) and the Meet the Team persona guide.
+  const [view, setView] = useState("desk");
   const [dragIndex, setDragIndex] = useState(null);
   const [overIndex, setOverIndex] = useState(null);
   const drawerRef = useRef(null);
@@ -6184,6 +6230,57 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           <button ref={drawerCloseRef} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose} aria-label="Close desk settings"><X size={15} /></button>
         </div>
 
+        <div className="seg" style={{ marginBottom: 18 }} role="tablist" aria-label="Settings sections">
+          <button role="tab" aria-selected={view === "desk"} className={view === "desk" ? "on" : ""} onClick={() => setView("desk")}>
+            <Settings size={13} /> Desk
+          </button>
+          <button role="tab" aria-selected={view === "team"} className={view === "team" ? "on" : ""} onClick={() => setView("team")}>
+            <UserRound size={13} /> Meet the Team
+          </button>
+        </div>
+
+        {view === "team" && (
+          <>
+            <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 16 }}>
+              Five desk leads can run your synthesis and research. Picking one does two things: their lens
+              <b style={{ color: "var(--text)" }}> tilts the pillar weighting</b> (the chips below show what each leans on and discounts, folded
+              on top of your own sliders), and the call is <b style={{ color: "var(--text)" }}>written in their voice</b> — same data, different
+              discipline. Pick them under Desk lead in the Synthesis Lab, or via Voices in the Research Lab.
+            </div>
+            {Object.entries(PERSONAS).map(([id, p]) => {
+              const tilt = PERSONA_TILT[id] || {};
+              const leans = PILLAR_KEYS.filter((k) => (tilt[k] || 0) >= 0.3).sort((a, b) => tilt[b] - tilt[a]);
+              const fades = PILLAR_KEYS.filter((k) => (tilt[k] || 0) <= -0.3).sort((a, b) => tilt[a] - tilt[b]);
+              return (
+                <div key={id} style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel2)", padding: "13px 14px", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 9, flexWrap: "wrap" }}>
+                    <b className="disp" style={{ fontSize: 14, letterSpacing: ".02em" }}>{p.name}</b>
+                    <span className="mono" style={{ fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", color: C.brass }}>{TEAM_BIOS[id]?.role || ""}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{p.style}</div>
+                  <p style={{ fontSize: 12, lineHeight: 1.62, color: "var(--text)", margin: "9px 0 10px" }}>{TEAM_BIOS[id]?.bio || ""}</p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {leans.map((k) => (
+                      <span key={k} className="chip" style={{ fontSize: 10, color: C.bull, borderColor: C.bull + "55", textTransform: "none", letterSpacing: 0 }} title={`${p.name} weighs ${PILLAR_LABEL[k]} more heavily than your slider alone`}>▲ {PILLAR_LABEL[k]}</span>
+                    ))}
+                    {fades.map((k) => (
+                      <span key={k} className="chip" style={{ fontSize: 10, color: C.bear, borderColor: C.bear + "55", textTransform: "none", letterSpacing: 0 }} title={`${p.name} discounts ${PILLAR_LABEL[k]} relative to your slider`}>▼ {PILLAR_LABEL[k]}</span>
+                    ))}
+                    {!leans.length && !fades.length && <span className="chip" style={{ fontSize: 10, textTransform: "none", letterSpacing: 0 }}>Balanced across pillars</span>}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.55, marginTop: 4 }}>
+              All five are fictional desk personas inspired by well-known trading disciplines — none is affiliated
+              with or endorsed by the real trader whose style it echoes. Your pillar sliders stay in charge: a
+              persona tilts the mix, it never overrides you.
+            </div>
+          </>
+        )}
+
+        {view === "desk" && (
+          <>
         {CLERK_ENABLED && (
           <div className={`sync-status${auth?.signedIn && cloudSync?.status !== "error" ? " on" : ""}${cloudSync?.status === "error" ? " error" : ""}`} role="status" aria-live="polite">
             {!auth?.signedIn ? <><LogIn size={13} /> <span>Sign in (top bar) to sync your watchlist, weights and libraries across devices. Signed-out settings stay in this browser.</span></>
@@ -6298,6 +6395,8 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
             ? "● Settings and thesis archive persist in this browser."
             : "○ Persistent storage unavailable here — settings and archives live for this session only."}
         </div>
+          </>
+        )}
       </div>
     </>
   );
@@ -7102,7 +7201,14 @@ export default function Overwatch() {
       notify(`Market sync paused: ${priceList.length} instruments are selected, but the live endpoint supports 64. Hide ${priceList.length - 64} from Settings.`, "err");
       return Promise.resolve(false);
     }
-    return runFetch(setMarket, "market", undefined, { watchlist: priceList });
+    // Tell the server which card-strip timeframe is active so it warms weekly/hourly bars only when
+    // they'll actually be rendered. Read from the persisted pref (it lives in PulseTab's state).
+    let stripPeriod = "d";
+    try {
+      const stored = JSON.parse(window.localStorage.getItem("overwatch:snap:stripperiod"));
+      if (stored === "w" || stored === "h") stripPeriod = stored;
+    } catch { /* default daily */ }
+    return runFetch(setMarket, "market", undefined, { watchlist: priceList, stripPeriod });
   };
   const refreshNews = () => runFetch(setNews, "news");
   const refreshPoints = () => runFetch(setPoints, "points");
@@ -7533,7 +7639,7 @@ export default function Overwatch() {
   const renderTabInner = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onRefreshMarket={refreshMarket} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
       case "calendar":
