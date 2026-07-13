@@ -5880,8 +5880,8 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
   return (
     <Card
       icon={BookMarked}
-      title="Research Archive"
-      sub={signedIn ? (reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet") : "Sample briefs — sign in to run and save your own"}
+      title={signedIn ? "Research Archive" : "User Research Lab Archive"}
+      sub={signedIn ? (reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet") : "Sample briefs showing what the Research Lab produces — they won't carry into your account; your own briefs land here once you sign in"}
       tools={
         signedIn && (
           <button className="btn btn-ghost btn-sm" title="Paste a research brief JSON to add it to your library (recovers a brief that was generated but never saved)" onClick={() => { setImportOpen((v) => !v); setImportErr(""); }}>
@@ -5972,10 +5972,13 @@ const ArchiveTab = ({
   // Re-clicking the Jack's Journal tab while it's already active closes any open letter — bump a token
   // the reader listens on, so tapping the tab is a second way to get back to the list.
   const [journalCloseToken, setJournalCloseToken] = useState(0);
+  // Signed-out labels lead with "User …" so a visitor browsing the sample entries understands these
+  // are the per-account archives of the Lab tools — and that the samples won't carry into an account.
+  const signedIn = !CLERK_ENABLED || Boolean(auth?.signedIn);
   const LIB_TABS = [
     { id: "journal", label: "Jack's Journal", Icon: Mail },
-    { id: "archive", label: "Thesis Archive", Icon: History },
-    { id: "researcharchive", label: "Research Archive", Icon: BookMarked },
+    { id: "archive", label: signedIn ? "Thesis Archive" : "User Thesis Lab Archive", Icon: History },
+    { id: "researcharchive", label: signedIn ? "Research Archive" : "User Research Lab Archive", Icon: BookMarked },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Library sections">
@@ -6006,8 +6009,10 @@ const ArchiveTab = ({
       {libTab === "archive" && (
         <Card
           icon={History}
-          title="Thesis Library"
-          sub={archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet"}
+          title={signedIn ? "Thesis Library" : "User Thesis Lab Archive"}
+          sub={signedIn
+            ? (archiveHistory.length ? `${archiveHistory.length} saved entr${archiveHistory.length === 1 ? "y" : "ies"} — thesis archive · synced across devices` : "No archived entries yet")
+            : "Sample entries showing what the Thesis Lab produces — they won't carry into your account; your own calls land here once you sign in"}
           tools={
             <InfoTip text="Every thesis is graded against the S&P/instrument's official 4:00pm ET close, not the next open. A call made during the session is judged on that same day's close; one made after 4:00pm ET is judged on the next trading day's close. HIT = price closed the called direction (up for bullish, down for bearish) by more than 0.2%. MISS = it closed the opposite way (or, for a neutral call, moved more than ±0.35%). FLAT = a directional call that closed within ±0.2% — a push that counts for neither. Hit rate = HITs ÷ (HITs + MISSes), so flats are excluded." />
           }
