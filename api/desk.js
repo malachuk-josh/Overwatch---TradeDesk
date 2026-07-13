@@ -3021,9 +3021,10 @@ const callAnthropic = async (prompt) => {
 // results. The desk's own live tape for the instrument is passed in as grounding context so the
 // research anchors to the real price/levels, not generic web noise.
 //
-// Bounded by design: max_uses caps the agentic loop so a run fits inside the 60s serverless budget
-// (true multi-minute deep research would need an async job + polling, a natural v2). Sonnet is the
-// default here — it's the capable-but-fast tier the desk wants for a tool that fans out to the web.
+// Bounded by design: max_uses caps the agentic loop and a 2-minute timeout keeps a run comfortably
+// inside the function's Fluid Compute budget (open-ended multi-minute deep research would need an
+// async job + polling, a natural v2). Sonnet is the default here — it's the capable-but-fast tier
+// the desk wants for a tool that fans out to the web.
 // Human date line in ET for grounding the research prompt's recency instructions.
 const dateLine = () => new Date().toLocaleString("en-US", { timeZone: "America/New_York", weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
@@ -3037,7 +3038,7 @@ Discipline:
 - Actively seek disconfirming evidence — hunt the bear case, don't just confirm a prior.
 - If the web doesn't support a claim, say the evidence is thin rather than inventing it.
 
-Hard budget: this runs inside a 60-second window. You get AT MOST 3 web searches, total, for the whole task — no page fetching, work from search results alone. Spend the searches well: don't chain extra ones to "double check" — form the brief from what you already have as soon as it's enough to answer the question. When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
+Hard budget: this runs inside a two-minute window. You get AT MOST 3 web searches, total, for the whole task — no page fetching, work from search results alone. Spend the searches well: don't chain extra ones to "double check" — form the brief from what you already have as soon as it's enough to answer the question. When done, respond with ONLY the JSON brief described by the user — no preamble, no markdown fences.`;
 
 const RESEARCH_SCHEMA = `Respond with ONLY a raw JSON object — no markdown, no commentary before or after. Exact schema:
 {"headline":"<punchy 6-12 word takeaway>","verdict":"bullish|bearish|neutral|mixed","summary":"<3-4 sentence synthesis of what you found and what it means for the instrument>","keyFindings":[{"point":"<a specific, sourced finding>","source":"<publisher name or URL you got it from>"}],"catalysts":[{"when":"<date or timeframe>","event":"<upcoming event>","impact":"<why it matters for price>"}],"risks":["<bear-case / downside bullet>"],"positioning":"<one line on flow, sentiment, short interest or analyst positioning if found, else empty string>","confidence":"high|medium|low — <one clause on why, e.g. thin/conflicting sources>","asOf":"<the recency window your sources actually cover, e.g. 'as of Jul 4 2026, sources from the past 2 weeks'>"}
@@ -3121,9 +3122,18 @@ export const runResearch = async (payload = {}) => {
     personaName,
     personaWho,
   });
-  // Single pass, wide window — web search + fetch rounds can run long, and a retry would blow the
-  // 60s budget. Leave ~5s headroom under maxDuration so the runtime never kills it mid-stream.
-  const brief = await callResearch({ prompt, timeoutMs: 55000 });
+  // Single pass, wide window. The old 55s ceiling was routinely blown by the web-search rounds:
+  // Vercel killed the function at 60s, the browser saw "failed to fetch", and the Anthropic tokens
+  // were billed anyway. Two minutes covers the slow tail with lots of headroom under maxDuration.
+  let brief;
+  try {
+    brief = await callResearch({ prompt, timeoutMs: 120000 });
+  } catch (err) {
+    if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+      throw new RequestError(504, "The research run exceeded its two-minute budget. Try again — run time varies with how many web searches the model needs.", "research_timeout");
+    }
+    throw err;
+  }
   return {
     instrument,
     name: payload.name || "",
@@ -3824,7 +3834,12 @@ export const thesisQualityIssues = ({ market, news, points } = {}) => [
 // The thesis op runs an extended-thinking synthesis call that retries once on a slow/failed
 // first pass — up to two ~22s attempts. Pin the function ceiling to the Hobby 60s cap so both
 // attempts fit and the runtime never kills the reasoning mid-flight.
-export const maxDuration = 60;
+// Fluid Compute (on by default for this project) allows up to 300s even on the free tier, and bills
+// active CPU — time spent idling on an upstream API is nearly free. The wide ceiling exists for the
+// research op, whose agentic web-search rounds regularly outlive a 60s window; killing the function
+// mid-run surfaced to the browser as "failed to fetch" while the Anthropic tokens were still billed.
+// Every other op keeps its own (much tighter) internal timeout, so they are unaffected.
+export const maxDuration = 300;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
