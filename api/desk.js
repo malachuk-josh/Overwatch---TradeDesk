@@ -1891,7 +1891,7 @@ const fetchSectorRotation = async () => {
   return data;
 };
 
-const fetchMarket = async (watchlist = []) => {
+const fetchMarket = async (watchlist = [], stripPeriod = "d") => {
   const requested = watchlist.length ? watchlist : SAMPLE_MARKET.tickers.map(({ symbol, name }) => ({ symbol, name }));
   const fearGreedPromise = fetchFearGreed().catch(() => SAMPLE_FEAR_GREED);
   let scan;
@@ -1901,13 +1901,17 @@ const fetchMarket = async (watchlist = []) => {
     return { ...SAMPLE_MARKET, fearGreed: await fearGreedPromise };
   }
 
-  // Refresh quotes plus the default DAILY strip. Weekly/hourly strips are intentionally not warmed
-  // for every hidden card on every sync; the selected card requests those through the `history`
-  // operation. We still include any warm values so this response remains backward compatible.
+  // Refresh quotes plus the default DAILY strip. Weekly/hourly bars are warmed only when the client
+  // says its card strip is actually showing that timeframe (stripPeriod "w"/"h") — not for every
+  // sync — so the extra Yahoo fan-out is paid exactly when the toggle needs it. (These primers were
+  // previously defined but never called from any path, which left histWeekly/histHourly permanently
+  // null and the H/W strip blank.) Any already-warm values still ride along regardless.
   const symbols = requested.map((i) => i.symbol);
   const [finnhubQuotes, histMap] = await Promise.all([
     primeFinnhubQuotes(symbols),
     primeBoardHistory(symbols).catch(() => ({})),
+    stripPeriod === "w" ? primeBoardHistoryWeekly(symbols).catch(() => ({})) : Promise.resolve(null),
+    stripPeriod === "h" ? primeBoardHistoryHourly(symbols).catch(() => ({})) : Promise.resolve(null),
   ]);
   const warmMap = (warm, freshMs) => Object.fromEntries(symbols.flatMap((symbol) => {
     const entry = warm[symbol];
@@ -3871,7 +3875,7 @@ export default async function handler(req, res) {
 
     let data;
     let metaOverrides = {};
-    if (operation === "market") data = await fetchMarket(normalizeWatchlist(rawPayload.watchlist));
+    if (operation === "market") data = await fetchMarket(normalizeWatchlist(rawPayload.watchlist), ["w", "h"].includes(rawPayload.stripPeriod) ? rawPayload.stripPeriod : "d");
     else if (operation === "news") data = await fetchNews();
     else if (operation === "points") data = await fetchPoints();
     else if (operation === "stocklevels") {
