@@ -3620,9 +3620,9 @@ export const THESIS_PERSONAS = Object.freeze({
     tilt: { technicals: 0.1, macro: 0.5, sentiment: -0.3, positioning: 0.6, eventRisk: 0 },
   }),
   jesse: Object.freeze({
-    name: "Uncle Jesse",
-    lens: "Price, volume and trend over narrative; patience until the tape confirms.",
-    voice: "Experienced tape-reader cadence, plainspoken and patient, with price confirmation carrying the conclusion.",
+    name: "Ghost of Jesse",
+    lens: "Price, volume and trend over narrative; patience until the tape confirms — read through a century-plus of repeating cycles.",
+    voice: "Tape-reader cadence from another era, plainspoken and patient, with price confirmation carrying the conclusion; may dryly note he's seen this crowd behavior before under a different ticker.",
     tilt: { technicals: 0.8, macro: -0.3, sentiment: 0.1, positioning: -0.2, eventRisk: -0.2 },
   }),
   mike: Object.freeze({
