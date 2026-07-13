@@ -3052,7 +3052,7 @@ const buildResearchPrompt = ({ instrument, name, context, question, personaName,
   const focus = `${instrument}${name ? ` (${name})` : ""}`;
   const grounding = context ? `\n\n=== DESK'S LIVE TAPE FOR ${instrument} (grounding — verify/extend against the web, don't just repeat it) ===\n${context}` : "";
   const voiceBlock = personaName && personaWho
-    ? `\n\n=== WHO YOU ARE ===\nYou are ${personaName}. ${personaWho}\nWrite "summary", "positioning" and the "confidence" clause in ${personaName}'s voice and decision framework — let your lens shape which findings you privilege and how you frame the read. This does NOT relax the research discipline: still cite every claim, still hunt disconfirming evidence, still separate fact from inference. "keyFindings", "catalysts" and "risks" stay factual and sourced, not editorialized.`
+    ? `\n\n=== WHO YOU ARE ===\nYou are ${personaName}. ${personaWho}\nWrite "summary", "positioning" and the "confidence" clause in ${personaName}'s voice and decision framework — let your lens shape which findings you privilege and how you frame the read. This does NOT relax the research discipline: still cite every claim, still hunt disconfirming evidence, still separate fact from inference. "keyFindings", "catalysts" and "risks" stay factual and sourced, not editorialized.\nThe voice lives INSIDE the JSON string values only — it never changes the response format. Keep the voiced strings tight (the summary is 3-4 sentences, not a monologue), and end your reply with the closing brace of the JSON: no prose before it, after it, or around it.`
     : "";
   return `Research target: ${focus}.${grounding}${voiceBlock}\n\n=== RESEARCH QUESTION ===\n${question}\n\nWork the live web to answer it for ${focus}, then write the brief.\n\n${RESEARCH_SCHEMA}`;
 };
@@ -3068,7 +3068,10 @@ const callResearch = async ({ prompt, timeoutMs }) => {
     body: JSON.stringify({
       // Sonnet is the fast-but-capable tier the desk wants for a web-fanning tool. Overridable.
       model: process.env.ANTHROPIC_RESEARCH_MODEL || "claude-sonnet-5",
-      max_tokens: 3500,
+      // Output cap must cover between-search narration + the full JSON brief. 3500 proved too tight
+      // for the wordier personas (Ghost of Jesse hit it and the JSON truncated mid-array, killing
+      // the run at the parse step after all tokens were already billed). 8000 leaves ample headroom.
+      max_tokens: 8000,
       system: RESEARCH_SYSTEM(dateLine()),
       // web_search_20260209 carries dynamic filtering: Claude filters results with code before they
       // reach context, for better signal + token efficiency. max_uses bounds the agentic loop so the
@@ -3085,10 +3088,27 @@ const callResearch = async ({ prompt, timeoutMs }) => {
   if (!response.ok) throw new Error(`Anthropic research returned ${response.status}`);
   const payload = await response.json();
   const blocks = Array.isArray(payload?.content) ? payload.content : [];
-  // The brief is the model's final text block (it narrates between searches in earlier text blocks).
+  // The brief is normally the model's FINAL text block (it narrates between searches in earlier
+  // ones) — but not reliably: some runs tack narration after the JSON or split output across
+  // blocks, which used to fail the whole run with "Model did not return JSON" even though a valid
+  // brief existed one block earlier. Scan text blocks newest-first and take the first that parses.
   const textBlocks = blocks.filter((b) => b.type === "text" && b.text);
-  const finalText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
-  const brief = validateResearchBrief(cleanModelJson(finalText));
+  let brief = null;
+  let parseError = null;
+  for (let i = textBlocks.length - 1; i >= 0 && !brief; i--) {
+    try { brief = validateResearchBrief(cleanModelJson(textBlocks[i].text)); }
+    catch (err) { if (!parseError) parseError = err; }
+  }
+  if (!brief) {
+    // Billed tokens deserve a diagnosable failure: say WHY the brief is unreadable, and log the
+    // tail of the model output so the exact malformation is visible in the runtime logs.
+    const tail = String(textBlocks[textBlocks.length - 1]?.text || "").slice(-400);
+    console.error(`research brief unparseable (stop_reason=${payload?.stop_reason}): ${parseError?.message}; output tail: ${tail}`);
+    if (payload?.stop_reason === "max_tokens") {
+      throw new RequestError(502, "The research brief was cut off mid-generation by the output limit. Run it again — this is transient, not a problem with your prompt.", "research_truncated");
+    }
+    throw new RequestError(502, "The research model returned a brief the desk couldn't parse. Run it again — this is transient, not a problem with your prompt.", "research_bad_output");
+  }
   // Ground-truth source list: every unique URL that actually came back from a search tool result —
   // the verifiable trail, independent of what the model chose to list in keyFindings.
   const sources = [];
