@@ -1159,6 +1159,131 @@ Backstory guardrail: keep it archetypal, not verifiable — no fake specific bac
 };
 const DEFAULT_PERSONA = "jack";
 
+// Illustrative library content shown to signed-out visitors so the Thesis Archive / Research Archive
+// aren't empty on first look — a new visitor can see what the Lab tools actually produce before
+// signing in to build their own. Explicitly tagged `_sample: true` (never a real dated call) and
+// `_date: "Sample"` so nothing here is mistaken for a live thesis or goes stale-looking over time.
+// Shown ONLY when the signed-out visitor has no real local archive of their own (see
+// effectiveArchiveHistory/effectiveResearchReports in the Overwatch component) — a returning user's
+// own saved-locally entries always take priority.
+const SAMPLE_ARCHIVE = [
+  {
+    _id: "sample-thesis-spx", _type: "thesis", _sample: true, _date: "Sample", _time: "",
+    instrument: "SPX", secondary: "", timestamp: "Sample entry", timingNote: "Illustrative — not a live call.",
+    bias: "bullish", score: 42, conviction: 6,
+    headline: "Buyers hold the pivot, breadth confirms the move",
+    summary: "Price is accepting above the session pivot with the futures complex leading the cash indexes higher into the open. Breadth is broad rather than concentrated in a handful of mega-caps, and the VIX term structure stays in orderly contango — a backdrop that typically lets dips get bought rather than sold. The weighted read leans bullish but not maximum conviction: positioning is already constructive, which caps how much further sentiment alone can carry the tape.",
+    pillarRead: "Technicals and positioning are the top-weighted drivers here — the pivot reclaim plus broad sector participation outweighs a slightly stretched sentiment pillar.",
+    stanceRead: "Data-decided lean with a balanced risk appetite; conviction is capped at 6 because participation, while broad, isn't yet extreme enough to earn a higher-conviction call.",
+    deskRead: "This is a hold-and-add tape, not a chase. I want to see the pivot defended on the first pullback before sizing up — buyers showing up on weakness tells you more than buyers showing up on strength. Continuity with the last few sessions: breadth has been building, not fading.",
+    pairRead: "",
+    drivers: ["Futures leading cash into the open", "Breadth: broad sector participation, not narrow", "VIX term structure in orderly contango", "Pivot reclaimed and holding on the retest", "Positioning already constructive — caps upside conviction", "No major macro catalyst risk on the calendar today"],
+    bullCase: ["Broad sector participation confirms the move isn't just a mega-cap story.", "Vol structure in contango argues dips get bought, not sold."],
+    bearCase: ["Positioning is already constructive — limited fresh buying power left on the sidelines.", "A reversal below the pivot on volume would flip the read fast."],
+    levels: { action: "Session pivot — acceptance above confirms the bullish case", upside: "Prior session high, then the weekly high", downside: "Pivot breakdown, then the prior day's low" },
+    gamePlan: "Favor dip-buys toward the pivot with a defined stop below it; scale out into the upside targets rather than pressing the whole size at once.",
+    invalidation: "A daily close back below the pivot on above-average volume ends the bullish case.",
+    standAside: "If breadth narrows sharply intraday (a handful of names carrying the index) while price still grinds higher, that's a warning sign to stand aside rather than chase.",
+    _instrument: "SPX", _weights: { technicals: 20, macro: 20, sentiment: 20, positioning: 20, eventRisk: 20 },
+    _lean: "auto", _risk: "balanced", _notes: "", _persona: "jack", _personaName: "Jack",
+  },
+  {
+    _id: "sample-thesis-aapl", _type: "thesis", _sample: true, _date: "Sample", _time: "",
+    instrument: "AAPL", secondary: "", timestamp: "Sample entry", timingNote: "Illustrative — not a live call.",
+    bias: "bearish", score: -38, conviction: 5,
+    headline: "A rich multiple with no room for a margin miss",
+    summary: "AAPL trades well above its historical earnings multiple at a moment when input costs — DRAM and NAND specifically — are running hot enough to pressure gross margin. The stock's own technicals aren't broken, but the setup is priced for flawless execution, and the pillar that matters most here (positioning/valuation) is stretched, not the price action. This is a valuation-and-margin call, not a momentum call.",
+    pillarRead: "Positioning carries the most weight in this read — a multiple well above historical norms leaves little room for a gross-margin surprise, which is the specific risk building in the supply chain.",
+    stanceRead: "Bear lean with a balanced risk appetite; conviction sits at 5 because the technical trend hasn't broken yet — this is a valuation call ahead of the trend, not a confirmed reversal.",
+    deskRead: "A thesis without the underlying data is just a hunch with confidence — and the underlying data here is input costs eating into the highest-margin part of the model quarter over quarter. Being early looks identical to being wrong until the print proves it one way or the other. I'd rather have the position sized for that uncertainty than not have it at all.",
+    pairRead: "",
+    drivers: ["Valuation well above historical multiple", "Input-cost pressure on gross margin", "Technical trend intact — this is a valuation lead, not a breakdown yet", "Consensus still skews bullish — a crowded long", "Upcoming earnings print is the real catalyst, not today's tape", "No confirmed technical breakdown yet — sizing should reflect that"],
+    bullCase: ["Pricing power has historically let the company defend margin better than peers.", "No confirmed technical breakdown — the trend hasn't broken yet."],
+    bearCase: ["A margin miss against a rich multiple has an outsized re-rating effect.", "Consensus is crowded long, which means limited fresh buying support if sentiment shifts."],
+    levels: { action: "Recent range support — a break below shifts this from valuation-lead to confirmed technical weakness", upside: "Recent range high — a reclaim would argue the market is shrugging off the margin risk", downside: "Prior swing low, then the level that confirms a valuation re-rating is underway" },
+    gamePlan: "Favor a defined-risk bearish structure sized for the fact that the technical trend hasn't broken yet — this is a thesis ahead of a catalyst, not a confirmed setup.",
+    invalidation: "A clean earnings beat with margin guidance holding or improving ends this thesis.",
+    standAside: "If the technical trend keeps making new highs with no sign of margin concern showing up in guidance, the best trade is no trade until the print.",
+    _instrument: "AAPL", _weights: { technicals: 15, macro: 20, sentiment: 15, positioning: 35, eventRisk: 15 },
+    _lean: "bear", _risk: "balanced", _notes: "", _persona: "mike", _personaName: "Cousin Mike",
+  },
+  {
+    _id: "sample-thesis-nvda", _type: "thesis", _sample: true, _date: "Sample", _time: "",
+    instrument: "NVDA", secondary: "", timestamp: "Sample entry", timingNote: "Illustrative — not a live call.",
+    bias: "bullish", score: 55, conviction: 7,
+    headline: "Tape is confirming — trend traders don't fight this",
+    summary: "The tape tells the story here: higher highs, higher lows, and volume expanding on the up-days rather than the down-days. This is a trend-following read, not a valuation call — the technicals pillar dominates because the price action itself is the primary evidence, and it's unambiguous right now. Momentum names can run further and longer than the fundamentals crowd expects; the discipline is respecting the trend until the tape itself says otherwise.",
+    pillarRead: "Technicals dominate this read by design — the trend is confirmed by both price structure and volume, which is what a tape-reading approach weighs above all else.",
+    stanceRead: "Bull lean with an aggressive risk appetite justified by clean trend confirmation; conviction sits at 7 because the tape is unambiguous, not because of a story.",
+    deskRead: "The tape doesn't lie, and right now it's saying higher highs, higher lows, volume on the up-days. I don't need a narrative to trade this — I need the trend to keep confirming itself, and it has been. The market will tell you when it's over; until then, respect it.",
+    pairRead: "",
+    drivers: ["Higher highs and higher lows — clean uptrend structure", "Volume expanding on up-days, contracting on down-days", "Momentum confirms rather than diverges from price", "Sector leadership — this name is pulling its group higher, not lagging it", "No distribution days on the recent tape", "Aggressive risk appetite justified by trend clarity, not by a story"],
+    bullCase: ["Clean trend structure with volume confirmation is the strongest technical setup there is.", "Sector leadership argues this keeps pulling the group rather than fading alone."],
+    bearCase: ["A parabolic move without a pause is exactly the kind of tape that reverses hardest.", "No trend runs forever — the first real distribution day is the tell to watch for."],
+    levels: { action: "Most recent higher-low — the trend stays intact as long as this holds", upside: "Extension of the current trend channel", downside: "A break of the most recent higher-low is the first sign the trend is stalling" },
+    gamePlan: "Trail the position with the trend — add on strength that confirms, not on hope; use the most recent higher-low as a moving stop reference.",
+    invalidation: "The first clean break of the higher-low structure with volume ends the trend-following case.",
+    standAside: "If the tape goes parabolic without any pause or pullback, that's not a reason to chase harder — it's a reason to tighten risk, not add it.",
+    _instrument: "NVDA", _weights: { technicals: 40, macro: 15, sentiment: 15, positioning: 15, eventRisk: 15 },
+    _lean: "bull", _risk: "aggressive", _notes: "", _persona: "jesse", _personaName: "Uncle Jesse",
+  },
+];
+
+const SAMPLE_RESEARCH = [
+  {
+    _id: "sample-research-aapl", _sample: true, _date: "Sample", _time: "",
+    instrument: "AAPL", name: "Apple Inc.",
+    question: "Build the bear case for AAPL right now. The biggest risks, red flags and downside scenarios the market may be underpricing.",
+    headline: "Memory costs, not China, are Apple's real margin risk",
+    verdict: "bearish",
+    summary: "Apple trades at a premium multiple that prices in flawless execution just as input costs break the wrong way — contract DRAM has run up sharply over consecutive quarters, and suppliers are diverting capacity to higher-margin AI memory. The consensus bear case is still China; that's fighting the last war since Apple's China share has actually been improving. The risk the multiple isn't discounting is a gross-margin quarter that misses while the highest-margin Services revenue sits under an antitrust appeal.",
+    keyFindings: [
+      { point: "Apple's trailing P/E sits well above its own 10-year historical median, and above a conservative DCF-based fair value — growth is already priced in.", source: "Illustrative valuation screen" },
+      { point: "Contract DRAM pricing has risen sharply across consecutive quarters as suppliers shift capacity toward higher-margin AI server memory, a structural squeeze rather than a spot spike.", source: "Illustrative supply-chain research" },
+      { point: "The consensus bear case (China weakness) is stale — recent share data shows Apple's China position improving, not deteriorating, which shifts the real risk toward margins rather than demand.", source: "Illustrative market-share research" },
+    ],
+    catalysts: [
+      { when: "Next quarterly print", event: "First clean read on whether price increases are offsetting memory cost inflation", impact: "A gross-margin miss or soft guide is the specific event that could re-rate a rich multiple." },
+      { when: "Ongoing", event: "Appeal proceedings tied to a major Services revenue-share agreement", impact: "Any adverse outcome strikes the highest-margin, highest-multiple part of the business." },
+    ],
+    risks: [
+      "Gross margin compresses as input costs outrun price increases — a rich multiple has little room for a margin miss.",
+      "A move back toward historical average multiples is meaningful downside with no operational catalyst required.",
+      "Consensus still skews bullish and crowded long — limited fresh buying support if sentiment turns.",
+    ],
+    positioning: "Sell-side coverage still skews bullish and the tape sits near highs — the crowd is long and comfortable. Consensus is where crowded trades go to get crowded; the disagreement worth owning is that the market is treating the margin pressure as transitory when the supply-side shift looks structural.",
+    confidence: "medium — the margin-compression logic is well-supported, but timing is not. A rich multiple can stay rich until an actual print forces the issue.",
+    asOf: "Illustrative brief — sample library content, not a live research run.",
+    _sources: [],
+    generatedAt: "Sample entry",
+    _personaName: "Cousin Mike",
+  },
+  {
+    _id: "sample-research-iwm", _sample: true, _date: "Sample", _time: "",
+    instrument: "IWM", name: "iShares Russell 2000 ETF",
+    question: "Build the bull case for a short-term mean-reversion bounce after an extreme oversold reading.",
+    headline: "A top-decile oversold reading argues for a bounce, not a bottom call",
+    verdict: "bullish",
+    summary: "This is a short-term, rules-based read, not a fundamental one: after a sharp multi-day decline, short-term momentum readings reach levels that have historically preceded a reflexive bounce more often than not. The edge here is statistical and time-limited — it says nothing about the intermediate trend, which can still be down. Size and hold time should both be small; this is a probabilistic edge, not a conviction call.",
+    keyFindings: [
+      { point: "A 3-day RSI reading in single digits is a top-decile oversold extreme historically associated with a higher-than-average frequency of a short-term bounce over the following several sessions.", source: "Overwatch quant screen (illustrative)" },
+      { point: "The edge is strongest when the broader trend is neutral-to-up; when the larger trend is firmly down, the same oversold reading has historically produced a smaller and less reliable bounce.", source: "Overwatch quant screen (illustrative)" },
+    ],
+    catalysts: [],
+    risks: [
+      "This is a statistical tendency, not a guarantee — a share of oversold extremes simply keep extending lower.",
+      "If the broader trend is down, the historical edge for this setup is meaningfully weaker.",
+      "Position sizing must reflect that this is a probabilistic short-term edge, not a directional conviction call.",
+    ],
+    positioning: "",
+    confidence: "medium — the statistical tendency is real but modest, and says nothing about the intermediate trend.",
+    asOf: "Illustrative brief — sample library content, not a live research run.",
+    _sources: [],
+    generatedAt: "Sample entry",
+    _personaName: "Professor Lou",
+  },
+];
+
 // Signature pillar emphasis per persona — how each trader's lens naturally weights the five
 // pillars. Folded on top of the trader's manual sliders (see personaWeights) so the persona shapes
 // the read while a slider dragged high still anchors it. Relative emphasis, roughly [-0.5, +0.9];
@@ -4674,6 +4799,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // Jumping here from the Library's Research Archive always means "go look at this brief" — force
   // the Research sub-tab open so the brief is actually visible, whatever sub-tab was last active.
   useEffect(() => { if (researchViewing) setToolView("research"); }, [researchViewing, setToolView]);
+  // Symmetric fix for the Thesis Archive: opening a saved (or sample) thesis from the Library or
+  // Market Pulse only sets `viewing` — without this, it silently lands on whatever Lab sub-tab was
+  // last active (Research, by default) with the thesis invisible until the visitor manually clicks
+  // Synthesis Lab. Force that sub-tab open the same way the research jump already does.
+  useEffect(() => { if (viewing) setToolView("synthesis"); }, [viewing, setToolView]);
   // Thesis Lab sub-nav, in workflow order: Research leads (ground the call in sourced facts before
   // building it) and is the default landing view; Algo Lab sits in the middle (standalone — it doesn't
   // feed the thesis); Synthesis — the options calculator folded in — closes the loop as the final step.
@@ -4889,7 +5019,9 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         {viewing && (
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px" }}>
             <History size={14} color={C.brass} />
-            <span style={{ fontSize: 12.5, color: C.muted }}>Viewing archived thesis — {archiveStamp(viewing)}</span>
+            <span style={{ fontSize: 12.5, color: C.muted }}>
+              {viewing._sample ? "Viewing a sample thesis — sign in to build and save your own" : `Viewing archived thesis — ${archiveStamp(viewing)}`}
+            </span>
             <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
               {onGoLibrary && <button className="btn btn-sm" onClick={onGoLibrary}><History size={13} /> Back to library</button>}
               <button className="btn btn-sm" onClick={() => setViewing(null)}>Back to latest</button>
@@ -4982,7 +5114,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
               </div>
             </Card>
             {(t._tradeStructures || []).length > 0 && <TradeStructureCard structures={t._tradeStructures} bias={t.bias} />}
-            <TradeLogCard key={t._id || "trade"} entry={t} onLogTrade={onLogTrade} />
+            {!t._sample && <TradeLogCard key={t._id || "trade"} entry={t} onLogTrade={onLogTrade} />}
             <div className="grid g-2">
               <div className="guard g-red"><b><AlertTriangle size={12} /> Thesis invalidation</b>{t.invalidation}</div>
               <div className="guard g-amber"><b><Shield size={12} /> Stand-aside conditions</b>{t.standAside}</div>
@@ -5407,6 +5539,7 @@ const ResearchBrief = ({ data }) => {
     <div className="rl-brief">
       <div className="rl-brief-head">
         <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", textTransform: "uppercase" }}>{data.verdict || "read"}</span>
+        {data._sample && <span className="chip" title="Illustrative example — sign in to run and save your own" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
         {data._personaName && <span className="chip" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>{data._personaName}</span>}
         <h3 className="rl-headline">{data.headline || `${data.instrument} research`}</h3>
       </div>
@@ -5529,7 +5662,10 @@ const ResearchLab = ({ market, points, notify, auth, reports, setReports, viewin
     }
   };
 
-  if (!signedIn) {
+  // Reading (including the illustrative sample briefs shown to a signed-out visitor) needs no
+  // account; only running a NEW brief does (doResearch guards that separately, since it's a metered
+  // API call). So the sign-in wall only blocks signed-out visitors who have nothing to read yet.
+  if (!signedIn && !reports.length) {
     return (
       <div className="rl-root">
         <div className="rl-intro">
@@ -5618,12 +5754,15 @@ const ResearchLab = ({ market, points, notify, auth, reports, setReports, viewin
             className="btn btn-brass"
             style={{ width: "100%", justifyContent: "center", marginTop: 4, padding: "12px" }}
             onClick={doResearch}
-            disabled={run.status === "loading" || !question.trim()}
+            disabled={run.status === "loading" || !question.trim() || !signedIn}
+            title={signedIn ? undefined : "Sign in to run deep research — metered API calls are tied to your account"}
           >
             {run.status === "loading" ? <><RefreshCw size={15} className="spin" /> Researching {cfg.symbol}…</> : <><Search size={15} /> Run deep research</>}
           </button>
           <div style={{ fontSize: 11, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
-            Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Every brief is saved to your Research Archive in the Library, synced to your account.
+            {signedIn
+              ? "Bounded to a single web-search pass so it fits the desk's serverless budget — expect ~20-50s. Every brief is saved to your Research Archive in the Library, synced to your account."
+              : "The briefs shown here are illustrative samples. Sign in to run your own live research."}
           </div>
         </Card>
         </div>
@@ -5727,7 +5866,7 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
     setImportOpen(false);
   };
 
-  if (!signedIn) {
+  if (!signedIn && !reports.length) {
     return (
       <Card icon={Lock} title="Sign in required" sub="Research briefs are tied to your account">
         <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginTop: 0 }}>
@@ -5742,14 +5881,16 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
     <Card
       icon={BookMarked}
       title="Research Archive"
-      sub={reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet"}
+      sub={signedIn ? (reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet") : "Sample briefs — sign in to run and save your own"}
       tools={
-        <button className="btn btn-ghost btn-sm" title="Paste a research brief JSON to add it to your library (recovers a brief that was generated but never saved)" onClick={() => { setImportOpen((v) => !v); setImportErr(""); }}>
-          <BookMarked size={12} /> Import brief
-        </button>
+        signedIn && (
+          <button className="btn btn-ghost btn-sm" title="Paste a research brief JSON to add it to your library (recovers a brief that was generated but never saved)" onClick={() => { setImportOpen((v) => !v); setImportErr(""); }}>
+            <BookMarked size={12} /> Import brief
+          </button>
+        )
       }
     >
-      {importOpen && (
+      {importOpen && signedIn && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel2)" }}>
           <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
             Paste a research brief JSON below to add it to your library. It saves to your account and syncs like any generated brief.
@@ -5777,13 +5918,14 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
           return (
             <div key={r._id} className="hist-row">
               <button className="hist-row-open" onClick={() => onOpenReport?.(r)} aria-label={`Open research brief: ${r.headline || r.question}`}>
-                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._date} · {r._time}</span>
+                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._time ? `${r._date} · ${r._time}` : r._date}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
+                {r._sample && <span className="chip" title="Illustrative example — sign in to run and save your own" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
                 <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
                 {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
                 <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
               </button>
-              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>
+              {!r._sample && <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>}
             </div>
           );
         })}
@@ -5899,6 +6041,7 @@ const ArchiveTab = ({
                 <button className="hist-row-open" onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }} aria-label={`Open thesis: ${entry.headline || t?.headline || "archived thesis"}`}>
                   <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
                   <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
+                  {entry._sample && <span className="chip" title="Illustrative example — sign in to build and save your own" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
                   <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
                   {entry._outcome && OUTCOME_META[entry._outcome.result] && (
                     <span className="chip" title={`Graded ${fmtSigned(entry._outcome.changePct, 2, "%")} vs the call`} style={{ color: OUTCOME_META[entry._outcome.result].color, borderColor: OUTCOME_META[entry._outcome.result].color + "66", flex: "none", fontSize: 10 }}>
@@ -5922,9 +6065,11 @@ const ArchiveTab = ({
                 }}>
                   <FileText size={12} />
                 </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry._id); }}>
-                  <Trash2 size={12} />
-                </button>
+                {!entry._sample && (
+                  <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry._id); }}>
+                    <Trash2 size={12} />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -6608,6 +6753,14 @@ export default function Overwatch() {
 
   // Auth + per-user cloud sync (Phase 2). Signed-out (or Clerk-disabled) → local storage only.
   const auth = useAuthSync();
+  // A signed-out visitor with no archive of their own sees illustrative sample content instead of an
+  // empty library, so the Lab tools' output is visible before signing in. Never touches real state —
+  // setArchiveHistory/setResearchReports always operate on the actual (empty, for a fresh signed-out
+  // visitor) state, so deleting/interacting with a sample row is a harmless no-op, not data loss. Any
+  // real local or cloud data always takes priority the moment it exists.
+  const showSampleLibrary = CLERK_ENABLED && !auth.signedIn;
+  const effectiveArchiveHistory = showSampleLibrary && !archiveHistory.length ? SAMPLE_ARCHIVE : archiveHistory;
+  const effectiveResearchReports = showSampleLibrary && !researchReports.length ? SAMPLE_RESEARCH : researchReports;
   const cloudHydrated = useRef(null); // authenticated user id once that account has hydrated
   const cloudRevisions = useRef({ settings: null, archive: null, research: null });
   const cloudWriteQueues = useRef({
@@ -7343,8 +7496,8 @@ export default function Overwatch() {
   }, [auth.signedIn, auth.getToken, notify, waitForCloudIdle]);
   const calendarGroupsForBadge = calendarEventGroups(points.data);
   const calendarBadge = calendarEventCount(calendarGroupsForBadge) || null;
-  const thesisHistory = archiveHistory.filter((e) => e._type === "thesis" || !e._type);
-  const archiveBadge = archiveHistory.length || null;
+  const thesisHistory = effectiveArchiveHistory.filter((e) => e._type === "thesis" || !e._type);
+  const archiveBadge = effectiveArchiveHistory.length || null;
   // Symbols kept off the Pulse grid: anything toggled off in the watchlist (Mag 7 start off), plus
   // any single-stock focus that isn't on the visible board at all.
   const hiddenSymbols = useMemo(() => {
@@ -7397,7 +7550,7 @@ export default function Overwatch() {
             market={market.data} news={news.data} points={points.data}
             onGoLibrary={() => nav("archives")}
             researchViewing={researchViewing} setResearchViewing={setResearchViewing}
-            researchReports={researchReports} setResearchReports={setResearchReports}
+            researchReports={effectiveResearchReports} setResearchReports={setResearchReports}
             notify={notify}
             auth={auth}
           />
@@ -7405,8 +7558,8 @@ export default function Overwatch() {
       case "archives":
         return (
           <ArchiveTab
-            archiveHistory={archiveHistory}
-            researchReports={researchReports}
+            archiveHistory={effectiveArchiveHistory}
+            researchReports={effectiveResearchReports}
             setResearchReports={setResearchReports}
             viewing={viewing}
             setViewing={setViewing}
