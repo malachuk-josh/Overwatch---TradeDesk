@@ -5669,11 +5669,62 @@ const ResearchLab = ({ market, points, notify, auth, reports, setReports, viewin
 // stays browse-focused there (mirrors the Thesis Archive split: build in the Lab, review in the
 // Library). Self-contained: syncs its own copy of the same account-scoped report list Research Lab
 // writes to (loadUserResearch/saveUserResearch), same pattern CloudNewsletterList already uses.
+// Normalize a pasted brief (single object or array) into a library entry, mirroring the shape the
+// Research Lab's generate path saves (line ~5522). Used by the manual import — the recovery path for
+// a brief produced outside the app (e.g. a run that was billed but timed out before it could save).
+const VERDICTS = ["bullish", "bearish", "neutral", "mixed"];
+const normalizeImportedBrief = (raw) => {
+  const list = Array.isArray(raw) ? raw : [raw];
+  const out = [];
+  for (const b of list) {
+    if (!b || typeof b !== "object" || Array.isArray(b)) continue;
+    if (!b.headline && !b.summary && !b.question) continue; // not a brief
+    out.push({
+      instrument: String(b.instrument || "").toUpperCase().slice(0, 12) || "—",
+      name: String(b.name || ""),
+      question: String(b.question || ""),
+      headline: String(b.headline || ""),
+      verdict: VERDICTS.includes(b.verdict) ? b.verdict : "neutral",
+      summary: String(b.summary || ""),
+      keyFindings: Array.isArray(b.keyFindings) ? b.keyFindings : [],
+      catalysts: Array.isArray(b.catalysts) ? b.catalysts : [],
+      risks: Array.isArray(b.risks) ? b.risks : [],
+      positioning: String(b.positioning || ""),
+      confidence: String(b.confidence || ""),
+      asOf: String(b.asOf || ""),
+      _sources: Array.isArray(b._sources) ? b._sources : [],
+      generatedAt: String(b.generatedAt || ""),
+      _id: b._id || uid(),
+      _ts: Number.isFinite(Number(b._ts)) ? Number(b._ts) : Date.now(),
+      _date: b._date || dateShort(),
+      _time: b._time || stampNow(),
+      _personaName: String(b._personaName || ""),
+      _imported: true,
+    });
+  }
+  return out;
+};
+
 const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
   const signedIn = Boolean(auth?.signedIn);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importErr, setImportErr] = useState("");
 
   const deleteReport = (id) => {
     setReports((prev) => prev.filter((r) => r._id !== id));
+  };
+
+  const doImport = () => {
+    setImportErr("");
+    let raw;
+    try { raw = JSON.parse(importText); }
+    catch { setImportErr("That isn't valid JSON — paste the full brief object."); return; }
+    const entries = normalizeImportedBrief(raw);
+    if (!entries.length) { setImportErr("No brief found in that JSON (needs at least a headline, summary or question)."); return; }
+    setReports((prev) => [...entries, ...prev].slice(0, 40));
+    setImportText("");
+    setImportOpen(false);
   };
 
   if (!signedIn) {
@@ -5692,7 +5743,31 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
       icon={BookMarked}
       title="Research Archive"
       sub={reports.length ? `${reports.length} saved brief${reports.length === 1 ? "" : "s"} — newest first, synced to your account` : "No saved briefs yet"}
+      tools={
+        <button className="btn btn-ghost btn-sm" title="Paste a research brief JSON to add it to your library (recovers a brief that was generated but never saved)" onClick={() => { setImportOpen((v) => !v); setImportErr(""); }}>
+          <BookMarked size={12} /> Import brief
+        </button>
+      }
     >
+      {importOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12, padding: 12, border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel2)" }}>
+          <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+            Paste a research brief JSON below to add it to your library. It saves to your account and syncs like any generated brief.
+          </div>
+          <textarea
+            className="bd-ta"
+            style={{ minHeight: 120, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11.5 }}
+            placeholder='{"instrument":"AAPL","verdict":"bearish","headline":"...","summary":"...", ...}'
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+          />
+          {importErr && <div className="err" role="status"><AlertTriangle size={14} color={C.bear} /><span>{importErr}</span></div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-brass btn-sm" onClick={doImport} disabled={!importText.trim()}><BookMarked size={12} /> Add to library</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setImportOpen(false); setImportText(""); setImportErr(""); }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {!reports.length && (
         <div style={{ color: C.muted, fontSize: 12.5 }}>Every deep-research brief you run in the Research Lab lands here automatically.</div>
       )}
