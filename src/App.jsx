@@ -4244,7 +4244,10 @@ const DataPointSection = ({ points, onRefresh }) => {
           title="Positioning & flows"
           sub="ETF proxies, credit, havens, sentiment components"
           tools={
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Freshness at={at} />
             <InfoTip text="A proxy read on risk appetite, not real order flow. The posture chip is a weighted score across SPY/QQQ/IWM/HYG (risk-on) vs TLT/GLD/UUP (defensive). Each row below is an ETF's % move plus relative volume, with a plain-English read — watch HYG (credit) vs SPY/QQQ: if credit isn't confirming a stock rally, the move is often fade-prone. The 3 signal tiles come from CNN Fear & Greed's individual components (put/call, junk bond demand, safe-haven demand, momentum, breadth), not the headline number, so they can disagree with it. The notes below are two spreads (growth vs Dow, credit vs duration) plus a sector-breadth count." />
+            </span>
           }
         >
           {posSummary ? (
@@ -6565,6 +6568,156 @@ const Toasts = ({ items }) => (
    STRATEGY LAB — algorithmic strategy backtester
    ================================================================ */
 
+/* ---------------- Desk notes slide-over ---------------- */
+
+// The home for pinned headlines and free-text desk notes (audit roadmap: "give it a home"). The
+// data model IS the existing thesis `notes` string — the same text the Thesis inputs textarea edits
+// and the next synthesis run reads — so this is a second window onto one source of truth, not a
+// separate store.
+const DeskNotesDrawer = ({ open, onClose, notes, setNotes, notify, onGoThesis }) => {
+  const [draft, setDraft] = useState("");
+  const closeRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
+    document.addEventListener("keydown", onKey);
+    window.requestAnimationFrame(() => closeRef.current?.focus());
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  const lines = (notes || "").split("\n").filter(Boolean);
+  const removeLine = (idx) => setNotes(lines.filter((_, i) => i !== idx).join("\n"));
+  const addLine = () => {
+    const t = draft.trim();
+    if (!t) return;
+    const line = t.startsWith("•") ? t : "• " + t;
+    if (lines.includes(line)) { notify?.("Already in the desk note", "err"); return; }
+    setNotes([...lines, line].join("\n"));
+    setDraft("");
+  };
+  return (
+    <>
+      <div className="overlay" onClick={onClose} aria-hidden="true" />
+      <div className="drawer" role="dialog" aria-modal="true" aria-label="Desk notes">
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <NotebookPen size={16} color={C.brass} />
+          <span className="disp" style={{ fontWeight: 600, fontSize: 15, marginLeft: 9, letterSpacing: ".04em" }}>DESK NOTES</span>
+          <button ref={closeRef} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose} aria-label="Close desk notes"><X size={15} /></button>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginBottom: 14 }}>
+          Everything here is fed into the <b style={{ color: "var(--text)" }}>next thesis run</b> as your desk note — pin headlines from
+          News Intel with the <NotebookPen size={11} style={{ verticalAlign: "-1px" }} /> button, or add a line yourself below.
+        </div>
+        {!lines.length && (
+          <div style={{ color: C.muted, fontSize: 12.5, padding: "18px 0", textAlign: "center" }}>
+            Nothing pinned yet. Pin a headline from News Intel, or add a note below.
+          </div>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {lines.map((line, i) => (
+            <div key={`${i}-${line.slice(0, 40)}`} className="hist-row" style={{ alignItems: "flex-start" }}>
+              <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.55, color: "var(--text)", padding: "6px 0 6px 4px" }}>{line.replace(/^•\s*/, "")}</span>
+              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove this note" onClick={() => removeLine(i)}><Trash2 size={12} /></button>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <input
+            className="bd-in"
+            style={{ flex: 1, textTransform: "none" }}
+            placeholder="Add a desk note line…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine(); } }}
+            aria-label="New desk note line"
+          />
+          <button className="btn btn-sm" onClick={addLine} disabled={!draft.trim()}>Add</button>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+          {onGoThesis && (
+            <button className="btn btn-sm" onClick={() => { onClose(); onGoThesis(); }}><FlaskConical size={13} /> Open Synthesis Lab</button>
+          )}
+          {lines.length > 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setNotes(""); notify?.("Desk notes cleared", "ok"); }}><Trash2 size={13} /> Clear all</button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+/* ---------------- Command palette (⌘K) ---------------- */
+
+// Global search across everything the desk holds — instruments, saved theses, research briefs and
+// wire headlines (audit roadmap: "nothing in this app is searchable today"). Substring match on
+// every whitespace-separated token; grouped results; full keyboard control.
+const CommandPalette = ({ open, onClose, actions }) => {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (open) { setQ(""); setSel(0); window.requestAnimationFrame(() => inputRef.current?.focus()); }
+  }, [open]);
+  const results = useMemo(() => {
+    if (!open) return [];
+    const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const hit = (a) => {
+      if (!tokens.length) return true;
+      const hay = `${a.label} ${a.sub || ""} ${a.group}`.toLowerCase();
+      return tokens.every((t) => hay.includes(t));
+    };
+    const capPerGroup = tokens.length ? 6 : 4;
+    const byGroup = new Map();
+    for (const a of actions) {
+      if (!hit(a)) continue;
+      const list = byGroup.get(a.group) || [];
+      if (list.length < capPerGroup) { list.push(a); byGroup.set(a.group, list); }
+    }
+    return [...byGroup.entries()].flatMap(([, list]) => list).slice(0, 18);
+  }, [open, q, actions]);
+  useEffect(() => { setSel(0); }, [q]);
+  if (!open) return null;
+  const run = (a) => { onClose(); a.run(); };
+  return (
+    <div className="cmdk-overlay" onMouseDown={onClose}>
+      <div className="cmdk" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="cmdk-input"
+          placeholder="Search instruments, theses, briefs, headlines…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") { e.preventDefault(); onClose(); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, results.length - 1)); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+            else if (e.key === "Enter" && results[sel]) { e.preventDefault(); run(results[sel]); }
+          }}
+          aria-label="Search the desk"
+        />
+        <div className="cmdk-list" role="listbox">
+          {results.map((a, i) => (
+            <button
+              key={a.id}
+              role="option"
+              aria-selected={i === sel}
+              className={`cmdk-item${i === sel ? " on" : ""}`}
+              onMouseEnter={() => setSel(i)}
+              onClick={() => run(a)}
+            >
+              <span className="cmdk-group-tag">{a.group}</span>
+              <span className="cmdk-label">{a.label}</span>
+              {a.sub && <span className="cmdk-sub">{a.sub}</span>}
+            </button>
+          ))}
+          {!results.length && <div style={{ padding: "18px 14px", fontSize: 12.5, color: C.muted }}>No matches — try a ticker, a headline word, or a thesis phrase.</div>}
+        </div>
+        <div className="cmdk-foot">↑↓ navigate · Enter open · Esc close</div>
+      </div>
+    </div>
+  );
+};
+
 // Frontend for the desk's "VIX Range Intraday Reversal Momentum Scalper" — the inputs mirror the
 // TradingView strategy one-for-one and the replay itself runs server-side (`backtest` operation).
 const ALGO_PARAMS_KEY = "overwatch:algo:params";
@@ -6654,7 +6807,7 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
     try {
       const token = await auth.getToken();
       const data = await callDesk("backtest", "", { params: buildParams() }, token);
-      setBt({ status: "done", data, error: null });
+      setBt({ status: "done", data: { ...data, _ranAt: Date.now() }, error: null });
     } catch (e) {
       setBt({ status: "error", data: null, error: e.message });
     }
@@ -6870,6 +7023,7 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
           icon={TrendingUp}
           title="Backtest results"
           sub={m ? `${m.symbol} · ${m.interval} · ${m.bars} bars · ${algoDate(m.from)} → ${algoDate(m.to)}` : "Set the inputs, then run the replay"}
+          tools={bt.data?._ranAt ? <span className="mono" style={{ fontSize: 10, color: C.muted, whiteSpace: "nowrap" }} title="When this replay was run — re-run to refresh against the latest bars">ran {new Date(bt.data._ranAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })} ET</span> : null}
         >
           {bt.status === "idle" && (
             <EmptyState icon={Bot} title="No run yet" body="Run the backtest to replay your scalper over the recent tape and see P/L, win rate, drawdown, and every trade it took." />
@@ -7746,6 +7900,42 @@ export default function Overwatch() {
     notify(pinned ? "Unpinned from the desk note" : "Pinned to the desk note — it feeds the next thesis (Thesis inputs → Desk note)", "ok");
   };
   const pinnedNoteLines = useMemo(() => new Set((notes || "").split("\n").filter(Boolean)), [notes]);
+  // Desk-notes slide-over + command palette (audit roadmap "Now" items).
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  // Everything the palette can reach: instruments (catalog-wide), saved theses, research briefs,
+  // and the current wire. Rebuilt only when a source actually changes.
+  const paletteActions = useMemo(() => {
+    const acts = [];
+    const seen = new Set();
+    for (const it of [...THESIS_INSTRUMENTS, ...DEFAULT_WATCHLIST]) {
+      if (!it?.symbol || seen.has(it.symbol)) continue;
+      seen.add(it.symbol);
+      acts.push({ id: `i-${it.symbol}`, group: "Instrument", label: `${it.symbol} — ${it.name}`, sub: "Set as Lab focus", run: () => { setInstrument(it.symbol); setTab("thesis"); } });
+    }
+    for (const e of archiveHistory) {
+      const t = e._type === "newsletter" ? e._thesis || e : e;
+      if (!t?.headline) continue;
+      acts.push({ id: `t-${e._id}`, group: "Thesis", label: t.headline, sub: `${t.instrument || "SPX"} · ${archiveStamp(e)}`, run: () => { setViewing(e._type === "newsletter" ? e._thesis || e : e); setTab("thesis"); } });
+    }
+    for (const r of researchReports) {
+      acts.push({ id: `r-${r._id}`, group: "Brief", label: r.headline || r.question || r.instrument, sub: `${r.instrument}${r._personaName ? ` · ${displayPersonaName(r._personaName)}` : ""}`, run: () => { setResearchViewing(r); setTab("thesis"); } });
+    }
+    for (const h of (news.data?.headlines || []).slice(0, 60)) {
+      acts.push({ id: `h-${h.title}`, group: "Headline", label: h.title, sub: `${h.source} · ${h.timeAgo}`, run: () => { if (h.url) { try { window.open(h.url, "_blank", "noopener"); } catch { /* popup blocked */ } } else setTab("news"); } });
+    }
+    return acts;
+  }, [archiveHistory, researchReports, news.data]);
   const deleteArchiveEntry = (id) => {
     setArchiveHistory((h) => h.filter((x) => x._id !== id));
     setViewing((v) => (v && v._id === id ? null : v));
@@ -7931,6 +8121,13 @@ export default function Overwatch() {
             {anyLoading ? <RefreshCw size={14} className="spin" /> : winW > 760 ? <RefreshCw size={14} /> : <Zap size={14} />}
             {winW > 760 && (anyLoading ? "Syncing…" : "Refresh")}
           </button>
+          <button className="btn btn-ghost" onClick={() => setPaletteOpen(true)} title="Search the desk — instruments, theses, briefs, headlines (Ctrl/Cmd+K)" aria-label="Search the desk">
+            <Search size={16} />
+          </button>
+          <button className="btn btn-ghost" onClick={() => setNotesOpen(true)} title="Desk notes — pinned headlines and notes feed the next thesis" aria-label="Desk notes" style={{ position: "relative" }}>
+            <NotebookPen size={16} />
+            {pinnedNoteLines.size > 0 && <span className="hdr-badge">{pinnedNoteLines.size}</span>}
+          </button>
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
@@ -7999,6 +8196,15 @@ export default function Overwatch() {
         </footer>
       )}
 
+      <DeskNotesDrawer
+        open={notesOpen}
+        onClose={() => setNotesOpen(false)}
+        notes={notes}
+        setNotes={setNotes}
+        notify={notify}
+        onGoThesis={() => setTab("thesis")}
+      />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} actions={paletteActions} />
       <SettingsDrawer
         open={settingsOpen} onClose={() => setSettingsOpen(false)}
         watchlist={watchlist} setWatchlist={setWatchlist}
