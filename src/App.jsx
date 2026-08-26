@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
 import Trophy from "lucide-react/dist/esm/icons/trophy.mjs";
+import Bell from "lucide-react/dist/esm/icons/bell.mjs";
 import Info from "lucide-react/dist/esm/icons/info.mjs";
 import Newspaper from "lucide-react/dist/esm/icons/newspaper.mjs";
 import Crosshair from "lucide-react/dist/esm/icons/crosshair.mjs";
@@ -2523,7 +2524,7 @@ const LevelMapCandles = ({ symbol, tickers, period = "d" }) => {
   );
 };
 
-const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
+const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers, onArmAlert = null }) => {
   // Persisted per card so the chosen ticker + daily/weekly timeframe survive a refresh.
   const [pref, setPref] = usePersistentState(`overwatch:lm:${storeKey || defaultSymbol}`, { sym: defaultSymbol, period: "d" });
   const active = pref.sym || defaultSymbol;
@@ -2593,6 +2594,25 @@ const LevelMapCard = ({ defaultSymbol, storeKey, points, tickers }) => {
             <button key={p} className={period === p ? "on" : ""} onClick={() => setPeriod(p)} title={p === "h" ? "Hourly levels" : p === "d" ? "Daily levels" : "Weekly levels"}>{p.toUpperCase()}</button>
           ))}
         </div>
+        {/* Arm any of this map's levels as a price alert (audit roadmap: level alerts). */}
+        {onArmAlert && spxData && (
+          <select
+            className="bd-in lm-select"
+            value=""
+            title="Arm a price alert at one of this map's levels"
+            aria-label={`Arm a ${active} level alert`}
+            onChange={(e) => {
+              const lv = Number(e.target.value);
+              if (Number.isFinite(lv) && lv > 0) onArmAlert({ symbol: active, level: lv, label: `${active} ${e.target.selectedOptions[0]?.dataset?.lbl || "level"} (${period.toUpperCase()})` });
+              e.target.value = "";
+            }}
+          >
+            <option value="" disabled>🔔 Arm level…</option>
+            {(spxData.resistances || []).map((v, i) => <option key={`r${i}`} value={v} data-lbl={`R${i + 1}`}>R{i + 1} · {fmtNum(v, lmDecimals(active, tickers))}</option>)}
+            {spxData.pivot != null && <option value={spxData.pivot} data-lbl="PIVOT">PIVOT · {fmtNum(spxData.pivot, lmDecimals(active, tickers))}</option>}
+            {(spxData.supports || []).map((v, i) => <option key={`s${i}`} value={v} data-lbl={`S${i + 1}`}>S{i + 1} · {fmtNum(v, lmDecimals(active, tickers))}</option>)}
+          </select>
+        )}
       </div>
     </Card>
   );
@@ -2762,7 +2782,7 @@ const SnapMarketFilter = ({ value, onChange, anyMarketOpen, hidden = [], onToggl
   );
 };
 
-const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, setWatchlist, onRefresh, onRefreshMarket = null, onGoThesis, morningDiff = null, onDismissDiff }) => {
+const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, watchlist, setWatchlist, onRefresh, onRefreshMarket = null, onArmAlert = null, onGoThesis, morningDiff = null, onDismissDiff }) => {
   const { status, data, error, at } = market;
   // Section-collapse state. These hooks must run before any early return so the hook order stays
   // stable across the idle/loading/error → ready transitions (Rules of Hooks).
@@ -3070,11 +3090,11 @@ const PulseTab = ({ market, points, pointsState, news, vixHint, hiddenSymbols, w
           <div style={{ padding: "0 12px 12px" }}>
             <div className="grid g-levelmaps pulse-levels-desktop">
               {LEVEL_MAP_DEFAULTS.map((sym, i) => (
-                <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} />
+                <LevelMapCard key={sym} defaultSymbol={sym} storeKey={`d${i}`} points={points} tickers={levelTickers} onArmAlert={onArmAlert} />
               ))}
             </div>
             <div className="pulse-levels-mobile">
-              <LevelMapCard defaultSymbol="SPY" storeKey="m" points={points} tickers={levelTickers} />
+              <LevelMapCard defaultSymbol="SPY" storeKey="m" points={points} tickers={levelTickers} onArmAlert={onArmAlert} />
             </div>
           </div>
         )}
@@ -4923,7 +4943,7 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
    TAB — THESIS LAB
    ================================================================ */
 
-const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, generateBlockedReason, deskTools, setDeskTools, market, news, points, onGoLibrary, researchReports, setResearchReports, researchViewing, setResearchViewing, notify, auth }) => {
+const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights, setWeights, lean, setLean, risk, setRisk, notes, setNotes, persona, setPersona, thesis, onGenerate, onLogTrade, history, viewing, setViewing, onDeleteHist, anyData, generateBlockedReason, deskTools, setDeskTools, market, news, points, onGoLibrary, researchReports, setResearchReports, researchViewing, setResearchViewing, notify, auth, onArmAlert = null }) => {
   const pillarScores = useMemo(() => computePillarFactorScores({ market, news, points }), [market, news, points]);
   // Nothing generated this session and nothing explicitly recalled — default to the most recent
   // archived thesis (newest-first) rather than an empty prompt, same unwrap as the Library's row click.
@@ -5297,12 +5317,34 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                 <ul className="case-list case-bear">{(t.bearCase || []).map((b, i) => <li key={i}>{b}</li>)}</ul>
               </Card>
             </div>
-            <Card title="Levels that matter" icon={Crosshair} sub="Action level, targets up & down">
-              <div className="grid g-3">
-                <div className="metric"><span className="metric-k" style={{ color: C.brass }}>Action level</span><span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{t.levels?.action || "—"}</span></div>
-                <div className="metric"><span className="metric-k" style={{ color: C.bull }}>Upside</span><span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{t.levels?.upside || "—"}</span></div>
-                <div className="metric"><span className="metric-k" style={{ color: C.bear }}>Downside</span><span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{t.levels?.downside || "—"}</span></div>
-              </div>
+            <Card title="Levels that matter" icon={Crosshair} sub="Action level, targets up & down — the bell arms a price alert at that level">
+              {(() => {
+                const alertSym = t.instrument || instrument;
+                const alertSpot = Number((market?.tickers || []).find((x) => x.symbol === alertSym)?.price);
+                const cell = (text, label, color) => {
+                  const lv = parseLevelNear(text, Number.isFinite(alertSpot) ? alertSpot : 0);
+                  return (
+                    <div className="metric">
+                      <span className="metric-k" style={{ color, display: "flex", alignItems: "center", gap: 5 }}>
+                        {label}
+                        {onArmAlert && lv != null && !t._sample && (
+                          <button className="btn btn-ghost btn-sm" style={{ padding: "1px 5px", lineHeight: 0 }} title={`Arm a ${alertSym} alert at ${fmtNum(lv, 2)}`} aria-label={`Arm a ${alertSym} alert at the ${label} level`} onClick={() => onArmAlert({ symbol: alertSym, level: lv, label: `thesis ${label.toLowerCase()}` })}>
+                            <Bell size={10} />
+                          </button>
+                        )}
+                      </span>
+                      <span className="metric-note" style={{ color: "var(--text)", fontSize: 12.5 }}>{text || "—"}</span>
+                    </div>
+                  );
+                };
+                return (
+                  <div className="grid g-3">
+                    {cell(t.levels?.action, "Action level", C.brass)}
+                    {cell(t.levels?.upside, "Upside", C.bull)}
+                    {cell(t.levels?.downside, "Downside", C.bear)}
+                  </div>
+                );
+              })()}
               <div style={{ marginTop: 13, fontSize: 13, lineHeight: 1.7 }}>
                 <span className="chip b-info" style={{ marginRight: 9 }}>GAME PLAN</span>{t.gamePlan}
               </div>
@@ -6724,6 +6766,100 @@ const Toasts = ({ items }) => (
    STRATEGY LAB — algorithmic strategy backtester
    ================================================================ */
 
+/* ---------------- Price alerts ---------------- */
+
+// Level & invalidation alerts (audit roadmap: "turns a read-only desk into one that pages you").
+// Alerts are client-side: each is armed with a direction inferred from the live price at arm time
+// and checked against every market sync; a cross fires a desk toast and (when permitted) a browser
+// notification. The desk's data cadence bounds alert latency — this pages you as fast as the tape
+// the app itself sees.
+const AlertsDrawer = ({ open, onClose, alerts, setAlerts, onArm, tickers }) => {
+  const [sym, setSym] = useState("SPY");
+  const [lvl, setLvl] = useState("");
+  const closeRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") { e.preventDefault(); onClose(); } };
+    document.addEventListener("keydown", onKey);
+    window.requestAnimationFrame(() => closeRef.current?.focus());
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  const armed = alerts.filter((a) => !a.triggered);
+  const hits = alerts.filter((a) => a.triggered);
+  const removeAlert = (id) => setAlerts((prev) => prev.filter((a) => a.id !== id));
+  const liveFor = (symbol) => {
+    const t = (tickers || []).find((x) => x.symbol === symbol);
+    return Number.isFinite(Number(t?.price)) ? Number(t.price) : null;
+  };
+  const row = (a) => (
+    <div key={a.id} className="hist-row" style={{ alignItems: "center", opacity: a.triggered ? 0.9 : 1 }}>
+      <span className="chip" style={{ flex: "none", fontSize: 10 }}>{a.symbol}</span>
+      <span className="mono" style={{ flex: "none", fontSize: 11.5, color: a.triggered ? C.brass : "var(--text)" }}>
+        {a.dir === "above" ? "≥" : "≤"} {fmtNum(a.level, 2)}
+      </span>
+      {a.label && <span style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{a.label}</span>}
+      {!a.label && <span style={{ flex: 1 }} />}
+      {a.triggered
+        ? <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }} title={`Crossed at ${fmtNum(a.triggeredPx, 2)}`}>HIT</span>
+        : liveFor(a.symbol) == null
+          ? <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted }} title="This symbol has no live quote on the board — the alert checks whenever a sync prices it">no feed</span>
+          : <span className="mono" style={{ flex: "none", fontSize: 10.5, color: C.muted }}>{fmtNum(liveFor(a.symbol), 2)}</span>}
+      <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove alert" onClick={() => removeAlert(a.id)}><Trash2 size={12} /></button>
+    </div>
+  );
+  return (
+    <>
+      <div className="overlay" onClick={onClose} aria-hidden="true" />
+      <div className="drawer" role="dialog" aria-modal="true" aria-label="Price alerts">
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <Bell size={16} color={C.brass} />
+          <span className="disp" style={{ fontWeight: 600, fontSize: 15, marginLeft: 9, letterSpacing: ".04em" }}>PRICE ALERTS</span>
+          <button ref={closeRef} className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={onClose} aria-label="Close price alerts"><X size={15} /></button>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6, marginBottom: 14 }}>
+          Arm a level here, from a thesis's <b style={{ color: "var(--text)" }}>Levels that matter</b>, or from any
+          Level Map. Alerts check on every data sync while the desk is open, fire a toast, and — if you allow
+          notifications — page you even when the tab is in the background.
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+          <InstrumentSelect value={sym} onChange={setSym} includeWatchlist style={{ flex: 1, minWidth: 0 }} ariaLabel="Alert instrument" />
+          <input
+            className="bd-in mono-in"
+            style={{ width: 110, textTransform: "none" }}
+            type="number"
+            inputMode="decimal"
+            placeholder="level"
+            value={lvl}
+            onChange={(e) => setLvl(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && lvl) { onArm({ symbol: sym, level: lvl, label: "manual" }); setLvl(""); } }}
+            aria-label="Alert level"
+          />
+          <button className="btn btn-sm" disabled={!lvl} onClick={() => { onArm({ symbol: sym, level: lvl, label: "manual" }); setLvl(""); }}><Bell size={12} /> Arm</button>
+        </div>
+        {!alerts.length && (
+          <div style={{ color: C.muted, fontSize: 12.5, padding: "14px 0", textAlign: "center" }}>No alerts armed yet.</div>
+        )}
+        {armed.length > 0 && (
+          <>
+            <span className="lab-label">Armed · {armed.length}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>{armed.map(row)}</div>
+          </>
+        )}
+        {hits.length > 0 && (
+          <>
+            <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>
+              Triggered · {hits.length}
+              <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={() => setAlerts((prev) => prev.filter((a) => !a.triggered))}>Clear triggered</button>
+            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{hits.map(row)}</div>
+          </>
+        )}
+      </div>
+    </>
+  );
+};
+
 /* ---------------- Desk notes slide-over ---------------- */
 
 // The home for pinned headlines and free-text desk notes (audit roadmap: "give it a home"). The
@@ -8092,6 +8228,50 @@ export default function Overwatch() {
     }
     return acts;
   }, [archiveHistory, researchReports, news.data]);
+
+  // --- price alerts (audit roadmap Next) ---
+  const [alerts, setAlerts] = usePersistentState("overwatch:alerts", []);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const armAlert = useCallback(({ symbol, level, label = "" }) => {
+    const lv = Number(String(level).replace(/,/g, ""));
+    const sym = String(symbol || "").toUpperCase();
+    if (!sym || !Number.isFinite(lv) || lv <= 0) { notify("Pick an instrument and a numeric level to arm", "err"); return; }
+    const t = (market.data?.tickers || []).find((x) => x.symbol === sym);
+    const ref = Number(t?.price);
+    const dir = Number.isFinite(ref) ? (lv >= ref ? "above" : "below") : "above";
+    try { if (typeof Notification !== "undefined" && Notification.permission === "default") Notification.requestPermission(); } catch { /* unsupported */ }
+    setAlerts((prev) => [...prev, { id: uid(), symbol: sym, level: lv, dir, label, armedAt: Date.now(), triggered: false }].slice(-40));
+    notify(`Alert armed: ${sym} ${dir} ${fmtNum(lv, 2)}${Number.isFinite(ref) ? "" : " — checks once a sync prices it"}`, "ok");
+  }, [market.data, notify, setAlerts]);
+  // Check every armed alert against each fresh market sync; fire once per alert.
+  useEffect(() => {
+    const tickers = market.data?.tickers || [];
+    if (!tickers.length) return;
+    setAlerts((prev) => {
+      if (!prev.some((a) => !a.triggered)) return prev;
+      let changed = false;
+      const next = prev.map((a) => {
+        if (a.triggered) return a;
+        const t = tickers.find((x) => x.symbol === a.symbol);
+        const px = Number(t?.price);
+        if (!Number.isFinite(px)) return a;
+        const hit = a.dir === "above" ? px >= a.level : px <= a.level;
+        if (!hit) return a;
+        changed = true;
+        notify(`${a.symbol} crossed ${fmtNum(a.level, 2)}${a.label ? ` (${a.label})` : ""} — now ${fmtNum(px, 2)}`, "ok");
+        try {
+          if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+            new Notification(`${a.symbol} alert`, { body: `Crossed ${fmtNum(a.level, 2)}${a.label ? ` (${a.label})` : ""} — now ${fmtNum(px, 2)}` });
+          }
+        } catch { /* notifications unavailable */ }
+        return { ...a, triggered: true, triggeredAt: Date.now(), triggeredPx: px };
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [market.data]);
+  const armedCount = alerts.filter((a) => !a.triggered).length;
+  const hitCount = alerts.filter((a) => a.triggered).length;
   const deleteArchiveEntry = (id) => {
     setArchiveHistory((h) => h.filter((x) => x._id !== id));
     setViewing((v) => (v && v._id === id ? null : v));
@@ -8171,7 +8351,7 @@ export default function Overwatch() {
   const renderTabInner = (id, nav = setTab) => {
     switch (id) {
       case "pulse":
-        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onRefreshMarket={refreshMarket} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
+        return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onRefreshMarket={refreshMarket} onArmAlert={armAlert} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
         return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} pinnedTitles={pinnedNoteLines} inSplit={splitOn} />;
       case "calendar":
@@ -8196,6 +8376,7 @@ export default function Overwatch() {
             researchReports={effectiveResearchReports} setResearchReports={setResearchReports}
             notify={notify}
             auth={auth}
+            onArmAlert={armAlert}
           />
         );
       case "archives":
@@ -8277,6 +8458,12 @@ export default function Overwatch() {
             {anyLoading ? <RefreshCw size={14} className="spin" /> : winW > 760 ? <RefreshCw size={14} /> : <Zap size={14} />}
             {winW > 760 && (anyLoading ? "Syncing…" : "Refresh")}
           </button>
+          <button className="btn btn-ghost" onClick={() => setAlertsOpen(true)} title="Price alerts — arm levels and get paged when price crosses" aria-label="Price alerts" style={{ position: "relative" }}>
+            <Bell size={16} />
+            {(armedCount > 0 || hitCount > 0) && (
+              <span className="hdr-badge" style={hitCount ? { background: C.bear } : undefined}>{hitCount || armedCount}</span>
+            )}
+          </button>
           <button className="btn btn-ghost" onClick={() => setPaletteOpen(true)} title="Search the desk — instruments, theses, briefs, headlines (Ctrl/Cmd+K)" aria-label="Search the desk">
             <Search size={16} />
           </button>
@@ -8352,6 +8539,14 @@ export default function Overwatch() {
         </footer>
       )}
 
+      <AlertsDrawer
+        open={alertsOpen}
+        onClose={() => setAlertsOpen(false)}
+        alerts={alerts}
+        setAlerts={setAlerts}
+        onArm={armAlert}
+        tickers={market.data?.tickers || []}
+      />
       <DeskNotesDrawer
         open={notesOpen}
         onClose={() => setNotesOpen(false)}
