@@ -445,7 +445,10 @@ const C = {
   bear: "#EF4444",
   brass: "#3B82F6",
   info: "#38BDF8",
-  muted: "#94A3B8",
+  // CSS var, not a literal: ~75 inline styles use C.muted, and a literal grey tuned for the dark
+  // theme landed at ~1.8:1 on white (the audit's BUG-05). The var resolves per theme. Never
+  // concatenate an alpha suffix onto this one.
+  muted: "var(--muted)",
 };
 
 const SETTINGS_KEY = "overwatch:settings";
@@ -1664,7 +1667,7 @@ const VixGauge = ({ value, structure, vixData }) => {
           <line x1="110" y1="106" x2="38" y2="106" stroke="#E2E8F0" strokeWidth="2.5" strokeLinecap="round" />
         </g>
         <circle cx="110" cy="106" r="5.5" fill="#E2E8F0" />
-        <text x="110" y="88" textAnchor="middle" fontSize="24" fontWeight="700" fill={zone ? zone.c : "#94A3B8"} fontFamily="JetBrains Mono, monospace">
+        <text x="110" y="88" textAnchor="middle" fontSize="24" fontWeight="700" fill={zone ? zone.c : "var(--muted)"} fontFamily="JetBrains Mono, monospace">
           {value == null ? "—" : fmtNum(value, 2)}
         </text>
         {eqVal != null && (
@@ -2020,6 +2023,26 @@ const buildSessionRead = ({ market, points, news }) => {
 
 const ETF_INSTRUMENTS = new Set(["SPY", "QQQ", "DIA"]);
 
+// One-pass vertical label declutter (BUG-04): given target y positions, returns adjusted ys that
+// preserve rank order and honor a minimum gap, clamped to [top, bottom]. Only the text moves — the
+// lines stay at their true price — so close levels stop overprinting ("Open"/"Close" → "Obose").
+const declutterYs = (targets, minGap, top, bottom) => {
+  const order = targets.map((y, i) => [y, i]).sort((a, b) => a[0] - b[0]);
+  const ys = order.map(([y]) => y);
+  for (let i = 1; i < ys.length; i++) if (ys[i] < ys[i - 1] + minGap) ys[i] = ys[i - 1] + minGap;
+  if (ys.length) {
+    if (ys[ys.length - 1] > bottom) ys[ys.length - 1] = bottom;
+    for (let i = ys.length - 2; i >= 0; i--) if (ys[i] > ys[i + 1] - minGap) ys[i] = ys[i + 1] - minGap;
+    if (ys[0] < top) {
+      ys[0] = top;
+      for (let i = 1; i < ys.length; i++) if (ys[i] < ys[i - 1] + minGap) ys[i] = ys[i - 1] + minGap;
+    }
+  }
+  const out = new Array(targets.length);
+  order.forEach(([, idx], k) => { out[idx] = ys[k]; });
+  return out;
+};
+
 const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const dec = decimals != null ? decimals : (ETF_INSTRUMENTS.has(label) ? 2 : 0);
   if (!spx || spx.spot == null) return <div style={{ color: C.muted, fontSize: 12 }}>No {label} levels in last sync.</div>;
@@ -2064,6 +2087,18 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
   const unfilledPct = gapFrontier != null && gapC ? ((gapFrontier - gapC) / gapC) * 100 : null;
   const hasGap = gapPct != null && Math.abs(gapPct) >= 0.1 && unfilledPct != null && Math.abs(unfilledPct) >= 0.05;
   const gapId = String(label).replace(/[^A-Za-z0-9]/g, "") || "x";
+  // Decluttered label lanes (BUG-04): four independent text columns — Open/Close (far left), the
+  // R/S/PIVOT labels (left gutter), level values (inside right edge), High/Low (far right) — each
+  // run through the one-pass declutter so nearby levels never overprint. Lines stay at true price.
+  const spotY = y(spx.spot);
+  const tagAbove = spotY - 19 >= 8; // near the top edge the price tag flips below its line
+  const tagTop = tagAbove ? spotY - 19 : spotY + 2;
+  const leftRows = ohlcRows.filter((r) => r.side === "left");
+  const rightRows = ohlcRows.filter((r) => r.side === "right");
+  const leftOuterYs = declutterYs(leftRows.map((r) => y(r.v) + 3.5), 10, 12, H - 4);
+  const rightOuterYs = declutterYs(rightRows.map((r) => y(r.v) + 3.5), 10, 12, H - 4);
+  const srLabelYs = declutterYs(rows.map((r) => y(r.v) + 3.5), 11, 12, H - 4);
+  const srValueYs = declutterYs(rows.map((r) => y(r.v) - 4), 11, 10, H - 6);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
       <defs>
@@ -2083,12 +2118,15 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
         const cx = AX + (PR - AX) * 0.5;  // centred horizontally on the map
         const cy = (gTop + gBot) / 2;
         const wordY = (y(gapO) + y(gapC)) / 2 + 3;  // left "GAP" sits between the Open and Close labels
+        // The centred % shares horizontal range with the floating price tag — suppress it rather
+        // than let the tag print over it when their vertical bands intersect.
+        const pctClear = cy + 8 < tagTop - 2 || cy - 8 > tagTop + 19;
         return (
           <g style={{ pointerEvents: "none" }}>
             <rect x={AX} y={gTop} width={PR - AX} height={gh} fill={`url(#gapHatch-${gapId})`} />
-            <text x={4} y={wordY} textAnchor="start" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">GAP</text>
-            {gh >= 12 && (
-              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" fill="#D9A05A" fontFamily="JetBrains Mono, monospace">{fmtSigned(unfilledPct, 2, "%")}</text>
+            <text x={4} y={wordY} textAnchor="start" fontSize="9" fontWeight="700" letterSpacing="0.08em" fill="var(--chart-gap)" fontFamily="JetBrains Mono, monospace">GAP</text>
+            {gh >= 12 && pctClear && (
+              <text x={cx} y={cy + 3} textAnchor="middle" fontSize="9" fontWeight="700" fill="var(--chart-gap)" fontFamily="JetBrains Mono, monospace">{fmtSigned(unfilledPct, 2, "%")}</text>
             )}
           </g>
         );
@@ -2096,40 +2134,37 @@ const LevelsLadder = ({ spx, label = "SPX", decimals, ohlc }) => {
       {/* OHLC reference rails — muted + dotted so they sit under the S/R and pivot lines.
           Open/Close ride the far-left gutter, High/Low the right gutter (clear of the value numbers). */}
       {ohlcRows.map((r, i) => (
-        <g key={`ohlc-${i}`} style={{ opacity: 0.5 }}>
-          <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke="#64748B" strokeWidth="1" strokeDasharray="1 3" />
-          <text
-            x={r.side === "left" ? 4 : PR + 5}
-            y={y(r.v) + 3.5}
-            textAnchor="start"
-            fontSize="9"
-            fill="#94A3B8"
-            fontFamily="JetBrains Mono, monospace"
-            fontWeight="700"
-          >
-            {r.label}
-          </text>
-        </g>
+        <line key={`ohlc-line-${i}`} x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke="var(--chart-rail)" strokeWidth="1" strokeDasharray="1 3" opacity="0.5" />
       ))}
-      <line x1={AX} y1="8" x2={AX} y2={H - 8} stroke="#1E293B" strokeWidth="1" />
+      {leftRows.map((r, i) => (
+        <text key={`ohlc-l-${i}`} x={4} y={leftOuterYs[i]} textAnchor="start" fontSize="9" fill="var(--muted)" fontFamily="JetBrains Mono, monospace" fontWeight="700" opacity="0.75">
+          {r.label}
+        </text>
+      ))}
+      {rightRows.map((r, i) => (
+        <text key={`ohlc-r-${i}`} x={PR + 5} y={rightOuterYs[i]} textAnchor="start" fontSize="9" fill="var(--muted)" fontFamily="JetBrains Mono, monospace" fontWeight="700" opacity="0.75">
+          {r.label}
+        </text>
+      ))}
+      <line x1={AX} y1="8" x2={AX} y2={H - 8} stroke="var(--chart-axis)" strokeWidth="1" />
       {rows.map((r, i) => (
         <g key={i}>
           <line x1={AX} y1={y(r.v)} x2={PR} y2={y(r.v)} stroke={colorOf(r.type)} strokeWidth={r.type === "piv" ? 1.6 : 1.2} strokeDasharray={r.type === "piv" ? "" : "5 4"} opacity="0.75" />
-          <text x={AX - 6} y={y(r.v) + 3.5} textAnchor="end" fontSize="10" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace" fontWeight="600">
+          <text x={AX - 6} y={srLabelYs[i]} textAnchor="end" fontSize="10" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace" fontWeight="600">
             {r.label}
           </text>
-          <text x={VALX} y={y(r.v) - 4} textAnchor="end" fontSize="10.5" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace">
+          <text x={VALX} y={srValueYs[i]} textAnchor="end" fontSize="10.5" fill={colorOf(r.type)} fontFamily="JetBrains Mono, monospace">
             {fmtNum(r.v, dec)}
           </text>
         </g>
       ))}
       <g>
-        <line x1={AX} y1={y(spx.spot)} x2={PR} y2={y(spx.spot)} stroke="#E2E8F0" strokeWidth="2" />
-        <circle cx={AX} cy={y(spx.spot)} r="4.5" fill="#E2E8F0">
+        <line x1={AX} y1={spotY} x2={PR} y2={spotY} stroke="var(--chart-spot)" strokeWidth="2" />
+        <circle cx={AX} cy={spotY} r="4.5" fill="var(--chart-spot)">
           <animate attributeName="r" values="4;5.5;4" dur="2s" repeatCount="indefinite" />
         </circle>
-        <rect x={AX + 6} y={y(spx.spot) - 19} rx="4" width={spotRectW} height="17" fill="#E2E8F0" />
-        <text x={spotCenterX} y={y(spx.spot) - 6.5} textAnchor="middle" fontSize="10.5" fill="#020617" fontWeight="700" fontFamily="JetBrains Mono, monospace">
+        <rect x={AX + 6} y={tagTop} rx="4" width={spotRectW} height="17" fill="var(--chart-spot)" />
+        <text x={spotCenterX} y={tagTop + 12.5} textAnchor="middle" fontSize="10.5" fill="var(--chart-spot-ink)" fontWeight="700" fontFamily="JetBrains Mono, monospace">
           {label} {fmtNum(spx.spot, dec)}
         </text>
       </g>
@@ -2283,7 +2318,10 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
         {/* even-split anchor: where every pillar would sit if weighted equally — vertices outside this
             ring are overweight, inside are underweight, giving the shape a fixed reference to read against */}
         <polygon points={polygon(evenSplit)} fill="none" stroke="#3B82F6" strokeWidth="1" strokeDasharray="3 3" opacity="0.45" />
-        <text x={cx} y={cy - outer * (evenSplit / max) - 3} textAnchor="middle" fill="#3B82F6" fontSize="7.5" opacity="0.7" fontFamily="JetBrains Mono, monospace">even {fmtPct(evenSplit)}%</text>
+        {/* Caption sits under the ring's BOTTOM edge midpoint — for an odd pillar count no spoke runs
+            straight down, so it can't collide with a vertex handle the way it did on the top spoke
+            (at balanced weights the Technicals vertex lands exactly where the caption used to). */}
+        <text x={cx} y={cy + outer * (evenSplit / max) * Math.cos(Math.PI / n) + 10} textAnchor="middle" fill="#3B82F6" fontSize="7.5" opacity="0.7" fontFamily="JetBrains Mono, monospace">even {fmtPct(evenSplit)}%</text>
         {data.map((d, i) => {
           const [x1, y1] = point(i, 0);
           const [x2, y2] = point(i, max);
@@ -2293,7 +2331,7 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
               <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#243140" strokeWidth="1" />
               <text x={lx} y={ly - 5} textAnchor="middle" dominantBaseline="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace">
                 {d.score != null && <title>{`Current ${d.k} read: ${d.score > 0 ? "+" : ""}${d.score} (unweighted, -100 to 100) — the weight below is how much it counts toward the call`}</title>}
-                <tspan fill="#94A3B8">{d.k}</tspan>
+                <tspan fill="var(--muted)">{d.k}</tspan>
                 {d.score != null && (
                   <tspan fill={d.score > 3 ? C.bull : d.score < -3 ? C.bear : C.brass} fontWeight="700"> {d.score > 0 ? "+" : ""}{d.score}</tspan>
                 )}
@@ -3723,7 +3761,7 @@ const MarketBreadth = ({ data, tickers = [] }) => {
    ================================================================ */
 const RRG_QUADRANTS = {
   leading: { label: "Leading", color: C.bull, blurb: "outperforming & accelerating" },
-  weakening: { label: "Weakening", color: "#EAB308", blurb: "outperforming but slowing" },
+  weakening: { label: "Weakening", color: "var(--rrg-weakening)", blurb: "outperforming but slowing" },
   lagging: { label: "Lagging", color: C.bear, blurb: "underperforming & decelerating" },
   improving: { label: "Improving", color: C.brass, blurb: "underperforming but turning up" },
 };
@@ -3750,6 +3788,27 @@ const RotationGraph = ({ sectors, focus, onFocus }) => {
     lagging: { x: P.l + 8, y: H - P.b - 8, anchor: "start" },
     improving: { x: P.l + 8, y: P.t + 15, anchor: "start" },
   };
+  // BUG-12: several heads typically cluster near the centre and their ticker labels overprinted.
+  // Cluster labels whose horizontal spans overlap, then run the shared one-pass vertical declutter
+  // per cluster — every ticker stays legible while the dots stay at their true coordinates.
+  const LBL_W = 32;
+  const rawLabels = sectors.map((s) => {
+    const head = s.tail[s.tail.length - 1];
+    const left = x(head.ratio) > W - P.r - 58;
+    const lx = x(head.ratio) + (left ? -9 : 9);
+    return { symbol: s.symbol, lx, ly: y(head.momentum) + 4, x0: left ? lx - LBL_W : lx, x1: left ? lx : lx + LBL_W };
+  });
+  const clusters = [];
+  for (const L of [...rawLabels].sort((a, b) => a.x0 - b.x0)) {
+    const tail = clusters[clusters.length - 1];
+    if (tail && L.x0 <= tail.x1 + 4) { tail.items.push(L); tail.x1 = Math.max(tail.x1, L.x1); }
+    else clusters.push({ x1: L.x1, items: [L] });
+  }
+  const labelYs = new Map();
+  for (const c of clusters) {
+    const ys = declutterYs(c.items.map((L) => L.ly), 11, P.t + 10, H - P.b - 4);
+    c.items.forEach((L, i) => labelYs.set(L.symbol, ys[i]));
+  }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="rrg-plot" role="img" aria-label="Sector rotation graph: relative strength vs momentum by sector">
       <defs>
@@ -3795,7 +3854,7 @@ const RotationGraph = ({ sectors, focus, onFocus }) => {
             <circle cx={x(head.ratio)} cy={y(head.momentum)} r="5.5" fill={color} stroke="var(--panel2)" strokeWidth="1.5" filter="url(#rrg-glow)" />
             <text
               x={x(head.ratio) + (labelLeft ? -9 : 9)}
-              y={y(head.momentum) + 4}
+              y={labelYs.get(s.symbol) ?? y(head.momentum) + 4}
               textAnchor={labelLeft ? "end" : "start"}
               className="rrg-sym"
               fill={color}
@@ -5610,7 +5669,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
 const OUTCOME_META = {
   hit: { label: "HIT", color: "#22C55E" },
   miss: { label: "MISS", color: "#EF4444" },
-  flat: { label: "FLAT", color: "#94A3B8" },
+  flat: { label: "FLAT", color: "#64748B" },
 };
 /* ---------- Research Library — grounded deep-research harness (Sonnet + web search) ---------- */
 
