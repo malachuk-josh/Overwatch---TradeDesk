@@ -120,7 +120,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "WULF", name: "TeraWulf", off: true, cat: "AI Infra" },
   { symbol: "VRT", name: "Vertiv Holdings", off: true, cat: "AI Infra" },
   { symbol: "GEV", name: "GE Vernova", off: true, cat: "AI Infra" },
-  { symbol: "SPCX", name: "SPCX", off: true, cat: "AI Infra" },
+  { symbol: "SPCX", name: "SpaceX", off: true, cat: "AI Infra" },
   // Healthcare infrastructure basket — hospitals, distributors, diagnostics, devices, health REITs
   // and health-tech. Live-quoted, shipped hidden by default under the "Healthcare" subcategory.
   { symbol: "UNH", name: "UnitedHealth Group", off: true, cat: "Healthcare" },
@@ -954,7 +954,7 @@ const condenseMarket = (m) => {
 
 const condenseNews = (n) => {
   if (!n) return "News: not synced.";
-  const h = (n.headlines || []).map((x) => `[${x.sentiment}/${x.impact}] ${x.title} — ${x.note}`).join("\n");
+  const h = (n.headlines || []).map((x) => `[${x.sentiment}/${x.impact}] ${x.title}${x.note ? ` — ${x.note}` : ""}`).join("\n");
   return `TAPE MOOD: ${n.mood || ""}\nHEADLINES:\n${h}`;
 };
 
@@ -3234,7 +3234,7 @@ const NewsFilterMenu = ({ cats, cat, setCat, tone, setTone, sortBy, setSortBy, s
   );
 };
 
-const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
+const NewsTab = ({ news, onRefresh, onAddNote, pinnedTitles = null, inSplit = false }) => {
   const { status, data, error, at } = news;
   const [cat, setCat] = usePersistentState("overwatch:news:cat", "all");
   const [tone, setTone] = usePersistentState("overwatch:news:tone", "all");
@@ -3324,9 +3324,20 @@ const NewsTab = ({ news, onRefresh, onAddNote, inSplit = false }) => {
                   {(h.tickers || []).map((ticker) => <span className="ticker-tag" key={ticker}>{ticker}</span>)}
                 </div>
               )}
-              <button className="btn btn-ghost btn-sm news-add" title="Add to desk notes" onClick={() => onAddNote(h.title)}>
-                <NotebookPen size={12} /> note
-              </button>
+              {(() => {
+                const pinned = Boolean(pinnedTitles?.has("• " + h.title));
+                return (
+                  <button
+                    className="btn btn-ghost btn-sm news-add"
+                    style={pinned ? { color: C.brass, borderColor: "rgba(59,130,246,.45)" } : undefined}
+                    title={pinned ? "Pinned to the desk note — click to unpin" : "Pin to the desk note — it feeds the next thesis (Thesis inputs → Desk note)"}
+                    aria-pressed={pinned}
+                    onClick={() => onAddNote(h.title)}
+                  >
+                    {pinned ? <><Check size={12} /> pinned</> : <><NotebookPen size={12} /> note</>}
+                  </button>
+                );
+              })()}
             </div>
           ))}
           {!filtered.length && <div style={{ color: C.muted, fontSize: 13, padding: 16 }}>Nothing matches those filters.</div>}
@@ -3412,7 +3423,7 @@ const TradingViewCalendarWidget = ({ lightMode = false }) => {
     const poll = () => {
       if (cancelled) return;
       if (container.querySelector("iframe")) {
-        revealTimer = setTimeout(() => !cancelled && setLoading(false), 400);
+        revealTimer = setTimeout(() => !cancelled && setLoading(false), 900);
         return;
       }
       if (Date.now() - start > 12000) { setLoading(false); return; }
@@ -4026,7 +4037,9 @@ const VolStructureMap = ({ detail = {} }) => {
       {hasPremium && (
         <div className="vol-premium">
           <div className="vol-premium-head">
-            <span className="vol-premium-label">Vol risk premium</span>
+            {/* Headline = VIX vs the desk's own equilibrium estimate (labelled as such — CHK-01);
+                the classic implied-minus-realized spread rides alongside so both reads are explicit. */}
+            <span className="vol-premium-label" title="VIX minus the desk equilibrium estimate (EQ = realized vol + term-structure adjustment). Not the classic IV−RV spread — that's shown at right.">VIX vs equilibrium</span>
             <span className="vol-premium-val" style={{ color: premColor }}>
               {fmtSigned(premium, 1)} {premiumLabel}
             </span>
@@ -4034,6 +4047,7 @@ const VolStructureMap = ({ detail = {} }) => {
           <div className="vol-premium-eq">
             <span>EQ {vixEq != null ? fmtNum(vixEq, 1) : "—"}</span>
             <span>RV {realizedVol != null ? fmtNum(realizedVol, 1) : "—"}</span>
+            {detail.ivRvSpread != null && <span title="Classic vol risk premium: implied (VIX) minus 20-day realized">IV−RV {fmtSigned(detail.ivRvSpread, 1)}</span>}
           </div>
           <div className="vol-premium-bar">
             <div className="vol-premium-center" />
@@ -4160,7 +4174,7 @@ const InternalsRegime = ({ data }) => {
 
           <div className="internals-footer">
             <div>
-              <b>Put/call</b>
+              <b title="Raw options-volume put/call ratio — a flow read; distinct from the Fear & Greed 0-100 put/call pressure score under Positioning">Put/call ratio</b>
               <span>{fmtNum(internals.putCall)} · {internals.putCallRead || "Options pressure is not available in this sync."}</span>
             </div>
             <div>
@@ -6421,8 +6435,10 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           </div>
         )}
 
-        <span className="lab-label">Watchlist · {watchlist.length} · {watchlist.filter((item) => !item.off).length}/{MARKET_BOARD_CAP} shown</span>
-        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Drag the handle to reorder cards on Market Pulse. Use Show / Hide to control what appears; two API slots stay reserved for the active Lab pair.</div>
+        {/* One selector, three labelled numbers (BUG-10): shown = cards on the Pulse grid, board
+            slots = the live-pricing cap, available = the full instrument catalog incl. hidden groups. */}
+        <span className="lab-label">Watchlist · {watchlist.filter((item) => !item.off).length} shown · {MARKET_BOARD_CAP} board slots · {watchlist.length} available</span>
+        <div style={{ fontSize: 10.5, color: C.faint || C.muted, margin: "-4px 0 10px" }}>Shown cards render on Market Pulse; every shown instrument uses one of the {MARKET_BOARD_CAP} live-pricing slots (two stay reserved for the active Lab pair); hidden instruments — including the collapsed groups below — stay in the {watchlist.length}-instrument catalog without using a slot. Drag the handle to reorder cards.</div>
         {(() => {
           const rows = watchlist.map((w, i) => ({ w, i }));
           const mainRows = rows.filter(({ w }) => !w.cat);
@@ -6500,7 +6516,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
           <button className="btn btn-sm btn-danger" onClick={() => setConfirmClear(true)}><Trash2 size={13} /> Clear thesis archive</button>
         ) : (
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-sm btn-danger" onClick={() => { onClearHistory(); setConfirmClear(false); }}><AlertTriangle size={13} /> Confirm — wipe it</button>
+            <button className="btn btn-sm btn-danger" onClick={() => { onClearHistory(); setConfirmClear(false); }}><AlertTriangle size={13} /> Confirm — permanently delete every archived thesis</button>
             <button className="btn btn-sm" onClick={() => setConfirmClear(false)}>Keep it</button>
           </div>
         )}
@@ -7719,10 +7735,17 @@ export default function Overwatch() {
     }
   };
 
+  // Pin/unpin a headline into the desk note (the free-text input the next thesis run reads).
+  // Toggle + dedupe: clicking an already-pinned card unpins it instead of appending a duplicate,
+  // and the card itself shows the pinned state (BUG-17).
   const addNote = (title) => {
-    setNotes((n) => (n ? n + "\n" : "") + "• " + title);
-    notify("Pinned to desk notes", "ok");
+    const line = "• " + title;
+    const lines = (notes || "").split("\n").filter(Boolean);
+    const pinned = lines.includes(line);
+    setNotes(pinned ? lines.filter((l) => l !== line).join("\n") : [...lines, line].join("\n"));
+    notify(pinned ? "Unpinned from the desk note" : "Pinned to the desk note — it feeds the next thesis (Thesis inputs → Desk note)", "ok");
   };
+  const pinnedNoteLines = useMemo(() => new Set((notes || "").split("\n").filter(Boolean)), [notes]);
   const deleteArchiveEntry = (id) => {
     setArchiveHistory((h) => h.filter((x) => x._id !== id));
     setViewing((v) => (v && v._id === id ? null : v));
@@ -7804,7 +7827,7 @@ export default function Overwatch() {
       case "pulse":
         return <PulseTab market={market} points={points.data} pointsState={points} news={news.data} vixHint={points.data?.vix?.structure} hiddenSymbols={hiddenSymbols} watchlist={watchlist} setWatchlist={setWatchlist} onRefresh={syncAll} onRefreshMarket={refreshMarket} onGoThesis={() => nav("thesis")} morningDiff={morningDiff} onDismissDiff={() => setMorningDiff(null)} />;
       case "news":
-        return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} inSplit={splitOn} />;
+        return <NewsTab news={news} onRefresh={refreshNews} onAddNote={addNote} pinnedTitles={pinnedNoteLines} inSplit={splitOn} />;
       case "calendar":
         return <CalendarTab points={points} onRefresh={refreshPoints} inSplit={splitOn} lightMode={lightMode} />;
       case "thesis":
