@@ -543,6 +543,14 @@ const calendarImportance = (value, title = "") => {
 
 const majorCalendarEvent = (event) => event.importance === "high" || /fed|fomc|powell|cpi|ppi|pce|payroll|jobs|unemployment|gdp|retail sales|ism|pmi|jobless claims|treasury auction|consumer confidence|quad witching|russell recon|monthly opex|msci|nasdaq-100 recon/i.test(event.event || "");
 
+// The upstream feed labels US agencies with British spellings ("Bureau of Labour Statistics",
+// "Department of Labour"). These are US government bodies with official US spellings — normalize on
+// ingest so every downstream surface (calendar rows, tooltips, thesis context) reads correctly.
+const usSpelling = (text) => String(text || "")
+  .replace(/\bLabour\b/g, "Labor")
+  .replace(/\bDefence\b/g, "Defense")
+  .replace(/\bCentre\b/g, "Center");
+
 const normalizeCalendarEvent = (item) => {
   const importance = calendarImportance(item.importance, item.title);
   const numericOrNull = (value) => value === null || value === undefined || value === "" ? null : Number.isFinite(Number(value)) ? Number(value) : null;
@@ -552,14 +560,14 @@ const normalizeCalendarEvent = (item) => {
   return {
     time: eventEtTime(item.date),
     date: eventEtDate(item.date),
-    event: item.title || item.indicator || "Economic event",
+    event: usSpelling(item.title || item.indicator || "Economic event"),
     importance,
     period: item.period || null,
     actual,
     forecast,
     previous,
-    source: item.source || "TradingView economic calendar",
-    note: clampText(item.comment, 180),
+    source: usSpelling(item.source || "TradingView economic calendar"),
+    note: clampText(usSpelling(item.comment), 180),
   };
 };
 
