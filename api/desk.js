@@ -2078,11 +2078,16 @@ const headlineTickers = (title) => {
 };
 
 const headlineNote = ({ category, impact, sentiment, tickers }) => {
-  const direction = sentiment === "bullish" ? "constructive" : sentiment === "bearish" ? "defensive" : "two-sided";
-  const target = tickers.length ? tickers.join("/") : "index risk";
-  if (impact >= 5) return `High-priority ${category} catalyst; treat as ${direction} for ${target} until price confirms otherwise.`;
-  if (impact === 4) return `Important ${category} input for ${target}; watch whether it changes breadth, rates, or volatility.`;
-  return `Secondary ${category} context; useful color, but price action still gets the final vote.`;
+  // Only top-priority catalysts get a synthesized read. The lower tiers used to carry templated
+  // filler that repeated verbatim on nearly every card ("Important flows input for ___; watch
+  // whether it changes breadth, rates, or volatility." on 6 of 7) — an empty slot beats eight
+  // identical ones, and the UI simply omits a missing note.
+  if (impact >= 5) {
+    const direction = sentiment === "bullish" ? "constructive" : sentiment === "bearish" ? "defensive" : "two-sided";
+    const target = tickers.length ? tickers.join("/") : "index risk";
+    return `High-priority ${category} catalyst; treat as ${direction} for ${target} until price confirms otherwise.`;
+  }
+  return null;
 };
 
 const catalystStack = (headlines) => {
@@ -2531,6 +2536,10 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed, termStruc
     : premium >= 2.0 ? "rich"
     : premium <= -2.0 ? "cheap"
     : "fair";
+  // Classic vol risk premium = implied minus realized. The tile's headline number is VIX vs the
+  // desk's own equilibrium estimate (RV + structure adjustment), which is a different — deliberate —
+  // signal; surfacing both stops the label and the operand disagreeing (audit CHK-01).
+  const ivRvSpread = Number.isFinite(vixPrice) && rv != null ? round(vixPrice - rv, 1) : null;
 
   // Composite vol score: zone (40%) + premium (35%) + structure (25%).
   const zoneScore = Number.isFinite(vixPrice)
@@ -2542,11 +2551,11 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed, termStruc
   const volScore = round(clamp(zoneScore * 0.4 + premiumScore * 0.35 + structureScore * 0.25, -100, 100), 0);
 
   const volRead = premiumLabel === "rich"
-    ? `VIX is ${Math.abs(premium)} pts above equilibrium (${vixEq}) — the market is over-pricing near-term risk. ${structure === "contango" ? "Term structure is orderly, reinforcing mean-reversion odds." : structure === "backwardation" ? "But term structure is inverted, so the stress may be justified." : "Term structure is flat, so the premium could persist."}`
+    ? `VIX is ${Math.abs(premium)} pts above the desk equilibrium estimate (EQ ${vixEq}) — the market is over-pricing near-term risk. ${structure === "contango" ? "Term structure is orderly, reinforcing mean-reversion odds." : structure === "backwardation" ? "But term structure is inverted, so the stress may be justified." : "Term structure is flat, so the premium could persist."}`
     : premiumLabel === "cheap"
-    ? `VIX is ${Math.abs(premium)} pts below equilibrium (${vixEq}) — implied vol is under-pricing risk relative to realized moves. ${structure === "backwardation" ? "Inverted term structure adds to the concern." : "Complacency can resolve abruptly if a catalyst hits."}`
+    ? `VIX is ${Math.abs(premium)} pts below the desk equilibrium estimate (EQ ${vixEq}) — implied vol is under-pricing risk relative to realized moves. ${structure === "backwardation" ? "Inverted term structure adds to the concern." : "Complacency can resolve abruptly if a catalyst hits."}`
     : premium != null
-    ? `VIX is near equilibrium (${vixEq}) — implied vol is fairly priced. ${structure === "contango" ? "Orderly term structure supports levels-based trading." : structure === "backwardation" ? "But inverted term structure argues for caution despite fair pricing." : "Direction needs confirmation before adding risk."}`
+    ? `VIX ${round(vixPrice, 1)} is near its equilibrium estimate (EQ ${vixEq}) — implied vol is fairly priced. ${structure === "contango" ? "Orderly term structure supports levels-based trading." : structure === "backwardation" ? "But inverted term structure argues for caution despite fair pricing." : "Direction needs confirmation before adding risk."}`
     : structure === "backwardation"
     ? "Front-loaded volatility is warning that liquidity can stay unstable and failed breaks can travel fast."
     : structure === "contango"
@@ -2622,6 +2631,7 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed, termStruc
       vixEq,
       premium,
       premiumLabel,
+      ivRvSpread,
       zone: volZone,
       score: volScore,
       read: volRead,
@@ -2638,15 +2648,18 @@ const buildInternals = ({ spx, ndx, dji, vix, sectors = [], fearGreed, termStruc
 const flowRead = (symbol, changePct, relativeVolume) => {
   const chg = Number(changePct) || 0;
   const rel = Number(relativeVolume) || 0;
-  const participation = rel >= 1.15 ? "with active participation" : rel <= 0.75 ? "on light participation" : "with normal participation";
-  if (symbol === "QQQ") return chg >= 0 ? `Growth leadership is bid ${participation}.` : `Growth leadership is under pressure ${participation}.`;
-  if (symbol === "DIA") return chg >= 0 ? `Dow/value exposure is cushioning the tape ${participation}.` : `Dow/value exposure is not insulating risk ${participation}.`;
-  if (symbol === "IWM") return chg >= 0 ? `Small caps are confirming risk appetite ${participation}.` : `Small caps are lagging, a breadth warning ${participation}.`;
-  if (symbol === "HYG") return chg >= 0 ? `High-yield credit is confirming risk appetite ${participation}.` : `High-yield credit is not confirming a clean risk-on tape ${participation}.`;
-  if (symbol === "TLT") return chg >= 0 ? `Duration demand is firm, usually a defensive/rates bid signal ${participation}.` : `Duration is selling off, usually a rates-pressure signal ${participation}.`;
-  if (symbol === "GLD") return chg >= 0 ? `Gold is bid, suggesting hedge demand is present ${participation}.` : `Gold is softer, suggesting less haven urgency ${participation}.`;
-  if (symbol === "UUP") return chg >= 0 ? `Dollar strength is a headwind for global risk ${participation}.` : `Dollar softness is easing one macro headwind ${participation}.`;
-  return chg >= 0 ? `${symbol} is bid ${participation}.` : `${symbol} is offered ${participation}.`;
+  // The shared participation read lives ONCE in the panel summary (see buildPositioning). A row only
+  // mentions volume when ITS book genuinely deviates — every row ending "on light participation" 8/8
+  // made the template visible through the prose.
+  const outlier = rel >= 1.3 ? ` on outsized volume (${round(rel, 1)}x)` : rel > 0 && rel <= 0.6 ? ` on unusually thin volume (${round(rel, 1)}x)` : "";
+  if (symbol === "QQQ") return chg >= 0 ? `Growth leadership is bid${outlier}.` : `Growth leadership is under pressure${outlier}.`;
+  if (symbol === "DIA") return chg >= 0 ? `Dow/value exposure is cushioning the tape${outlier}.` : `Dow/value exposure is not insulating risk${outlier}.`;
+  if (symbol === "IWM") return chg >= 0 ? `Small caps are confirming risk appetite${outlier}.` : `Small caps are lagging, a breadth warning${outlier}.`;
+  if (symbol === "HYG") return chg >= 0 ? `High-yield credit is confirming risk appetite${outlier}.` : `High-yield credit is not confirming a clean risk-on tape${outlier}.`;
+  if (symbol === "TLT") return chg >= 0 ? `Duration demand is firm, usually a defensive/rates bid signal${outlier}.` : `Duration is selling off, usually a rates-pressure signal${outlier}.`;
+  if (symbol === "GLD") return chg >= 0 ? `Gold is bid, suggesting hedge demand is present${outlier}.` : `Gold is softer, suggesting less haven urgency${outlier}.`;
+  if (symbol === "UUP") return chg >= 0 ? `Dollar strength is a headwind for global risk${outlier}.` : `Dollar softness is easing one macro headwind${outlier}.`;
+  return chg >= 0 ? `${symbol} is bid${outlier}.` : `${symbol} is offered${outlier}.`;
 };
 
 const buildPositioning = ({ flowScan, fearGreed, sectors = [] }) => {
@@ -2705,7 +2718,7 @@ const buildPositioning = ({ flowScan, fearGreed, sectors = [] }) => {
     note,
   });
   const signals = [
-    signal("Put/call pressure", components.putCall, "Lower scores imply more defensive options demand."),
+    signal("Put/call pressure", components.putCall, "CNN Fear & Greed\u2019s 0\u2013100 options-positioning score \u2014 a sentiment gauge, not the raw put/call ratio shown under Internals."),
     signal("Junk bond demand", components.junkBondDemand, "Credit demand is a direct risk-appetite check."),
     signal("Safe-haven demand", components.safeHavenDemand, "Haven demand rising into equity weakness confirms stress."),
     signal("Market momentum", components.marketMomentum, "SPX momentum component helps separate pullbacks from trend breaks."),
@@ -2717,9 +2730,17 @@ const buildPositioning = ({ flowScan, fearGreed, sectors = [] }) => {
     `${positiveSectors}/${sectors.length || 11} sectors are positive; breadth ${positiveSectors >= 7 ? "leans supportive" : positiveSectors <= 4 ? "leans fragile" : "is mixed"}.`,
   ];
 
+  // The participation read, said once for the whole board instead of tailing every row.
+  const rels = flows.map((f) => Number(f.relativeVolume)).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+  const relMedian = rels.length ? rels[Math.floor(rels.length / 2)] : null;
+  const participationLine = relMedian == null ? ""
+    : relMedian >= 1.15 ? ` Participation is active across the board (median ${round(relMedian, 1)}x average volume).`
+      : relMedian <= 0.75 ? ` Participation is light across the board (median ${round(relMedian, 1)}x average volume).`
+        : ` Participation is normal (median ${round(relMedian, 1)}x average volume).`;
+
   return {
     source: "TradingView ETF proxies + CNN Fear & Greed components",
-    summary: `Positioning proxy is ${posture}: ${qqq?.read || "growth tape mixed"} ${hyg?.read || ""}`,
+    summary: `Positioning proxy is ${posture}: ${qqq?.read || "growth tape mixed"} ${hyg?.read || ""}${participationLine}`,
     posture,
     score: round(riskScore, 2),
     flows,
