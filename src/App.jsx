@@ -4995,7 +4995,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   // Symmetric fix for the Thesis Archive: opening a saved (or sample) thesis from the Library or
   // Market Pulse only sets `viewing` — without this, it silently lands on whatever Lab sub-tab was
   // last active (Research, by default) with the thesis invisible until the visitor manually clicks
-  // Synthesis Lab. Force that sub-tab open the same way the research jump already does.
+  // the Thesis Lab sub-tab. Force that sub-tab open the same way the research jump already does.
   useEffect(() => { if (viewing) setToolView("synthesis"); }, [viewing, setToolView]);
   // Thesis Lab sub-nav, in workflow order: Research leads (ground the call in sourced facts before
   // building it) and is the default landing view; Algo Lab sits in the middle (standalone — it doesn't
@@ -5003,10 +5003,10 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const TOOL_TABS = [
     { id: "research", label: "Research Lab", Icon: Globe },
     { id: "algo", label: "Algo Lab", Icon: Bot },
-    { id: "synthesis", label: "Synthesis Lab", Icon: Sparkles },
+    { id: "synthesis", label: "Thesis Lab", Icon: Sparkles },
   ];
   const toolSeg = (
-    <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Thesis Lab tools">
+    <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Lab tools">
       {TOOL_TABS.map((t) => (
         <button key={t.id} role="tab" aria-selected={toolView === t.id} className={toolView === t.id ? "on" : ""} onClick={() => setToolView(t.id)}>
           <t.Icon size={13} /> {t.label}
@@ -6638,7 +6638,7 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
               Five desk leads can run your synthesis and research. Picking one does two things: their lens
               <b style={{ color: "var(--text)" }}> tilts the pillar weighting</b> (the chips below show what each leans on and discounts, folded
               on top of your own sliders), and the call is <b style={{ color: "var(--text)" }}>written in their voice</b> — same data, different
-              discipline. Pick them under Desk lead in the Synthesis Lab, or via Voices in the Research Lab.
+              discipline. Pick them under Desk lead in the Thesis Lab, or via Voices in the Research Lab.
             </div>
             {Object.entries(PERSONAS).map(([id, p]) => {
               const tilt = PERSONA_TILT[id] || {};
@@ -7010,7 +7010,7 @@ const DeskNotesDrawer = ({ open, onClose, notes, setNotes, notify, onGoThesis })
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
           {onGoThesis && (
-            <button className="btn btn-sm" onClick={() => { onClose(); onGoThesis(); }}><FlaskConical size={13} /> Open Synthesis Lab</button>
+            <button className="btn btn-sm" onClick={() => { onClose(); onGoThesis(); }}><FlaskConical size={13} /> Open Thesis Lab</button>
           )}
           {lines.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={() => { setNotes(""); notify?.("Desk notes cleared", "ok"); }}><Trash2 size={13} /> Clear all</button>
