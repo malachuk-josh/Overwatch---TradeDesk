@@ -7018,6 +7018,7 @@ const ALGO_DEFAULTS = {
   emaLen: 21, atrMult: 2.5, rsiOS: 30, rsiOB: 70,
   rr: 3, stopAtr: 1, startHour: 11, endHour: 16,
   vixMin: 10, vixMax: 40, qtyPct: 100, vixMode: "sameday",
+  commission: 0, slippageBps: 0,
 };
 const ALGO_SYMBOL_GROUPS = [
   ["Index ETFs", ["SPY", "QQQ", "DIA", "IWM", "SMH"]],
@@ -7091,6 +7092,8 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
     startHour: numOr(p.startHour, ALGO_DEFAULTS.startHour), endHour: numOr(p.endHour, ALGO_DEFAULTS.endHour),
     vixMin: numOr(p.vixMin, ALGO_DEFAULTS.vixMin), vixMax: numOr(p.vixMax, ALGO_DEFAULTS.vixMax),
     qtyPct: numOr(p.qtyPct, ALGO_DEFAULTS.qtyPct),
+    commission: numOr(p.commission, ALGO_DEFAULTS.commission),
+    slippageBps: numOr(p.slippageBps, ALGO_DEFAULTS.slippageBps),
   });
 
   const runNow = async () => {
@@ -7099,7 +7102,11 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
     try {
       const token = await auth.getToken();
       const data = await callDesk("backtest", "", { params: buildParams() }, token);
-      setBt({ status: "done", data: { ...data, _ranAt: Date.now() }, error: null });
+      setBt((prev) => {
+        // Keep the outgoing run for the run-vs-run diff (audit roadmap: compare consecutive runs).
+        if (prev.data?.stats) lastRunRef.current = { stats: prev.data.stats, meta: prev.data.meta };
+        return { status: "done", data: { ...data, _ranAt: Date.now() }, error: null };
+      });
     } catch (e) {
       setBt({ status: "error", data: null, error: e.message });
     }
@@ -7108,6 +7115,10 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
   // Auto-run the backtest once when the lab opens, using the saved (or default) settings, so results
   // are already populated before the user touches "Run backtest". Runs per mount (i.e. each time the
   // tab is opened), guarded so it fires only once.
+  const lastRunRef = useRef(null); // previous completed run, for the run-vs-run diff
+  // Named parameter sets (audit roadmap: "saved and named configs").
+  const [savedConfigs, setSavedConfigs] = usePersistentState("overwatch:algo:saved", {});
+  const [configName, setConfigName] = useState("");
   const didAutoRun = useRef(false);
   useEffect(() => {
     if (!auth?.signedIn) return;
@@ -7299,11 +7310,24 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
             <NumField label="Position" suffix="%" hint="of equity" value={p.qtyPct} placeholder="100" onChange={(v) => set("qtyPct", v)} />
             <NumField label="VIX min" value={p.vixMin} placeholder="15" onChange={(v) => set("vixMin", v)} />
             <NumField label="VIX max" value={p.vixMax} placeholder="40" onChange={(v) => set("vixMax", v)} />
+            <NumField label="Commission" suffix="$" hint="per side" value={p.commission} placeholder="0" onChange={(v) => set("commission", v)} />
+            <NumField label="Slippage" suffix="bps" hint="per side" value={p.slippageBps} placeholder="0" onChange={(v) => set("slippageBps", v)} />
           </div>
           <div style={{ marginTop: 12, fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
             Free intraday history caps the window: ~60 trading days at 15m/30m, ~2 years at 1h.
             The flat-by-close order fires at (last entry − 1):21 ET, exactly like the Pine script — set last entry past 17 and it never
             triggers, so trades ride until stop or target.
+          </div>
+          {/* Named config save/load — parameter sets worth keeping get a name and a slot. */}
+          <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <input className="bd-in" style={{ flex: "1 1 120px", minWidth: 0, textTransform: "none" }} placeholder="Config name…" value={configName} onChange={(e) => setConfigName(e.target.value)} aria-label="Config name" />
+            <button className="btn btn-ghost btn-sm" disabled={!configName.trim()} title="Save the current inputs under this name" onClick={() => { const n = configName.trim(); setSavedConfigs((prev) => ({ ...prev, [n]: buildParams() })); setConfigName(""); notify?.(`Config "${n}" saved`, "ok"); }}>Save</button>
+            {Object.keys(savedConfigs).length > 0 && (
+              <select className="bd-in" style={{ flex: "1 1 130px", minWidth: 0 }} value="" aria-label="Load a saved config" onChange={(e) => { const n = e.target.value; if (n && savedConfigs[n]) { setSaved({ ...ALGO_DEFAULTS, ...savedConfigs[n] }); notify?.(`Config "${n}" loaded — hit Run`, "ok"); } e.target.value = ""; }}>
+                <option value="" disabled>Load config…</option>
+                {Object.keys(savedConfigs).map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            )}
           </div>
           <button className="btn btn-brass" style={{ marginTop: 14, width: "100%", justifyContent: "center" }} disabled={bt.status === "loading"} onClick={runNow}>
             {bt.status === "loading" ? <><RefreshCw size={14} className="spin" /> Replaying bars…</> : <><PlayCircle size={14} /> Run backtest</>}
@@ -7336,7 +7360,37 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
                 <ToolStat k="Max drawdown" v={fmtUsd(s.maxDrawdown, 0)} color={s.maxDrawdown > 0 ? C.bear : undefined} sub={`${fmtNum(s.maxDrawdownPct, 2)}% off peak`} />
                 <ToolStat k="Avg win / loss" v={`${s.avgWin == null ? "—" : fmtUsd(s.avgWin, 0)} / ${s.avgLoss == null ? "—" : fmtUsd(s.avgLoss, 0)}`} sub="per closed trade" />
                 <ToolStat k="Buy & hold" v={fmtSigned(m.buyHoldPct, 2, "%")} color={chgColor(m.buyHoldPct)} sub="same window, same symbol" />
+                <ToolStat k="Sharpe" v={s.sharpe == null ? "—" : fmtNum(s.sharpe, 2)} sub="per-trade, unannualized" />
+                <ToolStat k="Sortino" v={s.sortino == null ? "—" : fmtNum(s.sortino, 2)} sub="downside-only risk" />
               </div>
+              {/* Say the benchmark verdict out loud (audit: "buy-and-hold beat the default config
+                  79.6%% to 9.3%% and the UI never says so"). */}
+              {s.trades > 0 && Number.isFinite(m.buyHoldPct) && (
+                m.buyHoldPct > s.netPnlPct
+                  ? <div className="guard g-amber" style={{ marginTop: 12 }}><b><AlertTriangle size={12} /> Benchmark check</b>Buy &amp; hold beat this config over the same window: {fmtSigned(m.buyHoldPct, 1, "%")} vs the strategy's {fmtSigned(s.netPnlPct, 1, "%")}. The edge has to clear that bar before it earns capital.</div>
+                  : <div className="guard g-green" style={{ marginTop: 12 }}><b><Check size={12} /> Benchmark check</b>The strategy beat buy &amp; hold over the same window: {fmtSigned(s.netPnlPct, 1, "%")} vs {fmtSigned(m.buyHoldPct, 1, "%")}.</div>
+              )}
+              {/* In-sample vs out-of-sample: last 30%% of bars held out (audit: OOS split). */}
+              {s.split && (s.split.inSample.trades > 0 || s.split.outOfSample.trades > 0) && (
+                <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {[["In-sample · first 70% of bars", s.split.inSample], [`Out-of-sample · last 30%${m.oosCutoffT ? ` (from ${algoDate(m.oosCutoffT)})` : ""}`, s.split.outOfSample]].map(([lbl, seg]) => (
+                    <div key={lbl} style={{ border: "1px solid var(--line)", borderRadius: 9, padding: "9px 11px", background: "var(--panel2)" }}>
+                      <div className="mono" style={{ fontSize: 9, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--faint)" }}>{lbl}</div>
+                      <div style={{ display: "flex", gap: 14, marginTop: 5, fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+                        <span>{seg.trades} trades</span>
+                        <span style={{ color: chgColor(seg.netPnl) }}>{fmtSigned(seg.netPnl, 0)}</span>
+                        <span style={{ color: C.muted }}>{seg.winRate == null ? "—" : `${fmtNum(seg.winRate, 1)}% win`}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Run-vs-run diff: what changed since the previous replay in this session. */}
+              {lastRunRef.current?.stats && (
+                <div style={{ marginTop: 10, fontSize: 11, color: C.muted, fontFamily: "'JetBrains Mono',monospace", letterSpacing: ".02em" }} title="Change vs the previous run in this session">
+                  vs last run: {fmtSigned(s.trades - lastRunRef.current.stats.trades, 0)} trades · {fmtSigned(s.netPnl - lastRunRef.current.stats.netPnl, 0)} net · {s.winRate != null && lastRunRef.current.stats.winRate != null ? `${fmtSigned(s.winRate - lastRunRef.current.stats.winRate, 1)} pts win rate` : ""}
+                </div>
+              )}
               <div style={{ marginTop: 14 }}>
                 <EquityCurve curve={bt.data.curve} capital={m.capital} />
               </div>
@@ -7350,7 +7404,30 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
       </div>
 
       {bt.data && bt.data.trades.length > 0 && (
-        <Card icon={History} title="Trade log" sub={`${bt.data.trades.length} trades · newest first`}>
+        <Card
+          icon={History}
+          title="Trade log"
+          sub={`${bt.data.trades.length} trades · newest first`}
+          tools={
+            <button
+              className="btn btn-ghost btn-sm"
+              title="Download the full trade log as CSV"
+              onClick={() => {
+                const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+                const rows = [["side", "qty", "entry_time_et", "entry_px", "exit_time_et", "exit_px", "pnl", "pnl_pct", "bars_held", "exit_reason", "out_of_sample"]];
+                for (const t2 of bt.data.trades) rows.push([t2.side, t2.qty, algoTime(t2.entryT), t2.entryPx, algoTime(t2.exitT), t2.exitPx, t2.pnl?.toFixed?.(2), t2.pnlPct?.toFixed?.(3), t2.bars, t2.reason, t2.oos ? "yes" : "no"]);
+                const blob = new Blob([rows.map((r) => r.map(esc).join(",")).join("\n")], { type: "text/csv" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = `overwatch-backtest-${m?.symbol || "run"}-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+              }}
+            >
+              <FileText size={12} /> CSV
+            </button>
+          }
+        >
           <div className="algo-table-wrap">
             <table className="algo-table">
               <thead>

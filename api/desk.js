@@ -1480,14 +1480,22 @@ const btRun = (bars, vixDays, p, meta) => {
   let vixIdx = -1;         // rolling pointer into vixDays (bars ascend)
   const equity = [];
 
+  // Friction model (audit roadmap: "backtest, seriously"): slippage moves every fill against the
+  // trade by slippageBps; commission charges $/side (two sides per round trip). Defaults are zero,
+  // so existing runs reproduce exactly until costs are set.
+  const slip = (p.slippageBps || 0) / 10000;
+  const commissionRT = (p.commission || 0) * 2;
+  const oosCutoffIdx = Math.floor(bars.length * 0.7); // last 30%% of bars = out-of-sample
   const record = (i, px, reason) => {
-    const pnl = pos.side * (px - pos.entryPx) * pos.qty;
+    const exitPx = px * (1 - pos.side * slip);
+    const pnl = pos.side * (exitPx - pos.entryPx) * pos.qty - commissionRT;
     realized += pnl;
     trades.push({
       side: pos.side > 0 ? "long" : "short", qty: pos.qty,
-      entryT: pos.entryT, entryPx: pos.entryPx, exitT: bars[i].t, exitPx: px,
-      pnl, pnlPct: (pos.side * (px - pos.entryPx) / pos.entryPx) * 100,
+      entryT: pos.entryT, entryPx: pos.entryPx, exitT: bars[i].t, exitPx,
+      pnl, pnlPct: pos.entryPx ? (pnl / (pos.entryPx * pos.qty)) * 100 : 0,
       bars: i - pos.entryIdx, reason,
+      oos: pos.entryIdx >= oosCutoffIdx,
     });
     pos = null;
   };
@@ -1501,8 +1509,9 @@ const btRun = (bars, vixDays, p, meta) => {
     }
     closeOrder = false;
     if (entryOrder && !pos) {
-      const qty = Math.floor((realized * p.qtyPct) / 100 / b.o);
-      if (qty >= 1) pos = { side: entryOrder.side, qty, entryPx: b.o, entryT: b.t, entryIdx: i, sl: entryOrder.sl, tp: entryOrder.tp };
+      const fillPx = b.o * (1 + entryOrder.side * slip);
+      const qty = Math.floor((realized * p.qtyPct) / 100 / fillPx);
+      if (qty >= 1) pos = { side: entryOrder.side, qty, entryPx: fillPx, entryT: b.t, entryIdx: i, sl: entryOrder.sl, tp: entryOrder.tp };
     }
     entryOrder = null;
 
@@ -1562,6 +1571,21 @@ const btRun = (bars, vixDays, p, meta) => {
   const grossProfit = wins.reduce((s, tr) => s + tr.pnl, 0);
   const grossLoss = trades.reduce((s, tr) => s + Math.min(tr.pnl, 0), 0);
   const netPnl = realized - BT_CAPITAL;
+  // Per-trade Sharpe/Sortino over trade %% returns (unannualized — intraday hold times make an
+  // annualization factor more misleading than honest per-trade risk-adjusted numbers).
+  const rets = trades.map((tr) => tr.pnlPct);
+  const mean = rets.length ? rets.reduce((a, b) => a + b, 0) / rets.length : null;
+  const std = rets.length > 1 ? Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / (rets.length - 1)) : null;
+  const downside = rets.filter((r) => r < 0);
+  const dstd = downside.length ? Math.sqrt(downside.reduce((a, b) => a + b ** 2, 0) / downside.length) : null;
+  const sharpe = std ? mean / std : null;
+  const sortino = dstd ? mean / dstd : (mean != null && mean > 0 && rets.length ? Infinity : null);
+  const segStats = (list) => {
+    const w = list.filter((tr) => tr.pnl > 0).length;
+    return { trades: list.length, netPnl: list.reduce((a, tr) => a + tr.pnl, 0), winRate: list.length ? (w / list.length) * 100 : null };
+  };
+  const isTrades = trades.filter((tr) => !tr.oos);
+  const oosTrades = trades.filter((tr) => tr.oos);
   const stride = Math.max(1, Math.ceil(equity.length / 400));
   const curve = equity.filter((_, i) => i % stride === 0 || i === equity.length - 1);
 
@@ -1570,6 +1594,7 @@ const btRun = (bars, vixDays, p, meta) => {
       ...meta, capital: BT_CAPITAL, bars: bars.length,
       from: bars[0].t, to: bars[bars.length - 1].t,
       buyHoldPct: (bars[bars.length - 1].c / bars[0].c - 1) * 100,
+      oosCutoffT: bars[oosCutoffIdx]?.t ?? null,
     },
     params: p,
     stats: {
@@ -1581,6 +1606,9 @@ const btRun = (bars, vixDays, p, meta) => {
       maxDrawdown: maxDD, maxDrawdownPct: maxDDPct,
       avgWin: wins.length ? grossProfit / wins.length : null,
       avgLoss: trades.length - wins.length ? grossLoss / (trades.length - wins.length) : null,
+      sharpe: Number.isFinite(sharpe) ? Math.round(sharpe * 100) / 100 : null,
+      sortino: Number.isFinite(sortino) ? Math.round(sortino * 100) / 100 : sortino === Infinity ? 99 : null,
+      split: { inSample: segStats(isTrades), outOfSample: segStats(oosTrades) },
     },
     curve, trades,
   };
@@ -1602,6 +1630,8 @@ export const algoParams = (raw = {}) => {
       stopAtr: btNum(raw.stopAtr, 2, 0.1, 20),
       startHour: Math.round(btNum(raw.startHour, 11, 0, 23)),
       endHour: Math.round(btNum(raw.endHour, 16, 1, 24)),
+      commission: btNum(raw.commission, 0, 0, 50),          // $ per side
+      slippageBps: btNum(raw.slippageBps, 0, 0, 50),        // bps per side, applied against the fill
       vixMin: btNum(raw.vixMin, 15, 0, 200),
       vixMax: btNum(raw.vixMax, 40, 0, 200),
       qtyPct: btNum(raw.qtyPct, 100, 1, 100),
