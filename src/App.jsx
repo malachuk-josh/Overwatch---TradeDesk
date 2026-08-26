@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
+import Trophy from "lucide-react/dist/esm/icons/trophy.mjs";
 import Info from "lucide-react/dist/esm/icons/info.mjs";
 import Newspaper from "lucide-react/dist/esm/icons/newspaper.mjs";
 import Crosshair from "lucide-react/dist/esm/icons/crosshair.mjs";
@@ -2396,7 +2397,10 @@ const FactorRadarChart = ({ weights, onChange, scores = null }) => {
 // Level maps: three cards defaulted to the major index ETFs, each retargetable to ANY watchlist
 // instrument via the header dropdown. Levels come from the points feed when the symbol is part of
 // the index complex, otherwise from the stocklevels endpoint (cached briefly client-side).
-const LEVEL_MAP_DEFAULTS = ["SPY", "QQQ", "DIA"];
+// Three DIFFERENT default names (audit: "three panels, one instrument, today" — the trio used to
+// collapse onto whatever one symbol the user last picked in all three). SPY / QQQ / IWM covers the
+// large-cap, growth and small-cap reads; each panel still remembers its own override.
+const LEVEL_MAP_DEFAULTS = ["SPY", "QQQ", "IWM"];
 // Dropdown sub-groups for the level-map ticker picker. Sets referenced lazily so definition order
 // relative to SNAP_*_SET doesn't matter. Anything unmatched falls into a trailing "Other" group.
 const LM_INDEX_SET = new Set(["SPX", "NDX", "DJI", "RUT", "VIX"]);
@@ -6125,6 +6129,155 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
   );
 };
 
+/* ---------------- Desk-lead scoreboard ---------------- */
+
+// The audit's "one that matters most": the desk already grades every thesis at the close and logs
+// trades against theses, but nothing connected outcomes to the five desk leads. This groups every
+// graded, non-sample thesis by the lead who called it and scores each lead — hit rate (flats
+// excluded), record, average aligned move (the "edge": the graded % move signed by the call's
+// direction), and the P/L of trades logged against that lead's calls — then reconciles recent
+// logged trades against the thesis that called them.
+const DeskLeadScoreboard = ({ archiveHistory }) => {
+  const rows = useMemo(() => {
+    const theses = archiveHistory.filter((e) => (!e._type || e._type === "thesis") && !e._sample);
+    const byLead = new Map();
+    for (const t of theses) {
+      const id = t._persona || "jack";
+      const lead = byLead.get(id) || {
+        id,
+        name: displayPersonaName(t._personaName) || PERSONAS[id]?.name || id,
+        graded: 0, hit: 0, miss: 0, flat: 0, edges: [], calls: 0,
+        tradePnl: 0, trades: 0, tradeWins: 0,
+        instruments: new Map(),
+      };
+      lead.calls += 1;
+      const o = t._outcome;
+      if (o?.result) {
+        lead.graded += 1;
+        if (o.result === "hit") lead.hit += 1;
+        else if (o.result === "miss") lead.miss += 1;
+        else lead.flat += 1;
+        const chg = Number(o.changePct);
+        if (Number.isFinite(chg) && (t.bias === "bullish" || t.bias === "bearish")) {
+          lead.edges.push(t.bias === "bullish" ? chg : -chg);
+        }
+        const inst = t.instrument || "SPX";
+        const rec = lead.instruments.get(inst) || { hit: 0, miss: 0 };
+        if (o.result === "hit") rec.hit += 1;
+        if (o.result === "miss") rec.miss += 1;
+        lead.instruments.set(inst, rec);
+      }
+      if (t._trade && Number.isFinite(Number(t._trade.pnl))) {
+        lead.trades += 1;
+        lead.tradePnl += Number(t._trade.pnl);
+        if (Number(t._trade.pnl) > 0) lead.tradeWins += 1;
+      }
+      byLead.set(id, lead);
+    }
+    return [...byLead.values()]
+      .map((l) => ({
+        ...l,
+        hitRate: l.hit + l.miss ? Math.round((l.hit / (l.hit + l.miss)) * 100) : null,
+        avgEdge: l.edges.length ? l.edges.reduce((a, b) => a + b, 0) / l.edges.length : null,
+        topInstruments: [...l.instruments.entries()]
+          .map(([sym, r]) => ({ sym, ...r, n: r.hit + r.miss }))
+          .filter((r) => r.n > 0)
+          .sort((a, b) => b.n - a.n)
+          .slice(0, 3),
+      }))
+      .sort((a, b) => (b.hitRate ?? -1) - (a.hitRate ?? -1) || b.graded - a.graded);
+  }, [archiveHistory]);
+
+  const recentTrades = useMemo(() => archiveHistory
+    .filter((e) => (!e._type || e._type === "thesis") && !e._sample && e._trade && Number.isFinite(Number(e._trade.pnl)))
+    .slice(0, 10), [archiveHistory]);
+
+  if (!rows.length) {
+    return (
+      <Card icon={Trophy} title="Desk-lead scoreboard" sub="Which lens is actually earning its seat">
+        <div style={{ color: C.muted, fontSize: 12.5, lineHeight: 1.6 }}>
+          No graded theses yet. Every thesis is graded automatically against the 4:00pm ET close — once calls start
+          grading, each desk lead's hit rate, edge, and trade P/L land here.
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <Card
+        icon={Trophy}
+        title="Desk-lead scoreboard"
+        sub="Graded calls, hit rate, average aligned move and logged-trade P/L — per desk lead"
+        tools={<InfoTip text="Every thesis is graded against the official 4:00pm ET close (HIT/MISS/FLAT — see the Thesis Archive's grading rules). Edge is the graded day's % move signed by the call's direction (bullish +, bearish −), averaged over that lead's directional calls; flats and neutral calls don't count toward hit rate or edge. Trade P/L sums the trades you logged on that lead's theses." />}
+      >
+        <div style={{ overflowX: "auto" }}>
+          <table className="sb-table">
+            <thead>
+              <tr><th>Desk lead</th><th>Calls</th><th>Record</th><th>Hit rate</th><th>Avg edge</th><th>Trades</th><th>Trade P/L</th><th>Where</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((l) => (
+                <tr key={l.id}>
+                  <td className="sb-lead">{l.name}</td>
+                  <td>{l.graded}<span className="sb-dim"> / {l.calls}</span></td>
+                  <td>
+                    <span className="sb-chip" style={{ color: C.bull }}>{l.hit}H</span>
+                    <span className="sb-chip" style={{ color: C.bear }}>{l.miss}M</span>
+                    <span className="sb-chip" style={{ color: C.muted }}>{l.flat}F</span>
+                  </td>
+                  <td style={{ color: l.hitRate == null ? C.muted : l.hitRate >= 50 ? C.bull : C.bear, fontWeight: 700 }}>
+                    {l.hitRate == null ? "—" : `${l.hitRate}%`}
+                  </td>
+                  <td style={{ color: l.avgEdge == null ? C.muted : l.avgEdge >= 0 ? C.bull : C.bear }}>
+                    {l.avgEdge == null ? "—" : fmtSigned(l.avgEdge, 2, "%")}
+                  </td>
+                  <td>{l.trades || "—"}</td>
+                  <td style={{ color: !l.trades ? C.muted : l.tradePnl >= 0 ? C.bull : C.bear }}>
+                    {l.trades ? `${l.tradePnl >= 0 ? "+" : "−"}$${fmtNum(Math.abs(l.tradePnl), 0)}` : "—"}
+                  </td>
+                  <td className="sb-dim">
+                    {l.topInstruments.map((r) => `${r.sym} ${r.hit}/${r.n}`).join(" · ") || "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {recentTrades.length > 0 && (
+        <Card icon={Scale} title="Logged trades vs the thesis that called them" sub="Did the execution agree with the call — and did either of them pay?">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {recentTrades.map((e) => {
+              const tr = e._trade;
+              const aligned = (tr.side === "long" && e.bias === "bullish") || (tr.side === "short" && e.bias === "bearish");
+              return (
+                <div key={e._id} className="hist-row" style={{ alignItems: "center" }}>
+                  <span className="mono sb-dim" style={{ flex: "none", fontSize: 10.5, minWidth: 118, whiteSpace: "nowrap" }}>{archiveStamp(e)}</span>
+                  <span className="chip" style={{ flex: "none", fontSize: 10 }}>{e.instrument || "SPX"}</span>
+                  <span className="chip" style={{ flex: "none", fontSize: 10, color: aligned ? C.bull : C.brass, borderColor: (aligned ? C.bull : C.brass) + "66" }} title={aligned ? "Trade direction matched the thesis bias" : "Trade direction differed from the thesis bias"}>
+                    {tr.side} {aligned ? "· aligned" : "· counter"}
+                  </span>
+                  {e._outcome?.result && (
+                    <span className="chip" style={{ flex: "none", fontSize: 10, color: e._outcome.result === "hit" ? C.bull : e._outcome.result === "miss" ? C.bear : C.muted }}>
+                      call {e._outcome.result}
+                    </span>
+                  )}
+                  <span style={{ flex: 1, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--text)" }}>{e.headline}</span>
+                  <b className="mono" style={{ flex: "none", fontSize: 11.5, color: tr.pnl >= 0 ? C.bull : C.bear }}>
+                    {tr.pnl >= 0 ? "+" : "−"}${fmtNum(Math.abs(tr.pnl), 0)}
+                  </b>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
 const ArchiveTab = ({
   archiveHistory,
   researchReports,
@@ -6170,6 +6323,7 @@ const ArchiveTab = ({
     { id: "journal", label: "Jack's Journal", Icon: Mail },
     { id: "archive", label: signedIn ? "Thesis Archive" : "User Thesis Lab Archive", Icon: History },
     { id: "researcharchive", label: signedIn ? "Research Archive" : "User Research Lab Archive", Icon: BookMarked },
+    { id: "scoreboard", label: "Scoreboard", Icon: Trophy },
   ];
   const libSeg = (
     <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Library sections">
@@ -6190,6 +6344,8 @@ const ArchiveTab = ({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {libSeg}
+
+      {libTab === "scoreboard" && <DeskLeadScoreboard archiveHistory={archiveHistory} />}
 
       {libTab === "journal" && (
         <Card icon={Mail} title="Jack's Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
