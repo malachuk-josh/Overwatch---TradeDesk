@@ -60,6 +60,7 @@ import BookMarked from "lucide-react/dist/esm/icons/book-marked.mjs";
 import Search from "lucide-react/dist/esm/icons/search.mjs";
 import PanelLeftClose from "lucide-react/dist/esm/icons/panel-left-close.mjs";
 import PanelLeftOpen from "lucide-react/dist/esm/icons/panel-left-open.mjs";
+import Upload from "lucide-react/dist/esm/icons/upload.mjs";
 import { CLERK_ENABLED, AuthControl, GatedSignIn, useAuthSync, loadUserSettings, saveUserSettings, loadUserArchive, saveUserArchive, loadUserResearch, saveUserResearch } from "./auth.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import { sanitizeArchive } from "./dataShape.js";
@@ -3329,7 +3330,7 @@ const NewsTab = ({ news, onRefresh, onAddNote, pinnedTitles = null, inSplit = fa
         </div>
         <div className="news-feed-scroll" style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 1090, overflowY: "auto", paddingRight: 6 }}>
           {filtered.map((h, i) => (
-            <div className="news-card" key={i} style={{ borderLeftColor: sentColor(h.sentiment) }}>
+            <div className="news-card" key={i} data-title={h.title} style={{ borderLeftColor: sentColor(h.sentiment) }}>
               <div className="news-top">
                 {h.rank && <span className="chip b-info">#{h.rank}</span>}
                 <span className={`chip ${CAT_TONE[h.category] || ""}`}>{h.category}</span>
@@ -4644,7 +4645,7 @@ const TradeLogCard = ({ entry, onLogTrade }) => {
         {t.note && <span style={{ fontSize: 12, color: C.muted, flex: 1, minWidth: 120 }}>{t.note}</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
-          <button className="btn btn-ghost btn-sm" title="Remove trade log" onClick={() => onLogTrade(entry._id, null)}><Trash2 size={12} /></button>
+          <button className="btn btn-ghost btn-sm" title="Remove trade log" aria-label="Remove trade log" onClick={() => onLogTrade(entry._id, null)}><Trash2 size={12} /></button>
         </span>
       </div>
     );
@@ -5151,7 +5152,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
 
               {secShown ? (
                 <div className="lab-field">
-                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Relative-value leg<button className="ti-x" title="Remove the RV leg" onClick={() => { setSecondary(""); setSecShown(false); }}>✕</button></span>
+                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Relative-value leg<button className="ti-x" title="Remove the RV leg" aria-label="Remove the relative-value leg" onClick={() => { setSecondary(""); setSecShown(false); }}>✕</button></span>
                   <InstrumentSelect value={secondary === instrument ? "" : secondary} onChange={setSecondary} noneLabel="None — single-instrument thesis" exclude={instrument} ariaLabel="Optional paired instrument" />
                 </div>
               ) : (
@@ -5176,7 +5177,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
 
               {(noteShown || (notes && notes.trim())) ? (
                 <div className="lab-field">
-                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Desk note — fed into the synthesis<button className="ti-x" title="Remove the desk note" onClick={() => { setNotes(""); setNoteShown(false); }}>✕</button></span>
+                  <span className="lab-label" style={{ display: "flex", alignItems: "center" }}>Desk note — fed into the synthesis<button className="ti-x" title="Remove the desk note" aria-label="Remove the desk note" onClick={() => { setNotes(""); setNoteShown(false); }}>✕</button></span>
                   <textarea className="bd-ta" placeholder="e.g. TD Sequential 9 printed on the daily. Respecting 2-hr max hold today." value={notes} onChange={(e) => setNotes(e.target.value)} />
                 </div>
               ) : (
@@ -6162,7 +6163,7 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
                 {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{displayPersonaName(r._personaName)}</span>}
                 <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
               </button>
-              {!r._sample && <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>}
+              {!r._sample && <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" aria-label={`Delete research brief: ${r.headline || r.question}`} onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>}
             </div>
           );
         })}
@@ -6453,14 +6454,14 @@ const ArchiveTab = ({
                   </span>
                   {t?.score != null && <span className="mono" style={{ fontSize: 11, color: C.muted, flex: "none" }}>{fmtSigned(t.score, 0)}</span>}
                 </button>
-                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" onClick={(e) => {
+                <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Download PDF" aria-label={`Download thesis as PDF: ${entry.headline || t?.headline || "archived thesis"}`} onClick={(e) => {
                   e.stopPropagation();
                   downloadPDF(buildThesisPrintHTML(t || entry), `overwatch-thesis-${entry._date || entry.instrument || "archived"}.pdf`);
                 }}>
                   <FileText size={12} />
                 </button>
                 {!entry._sample && (
-                  <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry._id); }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" aria-label={`Delete archived thesis: ${entry.headline || t?.headline || "entry"}`} onClick={(e) => { e.stopPropagation(); onDeleteEntry(entry._id); }}>
                     <Trash2 size={12} />
                   </button>
                 )}
@@ -6497,6 +6498,9 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
   // (AI Infra, Healthcare) otherwise bury the reorderable main list under 30+ rows.
   const [expandedCats, setExpandedCats] = usePersistentState("overwatch:settings:wlcats", {});
   const toggleCat = (cat) => setExpandedCats((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  // Watchlist import (audit roadmap "Later"): paste a ticker list or pick a broker CSV export.
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
   useEffect(() => {
     if (!open) return undefined;
     const previous = document.activeElement;
@@ -6563,6 +6567,50 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
       next.splice(to, 0, moved);
       return next;
     });
+  };
+
+  // Symbols arrive hidden so an import can never blow the live board's slot budget — the user
+  // promotes them with the same Shown toggle as everything else.
+  const importSymbols = (pairs) => {
+    const have = new Set(watchlist.map((x) => x.symbol));
+    const added = [];
+    let skipped = 0;
+    let invalid = 0;
+    let capped = false;
+    for (const { symbol, name } of pairs) {
+      const sym = String(symbol || "").trim().toUpperCase().replace(/^\$/, "");
+      if (!sym || /^(SYMBOL|TICKER|SYM)S?$/.test(sym)) continue; // CSV header cells
+      if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(sym)) { invalid += 1; continue; }
+      if (have.has(sym)) { skipped += 1; continue; }
+      if (watchlist.length + added.length >= WATCHLIST_CAP) { capped = true; break; }
+      have.add(sym);
+      added.push({ symbol: sym, name: String(name || "").trim() || sym, off: true });
+    }
+    if (added.length) setWatchlist([...watchlist, ...added]);
+    const bits = [`${added.length} added${added.length ? " hidden — use the Shown toggle to put them on the board" : ""}`];
+    if (skipped) bits.push(`${skipped} already in the catalog`);
+    if (invalid) bits.push(`${invalid} didn't look like tickers`);
+    if (capped) bits.push(`stopped at the ${WATCHLIST_CAP}-instrument catalog cap`);
+    notify(`Import: ${bits.join(" · ")}`, added.length ? "ok" : "err");
+    return added.length;
+  };
+  const importFromText = () => {
+    const pairs = importText.split(/[\s,;]+/).filter(Boolean).map((token) => ({ symbol: token }));
+    if (importSymbols(pairs)) { setImportText(""); setImportOpen(false); }
+  };
+  // Broker CSV: symbol from the first column, an optional display name from the second.
+  const importFromCSV = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const lines = String(reader.result || "").split(/\r?\n/).filter((l) => l.trim());
+      importSymbols(lines.map((line) => {
+        const cells = line.split(",").map((c) => c.replace(/^\s*["']?|["']?\s*$/g, ""));
+        return { symbol: cells[0], name: cells[1] };
+      }));
+    };
+    reader.onerror = () => notify("Couldn't read that file — export a plain .csv and try again", "err");
+    reader.readAsText(file);
   };
 
   return (
@@ -6707,9 +6755,44 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
             </>
           );
         })()}
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={() => { setWatchlist(DEFAULT_WATCHLIST); notify("Watchlist restored to desk defaults", "ok"); }}>
-          <RotateCcw size={12} /> Restore default board
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => { setWatchlist(DEFAULT_WATCHLIST); notify("Watchlist restored to desk defaults", "ok"); }}>
+            <RotateCcw size={12} /> Restore default board
+          </button>
+          <button className="btn btn-ghost btn-sm" aria-expanded={importOpen} onClick={() => setImportOpen((v) => !v)}>
+            <Upload size={12} /> Import tickers
+          </button>
+        </div>
+        {importOpen && (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel2)", padding: "12px 13px", marginTop: 10, display: "flex", flexDirection: "column", gap: 9 }}>
+            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.55 }}>
+              Paste tickers — commas, spaces or one per line — or pick a broker CSV export (symbol in the
+              first column, optional name in the second). New symbols join the catalog hidden.
+            </div>
+            <textarea
+              className="bd-in"
+              style={{ minHeight: 64, resize: "vertical", textTransform: "uppercase", fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}
+              placeholder={"AAPL, MSFT, NVDA\nTSLA"}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              aria-label="Tickers to import"
+            />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="btn btn-brass btn-sm" disabled={!importText.trim()} onClick={importFromText}><Plus size={12} /> Add to catalog</button>
+              <label className="btn btn-ghost btn-sm" style={{ cursor: "pointer" }}>
+                <Upload size={12} /> From CSV file…
+                <input
+                  type="file"
+                  accept=".csv,text/csv,text/plain"
+                  style={{ display: "none" }}
+                  onChange={(e) => { importFromCSV(e.target.files?.[0]); e.target.value = ""; }}
+                  aria-label="Import watchlist CSV file"
+                />
+              </label>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setImportOpen(false); setImportText(""); }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         <div style={{ borderTop: "1px solid var(--line)", margin: "22px 0 18px" }} />
         <span className="lab-label">Danger zone</span>
@@ -6805,7 +6888,7 @@ const AlertsDrawer = ({ open, onClose, alerts, setAlerts, onArm, tickers }) => {
         : liveFor(a.symbol) == null
           ? <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted }} title="This symbol has no live quote on the board — the alert checks whenever a sync prices it">no feed</span>
           : <span className="mono" style={{ flex: "none", fontSize: 10.5, color: C.muted }}>{fmtNum(liveFor(a.symbol), 2)}</span>}
-      <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove alert" onClick={() => removeAlert(a.id)}><Trash2 size={12} /></button>
+      <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove alert" aria-label={`Remove ${a.symbol} ${fmtNum(a.level, 2)} alert`} onClick={() => removeAlert(a.id)}><Trash2 size={12} /></button>
     </div>
   );
   return (
@@ -6909,7 +6992,7 @@ const DeskNotesDrawer = ({ open, onClose, notes, setNotes, notify, onGoThesis })
           {lines.map((line, i) => (
             <div key={`${i}-${line.slice(0, 40)}`} className="hist-row" style={{ alignItems: "flex-start" }}>
               <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.55, color: "var(--text)", padding: "6px 0 6px 4px" }}>{line.replace(/^•\s*/, "")}</span>
-              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove this note" onClick={() => removeLine(i)}><Trash2 size={12} /></button>
+              <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Remove this note" aria-label="Remove this note" onClick={() => removeLine(i)}><Trash2 size={12} /></button>
             </div>
           ))}
         </div>
@@ -7004,7 +7087,7 @@ const CommandPalette = ({ open, onClose, actions }) => {
           ))}
           {!results.length && <div style={{ padding: "18px 14px", fontSize: 12.5, color: C.muted }}>No matches — try a ticker, a headline word, or a thesis phrase.</div>}
         </div>
-        <div className="cmdk-foot">↑↓ navigate · Enter open · Esc close</div>
+        <div className="cmdk-foot">↑↓ navigate · Enter open · Esc close — desk keys: 1–5 tabs · / here · j/k wire · p pin</div>
       </div>
     </div>
   );
@@ -8277,6 +8360,47 @@ export default function Overwatch() {
       if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  // Keyboard-first nav (audit roadmap "Later"): 1–5 jump tabs, "/" opens the palette, j/k walk the
+  // wire cards, "p" pins the focused headline to the desk note. Inert while typing in any field or
+  // while any drawer/dialog is open, so single letters never hijack real input.
+  const addNoteRef = useRef(null);
+  addNoteRef.current = addNote;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+      if (document.querySelector('[role="dialog"], .overlay')) return;
+      const key = e.key;
+      if (key === "/") { e.preventDefault(); setPaletteOpen(true); return; }
+      if (/^[1-5]$/.test(key)) {
+        const ids = ["pulse", "news", "calendar", "thesis", "archives"];
+        e.preventDefault();
+        setTab(ids[Number(key) - 1]);
+        return;
+      }
+      if (key === "j" || key === "k") {
+        const cards = Array.from(document.querySelectorAll(".news-card"));
+        if (!cards.length) return;
+        e.preventDefault();
+        const delta = key === "j" ? 1 : -1;
+        const cur = cards.findIndex((c) => c.classList.contains("kb-focus"));
+        const idx = cur < 0 ? (delta > 0 ? 0 : cards.length - 1) : Math.min(cards.length - 1, Math.max(0, cur + delta));
+        cards.forEach((c) => c.classList.remove("kb-focus"));
+        cards[idx].classList.add("kb-focus");
+        cards[idx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
+      if (key === "p") {
+        const focused = document.querySelector(".news-card.kb-focus");
+        const title = focused?.dataset?.title;
+        if (title) { e.preventDefault(); addNoteRef.current?.(title); }
       }
     };
     document.addEventListener("keydown", onKey);
