@@ -1174,6 +1174,13 @@ Backstory guardrail: keep it archetypal, not verifiable — no fake specific bac
 };
 const DEFAULT_PERSONA = "jack";
 
+// Stored theses/briefs carry the persona name they were generated under, so a rename would surface
+// retired names forever (entries from before "Uncle Jesse" became the Ghost of Jesse). Map legacy
+// names at display time; stored data is left untouched.
+const LEGACY_PERSONA_NAMES = { "Uncle Jesse": "Ghost of Jesse" };
+const displayPersonaName = (name) => (name && LEGACY_PERSONA_NAMES[name]) || name;
+
+
 // Illustrative library content shown to signed-out visitors so the Thesis Archive / Research Archive
 // aren't empty on first look — a new visitor can see what the Lab tools actually produce before
 // signing in to build their own. Explicitly tagged `_sample: true` (never a real dated call) and
@@ -3389,12 +3396,14 @@ const TradingViewCalendarWidget = ({ lightMode = false }) => {
   );
 };
 
-const CalendarGroup = ({ label, items = [], empty, mode = "time" }) => (
+const CalendarGroup = ({ label, items = [], empty, mode = "time", showTitle = true }) => (
   <div className="cal-group">
-    <div className="cal-group-title">
-      <b>{label}</b>
-      <span>{items.length} event{items.length === 1 ? "" : "s"}</span>
-    </div>
+    {showTitle && (
+      <div className="cal-group-title">
+        <b>{label}</b>
+        <span>{items.length} event{items.length === 1 ? "" : "s"}</span>
+      </div>
+    )}
     {items.length ? items.map((c, i) => (
       <div className={`cal-row${c.structural ? " structural" : ""}`} key={`${label}-${i}`}>
         <span className="cal-time">{mode === "date" ? (calendarDateLabel(c.date, { weekday: true }) || c.time || "Date pending") : c.time}</span>
@@ -3552,7 +3561,8 @@ const CalendarTab = ({ points, onRefresh, inSplit = false, lightMode = false }) 
         </div>
         <div className="cal-right-col">
           <Card icon={AlertTriangle} title="Major Upcoming" sub={`${groups.upcoming?.length || 0} major event${groups.upcoming?.length === 1 ? "" : "s"} this week${data?.calendarSource ? ` · ${data.calendarSource}` : ""}`}>
-            <CalendarGroup label="Major Upcoming" items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
+            {/* The Card's own title already reads "Major Upcoming" — suppress the duplicate inner header. */}
+            <CalendarGroup label="Major Upcoming" showTitle={false} items={groups.upcoming || []} empty="No additional major market releases found this week." mode="date" />
           </Card>
           <Card icon={CalendarDays} title="On deck" sub="Today & tomorrow · U.S. releases">
             <CalendarGroup label={`Today · ${calendarDateLabel(data?.calendarRange?.today) || "—"}`} items={groups.today || []} empty="No U.S. releases today." />
@@ -5170,7 +5180,7 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
               <div className="th-summary">{t.summary}</div>
               {(t.deskRead || t.jackRead) && (
                 <div className="th-pairread th-jackread">
-                  <b><UserRound size={12} /> {t._personaName || "Jack"}'s read</b>
+                  <b><UserRound size={12} /> {displayPersonaName(t._personaName) || "Jack"}'s read</b>
                   <span>{t.deskRead || t.jackRead}</span>
                 </div>
               )}
@@ -5263,7 +5273,7 @@ const buildThesisText = (t) => {
     t.headline ? `\n"${t.headline}"` : "",
     t.summary ? `\n${t.summary}` : "",
   ];
-  if (t.deskRead || t.jackRead) lines.push(`\n${(t._personaName || "JACK").toUpperCase()}'S READ\n${t.deskRead || t.jackRead}`);
+  if (t.deskRead || t.jackRead) lines.push(`\n${(displayPersonaName(t._personaName) || "JACK").toUpperCase()}'S READ\n${t.deskRead || t.jackRead}`);
   if ((t.bullCase || []).length) lines.push(`\nBULL CASE\n${t.bullCase.map((b) => `• ${b}`).join("\n")}`);
   if ((t.bearCase || []).length) lines.push(`\nBEAR CASE\n${t.bearCase.map((b) => `• ${b}`).join("\n")}`);
   const lv = t.levels || {};
@@ -5322,7 +5332,7 @@ export const buildThesisPrintHTML = (t) => {
     <div class="headline">"${e(t.headline)}"</div>
     <p>${e(t.summary)}</p>
 
-    ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${e(t._personaName || "Jack")}&#39;s read:</b> ${e(t.deskRead || t.jackRead)}</div>` : ""}
+    ${(t.deskRead || t.jackRead) ? `<div class="callout"><b>${e(displayPersonaName(t._personaName) || "Jack")}&#39;s read:</b> ${e(t.deskRead || t.jackRead)}</div>` : ""}
 
     ${structures.length ? `<div class="callout"><b>Structures fed into this call:</b> ${structures.join(" &nbsp;·&nbsp; ")}</div>` : ""}
 
@@ -5546,7 +5556,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
         {filtered.map((item) => (
           <div key={item.id} className="hist-row">
             <button className="hist-row-open" onClick={(event) => openPreview(item.id, event.currentTarget)} aria-label={`Read ${item.title || "newsletter"}`}>
-              <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>
+              <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, minWidth: 148, flex: "none", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
                 {new Date(item.sentAt).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", year: "numeric" })}
                 {" "}
                 {new Date(item.sentAt).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" })}
@@ -5644,13 +5654,14 @@ const ResearchBrief = ({ data }) => {
       <div className="rl-brief-head">
         <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", textTransform: "uppercase" }}>{data.verdict || "read"}</span>
         {data._sample && <span className="chip" title="Illustrative example — sign in to run and save your own" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
-        {data._personaName && <span className="chip" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>{data._personaName}</span>}
+        {data._personaName && <span className="chip" style={{ flex: "none", color: C.brass, borderColor: C.brass + "66" }}>{displayPersonaName(data._personaName)}</span>}
         <h3 className="rl-headline">{data.headline || `${data.instrument} research`}</h3>
       </div>
       {data.summary && <p className="rl-summary">{data.summary}</p>}
       <div className="rl-meta">
         {data.confidence && <span><b>Confidence</b> {data.confidence}</span>}
-        {data.asOf && <span><b>As of</b> {data.asOf}</span>}
+        {/* The model often starts its asOf string with "as of …" — strip it so the label doesn't stutter. */}
+        {data.asOf && <span><b>As of</b> {String(data.asOf).replace(/^\s*as\s+of\s+/i, "")}</span>}
       </div>
 
       {(data.keyFindings || []).length > 0 && (
@@ -5886,7 +5897,7 @@ const ResearchLab = ({ market, points, notify, auth, reports, setReports, viewin
           <Card
             icon={Search}
             title={viewed ? `${viewed.instrument} brief` : "Research brief"}
-            sub={viewed ? `${viewed.question}`.slice(0, 90) : "Your sourced findings land here"}
+            sub={viewed ? `${viewed.question}`.slice(0, 90).trimEnd() + (`${viewed.question}`.length > 90 ? "…" : "") : "Your sourced findings land here"}
             tools={reports.length > 1 && navIdx >= 0 && (
               <span className="th-nav" style={{ marginBottom: 0 }}>
                 <span className="th-nav-pos">{navIdx + 1} / {reports.length}</span>
@@ -6022,11 +6033,11 @@ const ResearchArchiveTab = ({ auth, reports, setReports, onOpenReport }) => {
           return (
             <div key={r._id} className="hist-row">
               <button className="hist-row-open" onClick={() => onOpenReport?.(r)} aria-label={`Open research brief: ${r.headline || r.question}`}>
-                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 120, flex: "none", whiteSpace: "nowrap" }}>{r._time ? `${r._date} · ${r._time}` : r._date}</span>
+                <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, minWidth: 120, flex: "none", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{r._time ? `${r._date} · ${r._time}` : r._date}</span>
                 <span className="chip" style={{ flex: "none", fontSize: 10 }}>{r.instrument}</span>
                 {r._sample && <span className="chip" title="Illustrative example — sign in to run and save your own" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
                 <span className="chip" style={{ color: vColor, borderColor: vColor + "66", flex: "none", fontSize: 10, textTransform: "uppercase" }}>{r.verdict || "read"}</span>
-                {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{r._personaName}</span>}
+                {r._personaName && <span className="chip" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>{displayPersonaName(r._personaName)}</span>}
                 <span className="hist-title" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, color: "var(--text)" }}>{r.headline || r.question}</span>
               </button>
               {!r._sample && <button className="btn btn-ghost btn-sm" style={{ flex: "none" }} title="Delete" onClick={(e) => { e.stopPropagation(); deleteReport(r._id); }}><Trash2 size={12} /></button>}
@@ -6148,7 +6159,7 @@ const ArchiveTab = ({
             return (
               <div key={entry._id} className={`hist-row ${isViewingThis ? "viewing" : ""}`}>
                 <button className="hist-row-open" onClick={() => { setViewing(entry._type === "newsletter" ? entry._thesis || entry : entry); onGoThesis?.(); }} aria-label={`Open thesis: ${entry.headline || t?.headline || "archived thesis"}`}>
-                  <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, width: 148, flex: "none", whiteSpace: "nowrap" }}>{archiveStamp(entry)}</span>
+                  <span className="mono hist-date" style={{ fontSize: 10.5, color: C.muted, minWidth: 148, flex: "none", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{archiveStamp(entry)}</span>
                   <span className="chip" style={{ flex: "none", fontSize: 10, color: C.muted, borderColor: "var(--border)" }}>Thesis</span>
                   {entry._sample && <span className="chip" title="Illustrative example — sign in to build and save your own" style={{ flex: "none", fontSize: 10, color: C.brass, borderColor: C.brass + "66" }}>Sample</span>}
                   <span className="chip" style={{ color: biasColor, borderColor: biasColor + "66", flex: "none", fontSize: 10 }}>{t?.bias || "—"}</span>
@@ -6451,9 +6462,11 @@ const SettingsDrawer = ({ open, onClose, watchlist, setWatchlist, onClearHistory
 
         <div style={{ borderTop: "1px solid var(--line)", margin: "22px 0 14px" }} />
         <div className="mono" style={{ fontSize: 10.5, color: C.muted, lineHeight: 1.8, letterSpacing: ".03em" }}>
-          {storageOk
-            ? "● Settings and thesis archive persist in this browser."
-            : "○ Persistent storage unavailable here — settings and archives live for this session only."}
+          {!storageOk
+            ? "○ Persistent storage unavailable here — settings and archives live for this session only."
+            : CLERK_ENABLED && auth?.signedIn
+              ? "● Synced to your account — this browser also keeps a local copy for fast loads."
+              : "● Signed-out data stays in this browser only; sign in to sync it across devices."}
         </div>
           </>
         )}
@@ -6853,6 +6866,15 @@ const IDLE = { status: "idle", data: null, error: null, at: null };
 export default function Overwatch() {
   // Active tab — restored from storage so a refresh keeps the view you were on.
   const [tab, setTab] = useState(() => { try { return safeTab(localStorage.getItem(TAB_KEY)); } catch { return "pulse"; } });
+  // Scroll is a document-level value, so it used to survive tab switches — land on News from the
+  // bottom of Market Pulse and you arrived mid-wire with the controls above the fold. Reset to the
+  // top on every primary-tab change; skip the very first run so a reload keeps the browser's own
+  // scroll restoration.
+  const scrolledOnce = useRef(false);
+  useEffect(() => {
+    if (!scrolledOnce.current) { scrolledOnce.current = true; return; }
+    try { window.scrollTo(0, 0); } catch { /* ignore */ }
+  }, [tab]);
   // Split view: the right-pane tab id (null = single-tab mode). Restored from storage.
   const [splitTab, setSplitTab] = useState(() => { try { return localStorage.getItem("overwatch:split") || null; } catch { return null; } });
   const [winW, setWinW] = useState(() => (typeof window === "undefined" ? 1280 : window.innerWidth));
