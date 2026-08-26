@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { deliverNewsletter } from "./_deliver.js";
 import { consumeRateLimit, isSafeId, json, redisCommand } from "./_shared.js";
 
 const BASE_URL = (process.env.ARCHIVE_PUBLIC_BASE_URL
@@ -121,7 +122,15 @@ export default async function handler(req, res) {
     return json(res, 503, { error: "Archive storage is temporarily unavailable" });
   }
 
-  return json(res, 200, { ok: true, id, url: `${BASE_URL}/api/archive/${encodeURIComponent(id)}` });
+  // Morning delivery (audit roadmap "Later"): the letters already land here on the desk's own
+  // schedule (7:20 AM premarket, 5:30 PM wrap), so email fan-out rides this ingest instead of a
+  // separate cron. Runs after the archive write commits — a delivery failure never loses the
+  // letter — and `deliver: false` in the body opts a one-off ingest out.
+  const delivery = req.body.deliver === false
+    ? { attempted: false, reason: "opted_out" }
+    : await deliverNewsletter(record);
+
+  return json(res, 200, { ok: true, id, url: `${BASE_URL}/api/archive/${encodeURIComponent(id)}`, delivery });
 }
 
 export const config = { api: { bodyParser: { sizeLimit: "1mb" } } };

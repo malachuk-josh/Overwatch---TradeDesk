@@ -38,6 +38,10 @@ React + Vite trading intelligence dashboard. Fetches live market data, synthesiz
 | `UPSTASH_REDIS_REST_URL` | Alias for KV_REST_API_URL |
 | `UPSTASH_REDIS_REST_TOKEN` | Alias for KV_REST_API_TOKEN |
 | `ARCHIVE_INGEST_SECRET` | Bearer token for POST /api/archive/ingest |
+| `BREVO_API_KEY` | Brevo transactional key — emails each ingested letter (optional) |
+| `NEWSLETTER_SENDER_EMAIL` | Verified Brevo sender for newsletter delivery |
+| `NEWSLETTER_SENDER_NAME` | Sender display name (default "Overwatch Desk") |
+| `NEWSLETTER_DELIVERY_TO` | Comma-separated recipient emails for delivery |
 
 ## Vercel Deployment
 
