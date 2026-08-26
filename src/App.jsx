@@ -7739,8 +7739,11 @@ export default function Overwatch() {
         </div>
         <div className="bd-hright">
           <DeskClock />
-          <button className="btn btn-sync-icon" onClick={syncAll} disabled={anyLoading} title={anyLoading ? "Syncing…" : "Sync live data"} aria-label={anyLoading ? "Syncing…" : "Sync live data"}>
-            {anyLoading ? <RefreshCw size={14} className="spin" /> : <Zap size={14} />}
+          {/* Desktop gets an explicit labeled Refresh button — the icon-only bolt didn't read as
+              "refresh the data" on a wide screen with room to spare. Mobile keeps the compact bolt. */}
+          <button className={`btn btn-sync-icon${winW > 760 ? " btn-sync-labeled" : ""}`} onClick={syncAll} disabled={anyLoading} title={anyLoading ? "Syncing…" : "Refresh all live desk data"} aria-label={anyLoading ? "Syncing…" : "Refresh all live desk data"}>
+            {anyLoading ? <RefreshCw size={14} className="spin" /> : winW > 760 ? <RefreshCw size={14} /> : <Zap size={14} />}
+            {winW > 760 && (anyLoading ? "Syncing…" : "Refresh")}
           </button>
           <button className="btn btn-ghost" onClick={() => setLightMode((m) => !m)} title={lightMode ? "Switch to dark mode" : "Switch to light mode"}>
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
