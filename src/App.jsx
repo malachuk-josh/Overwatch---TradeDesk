@@ -600,6 +600,21 @@ const parseFirstPrice = (text) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+// Price-like number from a level line that is plausibly in the SAME instrument as `spot`. Thesis
+// level text often quotes the execution proxy alongside the cash instrument ("QQQ 728 / NQ 29,750"),
+// and blindly taking the first number once fed NQ futures points into a QQQ strike (~41× off). Only
+// candidates within [spot/2, spot*2] qualify; the one nearest spot wins. No spot → first number.
+const parseLevelNear = (text, spot) => {
+  const nums = (String(text || "").replace(/,/g, "").match(/\d{1,6}(?:\.\d+)?/g) || [])
+    .map(Number)
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (!nums.length) return null;
+  if (!Number.isFinite(spot) || spot <= 0) return nums[0];
+  const inScale = nums.filter((n) => n > spot / 2 && n < spot * 2);
+  if (!inScale.length) return null;
+  return inScale.reduce((best, n) => (Math.abs(n - spot) < Math.abs(best - spot) ? n : best), inScale[0]);
+};
+
 /* ---------------- morning snapshot diff ---------------- */
 
 // The last sync of each ET day is persisted; the first sync of the NEXT day diffs against it to
@@ -4652,9 +4667,24 @@ const OptionsCalculator = ({ env, setEnv, opt, setOpt, onReset, live, feedOn = f
   // Match-thesis affordance: only offered when the thesis on screen was generated for this same
   // instrument, so "Target" / "Invalidation" pulls the desk's own levels rather than a stale read.
   const thesisForSymbol = thesis && thesis._instrument === symbol ? thesis : null;
-  const thesisTarget = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.upside) : null;
-  const thesisInvalidation = thesisForSymbol ? parseFirstPrice(thesisForSymbol.levels?.downside) : null;
+  // Scale-aware parse: level text may quote the futures proxy alongside the instrument itself, so
+  // only a number in the instrument's own price scale (vs live spot) is offered as a strike.
+  const thesisTarget = thesisForSymbol ? parseLevelNear(thesisForSymbol.levels?.upside, S) : null;
+  const thesisInvalidation = thesisForSymbol ? parseLevelNear(thesisForSymbol.levels?.downside, S) : null;
   const matchThesis = (type, level) => { setOpt("type", type); setOpt("strike", String(roundStrike(level))); setOpt("feed", true); };
+  // The IV solver's market-price input is quote-of-the-moment data: persisted across sessions it
+  // arrives stale and the panel opens straight onto "No solution — outside no-arbitrage bounds".
+  // Seed it empty on mount and clear it when the ticker changes; only a price typed THIS session
+  // for THIS ticker is ever solved.
+  const solverSymbol = useRef(symbol);
+  const didClearSolver = useRef(false);
+  useEffect(() => {
+    const tickerChanged = solverSymbol.current !== symbol;
+    solverSymbol.current = symbol;
+    if ((!didClearSolver.current || tickerChanged) && opt.marketPrice) setOpt("marketPrice", "");
+    didClearSolver.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol]);
   // Have any calculator inputs been changed from their defaults? Drives the Reset control.
   const DEF = DEFAULT_DESK_TOOLS;
   const inputsDirty =
@@ -4810,6 +4840,14 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
   const latestArchived = history.length ? (history[0]._type === "newsletter" ? (history[0]._thesis || history[0]) : history[0]) : null;
   const t = viewing || thesis.data || latestArchived;
   const biasColor = t?.bias === "bullish" ? C.bull : t?.bias === "bearish" ? C.bear : C.brass;
+  // Freshness of the displayed thesis. The card silently defaulting to the newest ARCHIVED thesis
+  // used to impersonate "today" — no date anywhere, week-old levels beside a live options feed. Every
+  // card now carries its generated-at stamp, and a fallback older than the current ET session gets an
+  // explicit aged banner + CTA instead of passing as current.
+  const tStamp = t && !t._sample ? archiveStamp(t) : "";
+  const tIsCurrent = t?._dateKey ? t._dateKey === etDateKey() : false;
+  const showingFallback = Boolean(t && !viewing && !thesis.data);
+  const fallbackAged = showingFallback && !t?._sample && !tIsCurrent;
   // Up/down nav across the saved thesis archive (newest first), mirroring the newsletter reader.
   // Index 0 is the live latest — stepping onto it drops back to the live card (setViewing(null)).
   const navIdx = t?._id ? history.findIndex((e) => e._id === t._id) : -1;
@@ -5078,7 +5116,24 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
         )}
         {t && (
           <>
-            <div className="th-hero">
+            {fallbackAged && (
+              <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 15px", borderColor: "rgba(219,167,85,.45)" }}>
+                <History size={14} color={C.brass} />
+                <span style={{ fontSize: 12.5, color: C.muted }}>
+                  Last thesis: <b style={{ color: "var(--text)" }}>{tStamp}</b> — its levels are from that session, not today's tape.
+                </span>
+                <button
+                  className="btn btn-brass btn-sm"
+                  style={{ marginLeft: "auto", flex: "none" }}
+                  onClick={onGenerate}
+                  disabled={thesis.status === "loading" || !anyData || Boolean(generateBlockedReason)}
+                  title={generateBlockedReason || (!anyData ? "Sync data first" : "Generate a fresh thesis from the live feeds")}
+                >
+                  Build today's thesis
+                </button>
+              </div>
+            )}
+            <div className="th-hero" style={fallbackAged ? { opacity: 0.82 } : undefined}>
               {history.length > 1 && navIdx >= 0 && (
                 <div className="th-nav">
                   <span className="th-nav-pos">{navIdx + 1} / {history.length}</span>
@@ -5092,6 +5147,11 @@ const ThesisTab = ({ instrument, setInstrument, secondary, setSecondary, weights
                   <div className="th-head">"{t.headline}"</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 9, alignItems: "flex-end" }}>
+                  {tStamp && (
+                    <span className="mono" title="When this thesis was generated" style={{ fontSize: 10.5, color: fallbackAged ? C.brass : C.muted, letterSpacing: ".04em", whiteSpace: "nowrap" }}>
+                      {tStamp}
+                    </span>
+                  )}
                   <span className="chip">{(t.instrument || instrument)} FOCUS</span>
                   <span
                     className="chip"
@@ -6545,9 +6605,24 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
     let alive = true;
     const tick = async () => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Hard ceiling on the whole attempt. The panel once sat on its skeleton forever because a
+      // step before the fetch (Clerk's token refresh) could hang without rejecting — no request,
+      // no error, nothing for Refresh to do. Racing a timeout guarantees every attempt terminates
+      // in either data or a real, retryable error state.
+      let deadlineTimer;
       try {
-        const token = await auth.getToken();
-        const data = await callDesk("algolive", "", { params: JSON.parse(liveKey) }, token);
+        setLive((prev) => ({ ...prev, status: "loading" }));
+        const deadline = new Promise((_, reject) => {
+          deadlineTimer = setTimeout(() => reject(new Error("The live-signal check timed out — hit Refresh to retry.")), 25000);
+        });
+        deadline.catch(() => { /* lost the race — expected */ });
+        const data = await Promise.race([
+          (async () => {
+            const token = await auth.getToken();
+            return callDesk("algolive", "", { params: JSON.parse(liveKey) }, token);
+          })(),
+          deadline,
+        ]);
         if (!alive) return;
         setLive({ status: "done", data, error: null });
         const sig = data?.state?.signal;
@@ -6560,6 +6635,8 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
         }
       } catch (e) {
         if (alive) setLive((prev) => ({ status: "error", data: prev.data, error: e.message }));
+      } finally {
+        clearTimeout(deadlineTimer);
       }
     };
     tick();
@@ -6615,10 +6692,15 @@ const StrategyLabTab = ({ notify = null, auth = null }) => {
                 <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>Evaluates completed {p.interval} bars · auto-refreshes every 60s</div>
               </div>
               <button className="btn btn-ghost btn-sm" style={{ marginLeft: "auto", flexShrink: 0 }} title="Re-check the latest bar now" onClick={() => setPollSeq((n) => n + 1)}>
-                <RefreshCw size={12} className={live.status === "idle" || (live.status !== "error" && !live.data) ? "spin" : undefined} /> Refresh
+                <RefreshCw size={12} className={live.status === "idle" || live.status === "loading" ? "spin" : undefined} /> Refresh
               </button>
             </div>
-            {!st && live.status !== "error" && <LoadingBlock lines={3} msg="Reading the latest bars…" />}
+            {!st && (live.status === "idle" || live.status === "loading") && <LoadingBlock lines={3} msg="Reading the latest bars…" />}
+            {!st && live.status === "done" && (
+              <div style={{ color: C.muted, fontSize: 12.5, display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={13} /> No completed {p.interval} bar came back for {p.symbol} — hit Refresh to re-check.
+              </div>
+            )}
             {live.status === "error" && !st && <ErrBlock msg={live.error} onRetry={() => setPollSeq((n) => n + 1)} />}
             {st && (
               <>
