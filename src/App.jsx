@@ -8708,17 +8708,27 @@ export default function Overwatch() {
       )}
       </div>
 
-      <div className="bd-bottom-nav" aria-label="Mobile desk navigation">
-        <div className="bd-bottom-nav-inner">
-          {TABS.map((t) => (
-            <button key={t.id} aria-current={tab === t.id ? "page" : undefined} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
-              {t.badge ? <span className="bd-bnav-dot" /> : null}
-              <t.icon size={25} />
-              {t.short}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Portaled to document.body on purpose, and it must stay that way. A position:fixed element is
+          positioned against the nearest ancestor carrying transform / filter / backdrop-filter /
+          perspective / contain / will-change / container-type — any one of those silently turns
+          "pinned to the viewport" into "pinned to that ancestor", which is how this bar kept coming
+          adrift mid-page. Rendering it outside .bd-root puts it beyond the reach of anything the app
+          tree grows later, including .bd-root's own overflow-x clip. Guarded by
+          tests/layout-safety.test.js. */}
+      {typeof document !== "undefined" && createPortal(
+        <div className={`bd-bottom-nav${lightMode ? " light" : ""}`} aria-label="Mobile desk navigation">
+          <div className="bd-bottom-nav-inner">
+            {TABS.map((t) => (
+              <button key={t.id} aria-current={tab === t.id ? "page" : undefined} className={`bd-bnav-btn${tab === t.id ? " on" : ""}`} onClick={() => setTab(t.id)}>
+                {t.badge ? <span className="bd-bnav-dot" /> : null}
+                <t.icon size={25} />
+                {t.short}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {splitOn ? (
         <main className="bd-main bd-main-split">
