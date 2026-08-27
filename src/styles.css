@@ -982,6 +982,16 @@ input[type=range].bd-range::-moz-range-thumb{width:13px;height:13px;border-radiu
 .seg button.on{background:var(--brass-dim);color:var(--brass)}
 .seg button.on.sg-bull{background:var(--bull-dim);color:var(--bull)}
 .seg button.on.sg-bear{background:var(--bear-dim);color:var(--bear)}
+/* Narrow screens: a seg with several long labels (the Library's four tabs) is wider than the
+   viewport. `overflow:hidden` used to clip the overflowing tabs away with no way to reach them —
+   the Scoreboard was simply unreachable on a phone. Scroll the strip instead of swallowing it, and
+   stop the buttons shrinking so labels stay whole. overflow-y stays hidden so the rounded corners
+   still clip the button backgrounds. */
+@media(max-width:760px){
+  .seg{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;scroll-snap-type:x proximity}
+  .seg::-webkit-scrollbar{display:none}
+  .seg button{flex:1 0 auto;padding-left:13px;padding-right:13px;scroll-snap-align:start}
+}
 .lab-field{margin-top:16px}
 .lab-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:7px;display:block}
 
