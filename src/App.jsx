@@ -6359,6 +6359,14 @@ const ArchiveTab = ({
   // Re-clicking the Jack's Journal tab while it's already active closes any open letter — bump a token
   // the reader listens on, so tapping the tab is a second way to get back to the list.
   const [journalCloseToken, setJournalCloseToken] = useState(0);
+  // On a phone the sub-nav scrolls (four tabs are wider than the viewport), so the selected tab can
+  // sit off-screen — most visibly when the stored view came from a desktop session. Bring it into
+  // view whenever it changes, so the strip always shows which section you're actually in.
+  const libSegRef = useRef(null);
+  useEffect(() => {
+    const active = libSegRef.current?.querySelector("button.on");
+    if (active?.scrollIntoView) active.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [libTab]);
   // Signed-out labels lead with "User …" so a visitor browsing the sample entries understands these
   // are the per-account archives of the Lab tools — and that the samples won't carry into an account.
   const signedIn = !CLERK_ENABLED || Boolean(auth?.signedIn);
@@ -6369,7 +6377,7 @@ const ArchiveTab = ({
     { id: "scoreboard", label: "Scoreboard", Icon: Trophy },
   ];
   const libSeg = (
-    <div className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Library sections">
+    <div ref={libSegRef} className="seg" style={{ maxWidth: 720 }} role="tablist" aria-label="Library sections">
       {LIB_TABS.map((t) => (
         <button
           key={t.id}
