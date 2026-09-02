@@ -5531,7 +5531,7 @@ const useIsDesktop = (bp = 768) => {
 // (api/archive/delete.js) — this is just what shows the control.
 const JOURNAL_ADMIN_EMAIL = "malachuk@gmail.com";
 
-const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) => {
+const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0, reloadToken = 0 }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
@@ -5602,7 +5602,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0 }) =
       setLoading(false);
     }
   }, []);
-  useEffect(() => { loadArchive(); }, [loadArchive]);
+  useEffect(() => { loadArchive(); }, [loadArchive, reloadToken]);
 
   // Reader overlay: Esc closes, ← / → move between letters; lock background scroll while open.
   useEffect(() => {
@@ -6333,6 +6333,7 @@ const ArchiveTab = ({
   setResearchViewing,
   inSplit = false,
   auth = null,
+  reloadToken = 0,
 }) => {
   const filteredHistory = archiveHistory;
 
@@ -6400,7 +6401,7 @@ const ArchiveTab = ({
 
       {libTab === "journal" && (
         <Card icon={Mail} title="Jack's Journal" sub="Market wraps delivered by the Overwatch automation — stored in the cloud">
-          <CloudNewsletterList inSplit={inSplit} auth={auth} closeToken={journalCloseToken} />
+          <CloudNewsletterList inSplit={inSplit} auth={auth} closeToken={journalCloseToken} reloadToken={reloadToken} />
         </Card>
       )}
 
@@ -8024,9 +8025,45 @@ export default function Overwatch() {
     ? `Thesis generation is paused because ${unsafeFeeds.join("; ")}. Sync again when the affected provider is current.`
     : null;
 
+  // The header's refresh used to pull only the three live feeds (market / news / points), so the
+  // Library kept showing whatever it hydrated with at mount — a thesis or brief saved on another
+  // device, or a newly published journal letter, appeared only after a hard reload. Refresh now
+  // re-pulls the stored content too. Bumping the token is what makes Jack's Journal (a shared cloud
+  // list owned by its own component) re-fetch.
+  const [libraryReloadToken, setLibraryReloadToken] = useState(0);
+  const reloadLibrary = useCallback(async () => {
+    setLibraryReloadToken((n) => n + 1);
+    // Signed out there is no cloud copy — the token above still refreshes the shared journal.
+    if (!auth.signedIn || !auth.userId || cloudHydrated.current !== auth.userId) return true;
+    try {
+      const [archiveResult, researchResult] = await Promise.all([
+        loadUserArchive(auth.getToken),
+        loadUserResearch(auth.getToken),
+      ]);
+      // Adopt the server's revision along with its data, so the debounced writer versions its next
+      // save against what we just read instead of a stale revision it would have to retry.
+      if (archiveResult.status === "ok") {
+        setArchiveHistory(sanitizeArchive(archiveResult.data));
+        cloudRevisions.current.archive = archiveResult.revision ?? cloudRevisions.current.archive;
+      }
+      if (researchResult.status === "ok") {
+        setResearchReports(sanitizeArchive(researchResult.data));
+        cloudRevisions.current.research = researchResult.revision ?? cloudRevisions.current.research;
+      }
+      return archiveResult.status !== "error" && researchResult.status !== "error";
+    } catch {
+      return false; // the live-feed half of the sync still reports its own result
+    }
+  }, [auth.signedIn, auth.userId, auth.getToken]);
+
   const syncAll = async ({ silent = false } = {}) => {
     if (!silent) notify("Syncing the desk — three feeds in flight", "ok");
-    const [marketData, newsData, pointsData] = await Promise.all([refreshMarket(), refreshNews(), refreshPoints()]);
+    const [marketData, newsData, pointsData] = await Promise.all([
+      refreshMarket(), refreshNews(), refreshPoints(),
+      // Stored content refreshes alongside the live feeds; its outcome does not change the feed
+      // verdict below, so a cloud hiccup can't make three healthy feeds report as a failed sync.
+      reloadLibrary(),
+    ]);
     const r = [marketData, newsData, pointsData];
     const qualities = r.filter(Boolean).map((data) => data?._meta?.quality || "live");
     const degraded = qualities.filter((quality) => quality !== "live");
@@ -8602,6 +8639,7 @@ export default function Overwatch() {
             setResearchViewing={setResearchViewing}
             inSplit={splitOn}
             auth={auth}
+            reloadToken={libraryReloadToken}
           />
         );
       default:
