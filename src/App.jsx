@@ -5588,21 +5588,40 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0, rel
     }
   };
 
-  const loadArchive = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  // A background reload must never touch `loading` or `loadError`: both are render gates above that
+  // swap the whole component — the open reader and its iframe included — for a one-line placeholder.
+  // Unmounting the iframe reloads the letter and throws away where you were reading. Only the first
+  // load and an explicit retry, when there is nothing on screen to lose, are allowed to show a gate.
+  const loadArchive = useCallback(async ({ background = false } = {}) => {
+    if (!background) { setLoading(true); setLoadError(null); }
     try {
       const response = await fetch("/api/archive?limit=50");
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(body?.error || `Journal unavailable (${response.status})`);
-      setItems(Array.isArray(body?.data) ? body.data : []);
+      const next = Array.isArray(body?.data) ? body.data : [];
+      // Keep the previous array when nothing changed, so a refresh that returns the same letters
+      // re-renders nothing at all — the common case while you are sat reading one.
+      setItems((prev) => (prev.length === next.length
+        && prev.every((item, i) => item?.id === next[i]?.id && item?.sentAt === next[i]?.sentAt)
+        ? prev
+        : next));
     } catch (error) {
-      setLoadError(error?.message || "Journal unavailable");
+      // A failed background refresh stays quiet: the letters already on screen are still good, and
+      // the desk syncs again shortly. Only a foreground load surfaces the error.
+      if (!background) setLoadError(error?.message || "Journal unavailable");
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, []);
-  useEffect(() => { loadArchive(); }, [loadArchive, reloadToken]);
+  useEffect(() => { loadArchive(); }, [loadArchive]);
+  // Desk refresh (header button, or the auto-sync while the Pulse pane drives a split view) bumps
+  // reloadToken. Refresh the letters in the background so a new one appears without disturbing
+  // whatever is open. Skipped on mount — the effect above owns the first load.
+  const reloadMounted = useRef(false);
+  useEffect(() => {
+    if (!reloadMounted.current) { reloadMounted.current = true; return; }
+    loadArchive({ background: true });
+  }, [reloadToken, loadArchive]);
 
   // Reader overlay: Esc closes, ← / → move between letters; lock background scroll while open.
   useEffect(() => {
@@ -5631,7 +5650,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0, rel
   }, [previewId, items, inSplit, closePreview]);
 
   if (loading) return <div style={{ color: C.muted, fontSize: 12.5, padding: "8px 0" }}>Loading cloud newsletters…</div>;
-  if (loadError && !items.length) return <ErrBlock msg={loadError} onRetry={loadArchive} />;
+  if (loadError && !items.length) return <ErrBlock msg={loadError} onRetry={() => loadArchive()} />;
   if (!items.length) return <div style={{ color: C.muted, fontSize: 12.5 }}>No automated newsletters archived yet.</div>;
 
   const biasColor = (b) => b?.includes("bullish") ? C.bull : b?.includes("bearish") ? C.bear : C.brass;
@@ -5717,7 +5736,7 @@ const CloudNewsletterList = ({ inSplit = false, auth = null, closeToken = 0, rel
           </div>
         ))}
       </div>
-      {loadError && <div className="err" role="status" style={{ marginTop: 10 }}><AlertTriangle size={15} color={C.bear} /><span>{loadError}</span><button className="btn btn-sm" onClick={loadArchive}>Retry</button></div>}
+      {loadError && <div className="err" role="status" style={{ marginTop: 10 }}><AlertTriangle size={15} color={C.bear} /><span>{loadError}</span><button className="btn btn-sm" onClick={() => loadArchive()}>Retry</button></div>}
       {current && createPortal(
         <div className="nl-reader-overlay" onClick={closePreview}>
           <div ref={readerRef} className="nl-reader" role="dialog" aria-modal="true" aria-label={current.title || "Newsletter reader"} onClick={(e) => e.stopPropagation()}>{reader}</div>
