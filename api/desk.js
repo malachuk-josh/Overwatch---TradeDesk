@@ -988,11 +988,16 @@ const quote = async (symbol) => {
   const validCloses = (bars.close || []).filter((value) => Number.isFinite(value));
   const validOpens = (bars.open || []).filter((value) => Number.isFinite(value));
   const price = Number.isFinite(meta.regularMarketPrice) ? meta.regularMarketPrice : validCloses.at(-1);
-  const previous = Number.isFinite(meta.chartPreviousClose)
-    ? meta.chartPreviousClose
+  // Day change is measured against the PRIOR SESSION's close. Yahoo's chartPreviousClose is the
+  // close before the whole requested range (5 sessions back for range=5d), so using it turned a
+  // one-day move into a five-day move (e.g. SPX showing -8.6% on a -3.6% day).
+  const previous = Number.isFinite(meta.regularMarketPreviousClose)
+    ? meta.regularMarketPreviousClose
     : validCloses.length > 1
       ? validCloses.at(-2)
-      : price;
+      : Number.isFinite(meta.chartPreviousClose)
+        ? meta.chartPreviousClose
+        : price;
   const change = price - previous;
   const open = Number.isFinite(meta.regularMarketOpen)
     ? meta.regularMarketOpen
@@ -2779,24 +2784,33 @@ const buildPositioning = ({ flowScan, fearGreed, sectors = [] }) => {
   };
 };
 
+// Core index quotes for the points op. The TradingView scanner does not always return every
+// symbol (CBOE:SPX, CBOE:VIX and TVC:DJI can come back missing), and the market op already falls
+// back to Yahoo for those. Points used to throw instead, which swapped the WHOLE internals and
+// positioning panels for the built-in sample tape. Use the same scanner → Yahoo hierarchy here.
+const POINTS_CORE = ["SPX", "NDX", "DJI", "SPY", "QQQ", "DIA", "ES", "NQ", "YM", "VIX"];
+const fetchPointsCore = async () => {
+  const scan = await fetchScan().catch(() => new Map());
+  const used = new Set();
+  const entries = await Promise.all(POINTS_CORE.map(async (key) => {
+    const scanned = scan.get(SYMBOLS[key]);
+    if (scanned && Number.isFinite(Number(scanned.price))) { used.add("TradingView index scan"); return [key, scanned]; }
+    const fallback = await quote(key).catch(() => null);
+    if (fallback && Number.isFinite(Number(fallback.price))) { used.add("Yahoo Finance"); return [key, fallback]; }
+    return [key, null];
+  }));
+  return { scan, core: Object.fromEntries(entries), sources: [...used] };
+};
+
 const fetchPoints = async () => {
+  const calendarPromise = fetchEconomicCalendar().catch(() => buildSampleCalendar());
+  const flowPromise = fetchFlowScan().catch(() => null);
+  const fearGreedPromise = fetchFearGreed().catch(() => SAMPLE_FEAR_GREED);
   try {
-    const calendarPromise = fetchEconomicCalendar().catch(() => buildSampleCalendar());
-    const flowPromise = fetchFlowScan().catch(() => null);
-    const fearGreedPromise = fetchFearGreed().catch(() => SAMPLE_FEAR_GREED);
     const termStructurePromise = fetchVixTermStructure();
     const realizedVolPromise = fetchRealizedVol();
-    const scan = await fetchScan();
-    const spx = scan.get(SYMBOLS.SPX);
-    const ndx = scan.get(SYMBOLS.NDX);
-    const dji = scan.get(SYMBOLS.DJI);
-    const spy = scan.get(SYMBOLS.SPY);
-    const qqq = scan.get(SYMBOLS.QQQ);
-    const dia = scan.get(SYMBOLS.DIA);
-    const es = scan.get(SYMBOLS.ES);
-    const nq = scan.get(SYMBOLS.NQ);
-    const ym = scan.get(SYMBOLS.YM);
-    const vix = scan.get(SYMBOLS.VIX);
+    const { scan, core, sources: coreSources } = await fetchPointsCore();
+    const { SPX: spx, NDX: ndx, DJI: dji, SPY: spy, QQQ: qqq, DIA: dia, ES: es, NQ: nq, YM: ym, VIX: vix } = core;
     if (!spx || !vix) throw new Error("Missing index data");
     const sectors = SECTORS.flatMap(([name, symbol]) => {
       const result = scan.get(symbol);
@@ -2844,7 +2858,7 @@ const fetchPoints = async () => {
       nextStructural: calendarData.nextStructural || null,
       positioning,
       _provenance: [
-        { name: "TradingView index scan", component: "core indexes", quality: "live" },
+        { name: coreSources.join(" + ") || "TradingView index scan", component: "core indexes", quality: "live" },
         { name: "TradingView sector scan", component: "sector breadth", quality: sectors.length === SECTORS.length ? "live" : "stale" },
         { name: fearGreed?.source || "CNN Fear & Greed", component: "fear and greed", quality: fearQuality },
         { name: calendarData?.source || "economic calendar", component: "calendar", quality: calendarQuality },
@@ -2854,13 +2868,18 @@ const fetchPoints = async () => {
       ],
     };
   } catch {
+    // Core indexes are unreadable from every source. Only those parts fall back to the sample
+    // tape; the calendar, Fear & Greed and ETF flow feeds are independent and stay live.
+    const [calendarData, fearGreed, flowScan] = await Promise.all([calendarPromise, fearGreedPromise, flowPromise]);
     const sample = (symbol) => SAMPLE_MARKET.tickers.find((item) => item.symbol === symbol);
     const spx = sample("SPX");
     const ndx = sample("NDX");
     const dji = sample("DJI");
     const vix = SAMPLE_MARKET.tickers.find((item) => item.symbol === "VIX") || SAMPLE_MARKET.tickers[6];
-    const internals = buildInternals({ spx, ndx, dji, vix, sectors: SAMPLE_MARKET.sectors, fearGreed: SAMPLE_FEAR_GREED });
-    const sampleCalendar = buildSampleCalendar();
+    const internals = buildInternals({ spx, ndx, dji, vix, sectors: SAMPLE_MARKET.sectors, fearGreed });
+    const positioning = buildPositioning({ flowScan, fearGreed, sectors: [] });
+    const fearQuality = /sample/i.test(String(fearGreed?.source || "")) ? "sample" : "live";
+    const calendarQuality = /sample/i.test(String(calendarData?.source || "")) ? "sample" : "live";
     return {
       spx: indexLevels(spx) || { spot: spx.price, pivot: 7342, supports: [7298, 7260, 7215], resistances: [7397, 7440, 7485] },
       ndx: indexLevels(ndx) || { spot: 26402, pivot: 26498, supports: [26280, 26150, 26020], resistances: [26812, 26990, 27160] },
@@ -2880,17 +2899,19 @@ const fetchPoints = async () => {
         note: "Sample volatility state: elevated enough to keep intraday ranges wide.",
       },
       internals,
-      calendar: sampleCalendar.flat,
-      calendarGroups: sampleCalendar.groups,
-      calendarSource: sampleCalendar.source,
-      calendarAsOf: new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
-      positioning: SAMPLE_POSITIONING,
+      calendar: calendarData.flat,
+      calendarGroups: calendarData.groups,
+      calendarSource: calendarData.source,
+      calendarAsOf: calendarData.asOf || new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET",
+      calendarRange: calendarData.range || null,
+      nextStructural: calendarData.nextStructural || null,
+      positioning,
       _provenance: [
         { name: "Overwatch sample", component: "core indexes", quality: "sample" },
         { name: "Overwatch sample", component: "sector breadth", quality: "sample" },
-        { name: "Overwatch sample", component: "fear and greed", quality: "sample" },
-        { name: "Overwatch sample", component: "calendar", quality: "sample" },
-        { name: "Overwatch sample", component: "positioning", quality: "sample" },
+        { name: fearGreed?.source || "CNN Fear & Greed", component: "fear and greed", quality: fearQuality },
+        { name: calendarData?.source || "economic calendar", component: "calendar", quality: calendarQuality },
+        { name: flowScan ? "TradingView ETF proxies" : "Overwatch sample", component: "positioning", quality: flowScan ? "live" : "sample" },
       ],
     };
   }
