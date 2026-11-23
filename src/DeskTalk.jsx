@@ -56,7 +56,12 @@ let nextId = 1;
 
 export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] }) {
   const signedIn = Boolean(auth?.signedIn);
-  const getToken = useCallback(() => (auth?.getToken ? auth.getToken() : Promise.resolve(null)), [auth]);
+  // useAuthSync hands back a new object on every app render. Anything keyed on it (the speaker
+  // below, above all) would be torn down and rebuilt mid-sentence, cutting the voice off, so the
+  // token getter is read through a ref and stays the same function for the drawer's lifetime.
+  const tokenRef = useRef(auth?.getToken);
+  tokenRef.current = auth?.getToken;
+  const getToken = useCallback(() => (tokenRef.current ? tokenRef.current() : Promise.resolve(null)), []);
 
   const [lead, setLead] = useState(DEFAULT_LEAD);
   // One thread per desk lead, so switching from Jack to Mike and back picks up where you were.
@@ -197,7 +202,8 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
     pendingInterrupt.current = null;
 
     const update = (fn) => updateThread(forLead, (t) => t.map((x) => (x.id === replyId ? fn(x) : x)));
-    const voiced = speak && via === "voice";
+    // "Speak replies" means every reply, typed or spoken: you opened the desk to hear it.
+    const voiced = speak;
     const chunker = new SentenceChunker();
     const say = (s) => {
       if (voiced && !ignoreReply.current) speaker.current?.speak(s);
@@ -368,6 +374,9 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
 
   function typed(e) {
     e.preventDefault();
+    // Sending is a tap: the one moment phones allow audio to be switched on for what follows.
+    speaker.current?.unlock();
+    unlockEarcons();
     const text = draft;
     setDraft("");
     if (status === "speaking" || status === "thinking") interrupt();
