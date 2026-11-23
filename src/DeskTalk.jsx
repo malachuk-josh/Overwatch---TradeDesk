@@ -73,6 +73,10 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
   const [setup, setSetup] = useState(null);
   const [speak, setSpeak] = useState(() => stored("overwatch:talk:speak", true));
   const [handsFreePref, setHandsFreePref] = useState(() => stored("overwatch:talk:handsfree", false));
+  // Voice check: what this device actually reports, so a silent desk can be diagnosed from a screenshot.
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [voiceError, setVoiceError] = useState(null);
+  const [lastTurn, setLastTurn] = useState(null);
 
   const cloudListening = Boolean(setup?.stt);
   const handsFree = handsFreePref && cloudListening;
@@ -125,7 +129,11 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
       getToken,
       onStart: () => setStatus("speaking"),
       onIdle: () => settle(),
-      onError: () => setError(`${PERSONAS[lead].name}'s voice didn't load for one sentence. The text is on screen.`),
+      onError: (message) => {
+        const m = message || `${PERSONAS[lead].name}'s voice didn't load for one sentence. The text is on screen.`;
+        setError(m);
+        setVoiceError(m);
+      },
     };
     speaker.current = cloudVoice ? new CloudSpeaker(opts) : new BrowserSpeaker(opts);
     if (cloudVoice && open) speaker.current.warmFillers(FILLER_COUNT);
@@ -268,7 +276,9 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
         }
       }
       chunker.flush().forEach(say);
+      setLastTurn({ ok: gotText, voiced, at: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }) });
     } catch (err) {
+      setLastTurn({ ok: false, error: err instanceof Error ? err.message : "failed", at: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" }) });
       setError(err instanceof Error ? err.message : "The desk couldn't answer just now.");
       // An empty reply bubble says nothing useful: drop it.
       updateThread(forLead, (t) => t.filter((x) => x.id !== replyId || x.text || x.unheard));
@@ -484,10 +494,52 @@ export default function DeskTalk({ open, onClose, auth, getSnapshot, terms = [] 
                 </button>
               )}
             </div>
+            <button className="btn btn-ghost btn-sm talk-check-toggle" aria-expanded={checkOpen} onClick={() => setCheckOpen((v) => !v)}>
+              {checkOpen ? "Hide voice check" : "Voice check"}
+            </button>
+            {checkOpen && <VoiceCheck
+              rows={[
+                ["Signed in", signedIn ? "yes" : "no"],
+                ["Desk server", !setup ? "checking…" : setup.error ? setup.error : `Claude ${setup.chat ? "on" : "OFF"} · voices ${setup.tts ? "on" : "off"} · listening ${setup.stt ? "on" : "off"}`],
+                [`${name} speaks with`, voiceLabel],
+                ["Speak replies", speak ? "on" : "OFF"],
+                ["Device speech", typeof speechSynthesis === "undefined" ? "not available" : `${speechSynthesis.getVoices().length} voices${speechSynthesis.paused ? " · paused" : ""}`],
+                ["Audio session", typeof navigator !== "undefined" && navigator.audioSession ? navigator.audioSession.type : "not supported"],
+                ["App mode", typeof window !== "undefined" && (window.matchMedia?.("(display-mode: standalone)").matches || window.navigator.standalone) ? "home-screen app" : "browser"],
+                ["Last reply", !lastTurn ? "none yet" : lastTurn.ok ? `text arrived ${lastTurn.at}${lastTurn.voiced ? ", sent to voice" : ", not voiced"}` : `failed ${lastTurn.at}: ${lastTurn.error || "no text"}`],
+                ["Last voice error", voiceError || "none"],
+              ]}
+              onTest={() => {
+                // Everything here runs inside the tap, the one moment iOS lets audio start.
+                speaker.current?.unlock();
+                unlockEarcons();
+                playEarcon("on");
+                setVoiceError(null);
+                speaker.current?.stop();
+                speaker.current?.speak(`${name} here. If you can hear this, the desk voice works.`);
+              }}
+            />}
             <div className="talk-foot">Market commentary from fictional desk characters — not financial advice.</div>
           </>
         )}
       </div>
     </>
+  );
+}
+
+function VoiceCheck({ rows, onTest }) {
+  return (
+    <div className="talk-check" role="region" aria-label="Voice check">
+      <button className="btn btn-sm" onClick={onTest}><AudioLines size={13} /> Test voice</button>
+      <div className="talk-check-note">You should hear a chime, then the lead speak. Screenshot this panel if either is missing.</div>
+      <dl>
+        {rows.map(([k, v]) => (
+          <React.Fragment key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </React.Fragment>
+        ))}
+      </dl>
+    </div>
   );
 }

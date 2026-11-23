@@ -1517,3 +1517,10 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .talk-prefs label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .talk-voice{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
 .talk-foot{font-size:10.5px;color:var(--faint,var(--muted));line-height:1.45}
+.talk-check-toggle{align-self:flex-start;font-size:11px}
+.talk-check{border:1px dashed var(--line2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:11.5px}
+.talk-check button{align-self:flex-start}
+.talk-check-note{color:var(--muted);line-height:1.45}
+.talk-check dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0}
+.talk-check dt{color:var(--muted)}
+.talk-check dd{margin:0;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;overflow-wrap:anywhere}

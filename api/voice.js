@@ -280,6 +280,7 @@ export async function pumpAnthropicStream(response, onText, signal) {
 
 async function status(res) {
   const voices = Object.fromEntries(DESK_LEADS.map((lead) => [lead, elevenKey() ? voiceFor(lead).source : "none"]));
+  console.log(`[voice] status chat=${Boolean(process.env.ANTHROPIC_API_KEY)} tts=${Boolean(elevenKey())} stt=${Boolean(deepgramKey())}`);
   return json(res, 200, {
     chat: Boolean(process.env.ANTHROPIC_API_KEY),
     tts: Boolean(elevenKey()),
@@ -362,6 +363,9 @@ async function chat(req, res, uid) {
     }
     if (result.stopReason === "refusal") emit({ type: "text", text: `${result.said ? " " : ""}${REFUSAL_LINE}` });
     emit({ type: "timing", model: result.model, firstTextMs, totalMs: Date.now() - startedAt });
+    // One line per turn so a silent desk can be told apart from one nobody is reaching. Lead and
+    // timings only: never the trader's words or the reply.
+    console.log(`[voice] turn lead=${lead} model=${result.model} history=${history.length} firstText=${firstTextMs ?? "-"}ms total=${Date.now() - startedAt}ms stop=${result.stopReason}`);
     emit({ type: "done", stopReason: result.stopReason });
   } catch (err) {
     if (!abort.signal.aborted) {
