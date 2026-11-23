@@ -286,15 +286,21 @@ export class BrowserSpeaker {
     this.opts = opts; // { lead, onStart, onIdle }
     this.pending = 0;
     this.lastHeard = "";
+    // WebKit and Chrome can garbage-collect an utterance mid-queue, which drops its end event and
+    // leaves the speaker "busy" forever. Hold each one until it's done.
+    this.live = new Set();
   }
 
   unlock() {
     primeAudioSession();
     if (typeof speechSynthesis === "undefined") return;
     speechSynthesis.getVoices();
+    // Safari can sit "paused" after the app was backgrounded; nothing queued will play until resumed.
+    if (speechSynthesis.paused) speechSynthesis.resume();
     if (synthUnlocked) return;
     synthUnlocked = true;
-    const u = new SpeechSynthesisUtterance(" ");
+    // Real text at zero volume: an all-whitespace utterance can be skipped without starting the engine.
+    const u = new SpeechSynthesisUtterance("Ready.");
     u.volume = 0;
     speechSynthesis.speak(u);
   }
@@ -319,10 +325,20 @@ export class BrowserSpeaker {
       this.lastHeard = sentence;
       this.opts.onStart?.();
     };
-    u.onend = u.onerror = () => {
+    this.live.add(u);
+    const done = () => {
+      this.live.delete(u);
       this.pending = Math.max(0, this.pending - 1);
       if (this.pending === 0) this.opts.onIdle?.();
     };
+    u.onend = done;
+    u.onerror = (e) => {
+      done();
+      // "interrupted"/"canceled" are us stopping it; anything else (e.g. "not-allowed") is the
+      // device refusing to speak, which used to fail without a word.
+      if (e?.error && e.error !== "interrupted" && e.error !== "canceled") this.opts.onError?.(`The device voice refused to speak (${e.error}).`);
+    };
+    if (speechSynthesis.paused) speechSynthesis.resume();
     speechSynthesis.speak(u);
   }
 
