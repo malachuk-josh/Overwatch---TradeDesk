@@ -1200,7 +1200,7 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .loading-line{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12.5px;font-family:'JetBrains Mono',monospace}
 
 /* ---------- toasts ---------- */
-.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:9px;z-index:200}
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:9px;z-index:220}
 .toast{
   display:flex;align-items:center;gap:10px;background:var(--panel3);border:1px solid var(--line2);
   border-radius:9px;padding:11px 15px;font-size:13px;box-shadow:0 10px 30px rgba(0,0,0,.5);
@@ -1460,3 +1460,60 @@ select.bd-in option{background:var(--panel);color:var(--text)}
 .sb-lead{font-family:'Space Grotesk',sans-serif;font-weight:600;white-space:nowrap}
 .sb-chip{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:700;margin-right:6px}
 .sb-dim{color:var(--muted);font-size:10.5px}
+
+/* ---------- talk to the desk (voice) ---------- */
+/* A column that fills the drawer: lead picker on top, transcript takes the slack, mic and input pinned below. */
+/* Above the floating mobile nav (200), which would otherwise sit right over the mic and input; toasts
+   stay above everything so an alert that fires mid-conversation still shows. */
+.talk-drawer{display:flex;flex-direction:column;gap:10px;z-index:201}
+.talk-head{display:flex;align-items:center;gap:9px}
+.talk-head-icon{color:var(--brass);flex:none}
+.talk-title{font-weight:600;font-size:15px;letter-spacing:.04em}
+.talk-empty{color:var(--muted);font-size:12.5px;line-height:1.6;padding:6px 0}
+.talk-leads{display:flex;flex-wrap:wrap;gap:6px}
+.talk-lead{
+  display:inline-flex;align-items:baseline;gap:6px;padding:6px 11px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--line2);background:var(--panel2);color:var(--muted);font:600 12px 'Inter',sans-serif;
+  transition:color .13s,border-color .13s,background .13s;
+}
+.talk-lead:hover{color:var(--text)}
+.talk-lead.on{background:var(--brass-dim);border-color:var(--brass);color:var(--brass)}
+.talk-lead:focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px}
+.talk-lead-tag{font:500 9.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+.talk-style{font-size:11px;color:var(--muted);line-height:1.45}
+.talk-transcript{
+  flex:1;min-height:120px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+  padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);overscroll-behavior:contain;
+}
+.talk-hint{color:var(--muted);font-size:12.5px;line-height:1.55;margin:auto 0;text-align:center;padding:0 12px}
+.talk-turn{display:flex;flex-direction:column;gap:2px;max-width:88%}
+.talk-turn.trader{align-self:flex-end;align-items:flex-end}
+.talk-turn.lead{align-self:flex-start}
+.talk-who{font:600 9.5px 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--brass)}
+.talk-text{font-size:13px;line-height:1.55;padding:7px 11px;border-radius:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.talk-turn.lead .talk-text{background:var(--panel);border:1px solid var(--line);color:var(--text);border-top-left-radius:4px}
+.talk-turn.trader .talk-text{background:var(--brass-dim);color:var(--text);border-top-right-radius:4px}
+.talk-turn.interim .talk-text{opacity:.6;font-style:italic}
+.talk-unheard{color:var(--muted);opacity:.7}
+.talk-dots{color:var(--muted);letter-spacing:.12em}
+.talk-error{font-size:12px;color:var(--bear);line-height:1.5}
+.talk-mic-row{display:flex;align-items:center;gap:13px}
+.talk-mic{
+  flex:none;width:58px;height:58px;border-radius:50%;display:grid;place-items:center;cursor:pointer;
+  border:1px solid var(--brass);background:var(--brass-dim);color:var(--brass);transition:transform .12s,background .15s;
+}
+.talk-mic:hover{transform:scale(1.04)}
+.talk-mic:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.talk-mic:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
+.talk-mic.listening{background:var(--brass);color:#fff;animation:talkPulse 1.6s ease-in-out infinite}
+.talk-mic.speaking{border-color:var(--bull);color:var(--bull);background:var(--bull-dim)}
+.talk-mic.thinking{opacity:.85}
+@keyframes talkPulse{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,.45)}50%{box-shadow:0 0 0 10px rgba(59,130,246,0)}}
+@media (prefers-reduced-motion:reduce){.talk-mic.listening{animation:none}}
+.talk-status{font-size:12.5px;color:var(--muted);line-height:1.45}
+.talk-type{display:flex;gap:8px}
+.talk-type .bd-in{flex:1;min-width:0;text-transform:none}
+.talk-prefs{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;font-size:11.5px;color:var(--muted)}
+.talk-prefs label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.talk-voice{font:500 10px 'JetBrains Mono',monospace;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.talk-foot{font-size:10.5px;color:var(--faint,var(--muted));line-height:1.45}
