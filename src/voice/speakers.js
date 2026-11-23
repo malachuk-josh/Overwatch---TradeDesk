@@ -18,6 +18,21 @@ export function silentWav() {
   return `data:audio/wav;base64,${btoa(bin)}`;
 }
 
+/**
+ * iPhone's ring/silent switch mutes Web Audio and the built-in voice unless the page declares it is
+ * playing media, not alert sounds. Safari 16.4+ exposes that as navigator.audioSession; elsewhere
+ * this does nothing. Call from a tap.
+ */
+export function primeAudioSession() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.audioSession && navigator.audioSession.type !== "playback") {
+      navigator.audioSession.type = "playback";
+    }
+  } catch {
+    // older Safari, or a browser without the Audio Session API
+  }
+}
+
 const authHeaders = async (getToken) => {
   const token = await getToken?.().catch(() => null);
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -55,6 +70,7 @@ export class CloudSpeaker {
   }
 
   unlock() {
+    primeAudioSession();
     if (this.hasWebAudio()) {
       const ctx = this.context();
       ctx.resume().catch(() => {});
@@ -249,6 +265,22 @@ export const BROWSER_VOICE = Object.freeze({
   connors: { pick: 4, pitch: 1.0, rate: 0.94 },
 });
 
+// Apple ships joke voices alongside the real ones ("Bad News" sings, "Bubbles" gurgles). A lead's
+// slot must never land on one.
+const NOVELTY_VOICE = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Junior|Ralph|Kathy|Fred)\b/i;
+
+/** The device voice for a lead: English, real voices only, natural/neural ones first. */
+export function pickBrowserVoice(voices, lead) {
+  const english = (voices || []).filter((v) => v.lang?.toLowerCase().startsWith("en") && !NOVELTY_VOICE.test(v.name || ""));
+  if (!english.length) return null;
+  const quality = (v) => Number(/natural|neural|premium|enhanced/i.test(v.name)) * 2 + Number(/^en-US/i.test(v.lang));
+  const ranked = [...english].sort((a, b) => quality(b) - quality(a));
+  return ranked[(BROWSER_VOICE[lead]?.pick ?? 0) % ranked.length];
+}
+
+// iOS only lets a page speak once speechSynthesis.speak() has run inside a tap. Once per page.
+let synthUnlocked = false;
+
 export class BrowserSpeaker {
   constructor(opts) {
     this.opts = opts; // { lead, onStart, onIdle }
@@ -257,15 +289,18 @@ export class BrowserSpeaker {
   }
 
   unlock() {
-    if (typeof speechSynthesis !== "undefined") speechSynthesis.getVoices();
+    primeAudioSession();
+    if (typeof speechSynthesis === "undefined") return;
+    speechSynthesis.getVoices();
+    if (synthUnlocked) return;
+    synthUnlocked = true;
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    speechSynthesis.speak(u);
   }
 
   voice() {
-    const english = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("en"));
-    if (!english.length) return null;
-    // Natural/neural voices first, then the rest, so the lead's slot lands on the best ones.
-    const ranked = [...english].sort((a, b) => Number(/natural|neural|premium|enhanced/i.test(b.name)) - Number(/natural|neural|premium|enhanced/i.test(a.name)));
-    return ranked[(BROWSER_VOICE[this.opts.lead]?.pick ?? 0) % ranked.length];
+    return pickBrowserVoice(speechSynthesis.getVoices(), this.opts.lead);
   }
 
   speak(sentence) {

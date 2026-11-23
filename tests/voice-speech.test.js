@@ -77,3 +77,15 @@ describe("edge cases found while building", () => {
     expect([...c.push("Use a tight stop, e.g. below the open. Then wait. "), ...c.flush()]).toEqual(["Use a tight stop, e.g. below the open.", "Then wait."]);
   });
 });
+
+describe("device voices", () => {
+  it("never gives a lead one of Apple's joke voices, and prefers natural US voices", async () => {
+    const { pickBrowserVoice } = await import("../src/voice/speakers.js");
+    const v = (name, lang = "en-US") => ({ name, lang });
+    const voices = [v("Bad News"), v("Bells"), v("Zarvox"), v("Samantha"), v("Daniel", "en-GB"), v("Microsoft Aria Online (Natural)"), v("Thomas", "fr-FR")];
+    const picked = ["jack", "jesse", "mike", "ptj", "connors"].map((lead) => pickBrowserVoice(voices, lead).name);
+    for (const name of picked) expect(name).not.toMatch(/Bad News|Bells|Zarvox|Thomas/);
+    expect(pickBrowserVoice(voices, "jack").name).toBe("Microsoft Aria Online (Natural)");
+    expect(pickBrowserVoice([v("Bubbles"), v("Thomas", "fr-FR")], "jack")).toBeNull();
+  });
+});
